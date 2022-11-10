@@ -7,6 +7,7 @@
   , "datetime"
   , "effect"
   , "either"
+  , "heterogeneous"
   , "lists"
   , "maybe"
   , "prelude"

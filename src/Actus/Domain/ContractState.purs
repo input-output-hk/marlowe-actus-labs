@@ -1,45 +1,60 @@
 module Actus.Domain.ContractState where
 
 import Actus.Domain.ContractTerms (PRF)
+import Contrib.Data.Lens.Record.Generic (mkNewtyped1Lenses)
 import Data.DateTime (DateTime)
 import Data.Maybe (Maybe)
+import Data.Newtype (class Newtype)
+import Data.Profunctor.Strong (class Strong)
+import Type.Prelude (Proxy(..))
+import Type.Proxy (Proxy)
 
 {-| ACTUS contract states are defined in
     https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-states.json
 -}
-data ContractState a = ContractState
-  {
-    tmd   :: Maybe DateTime -- ^ Maturity Date (MD): The timestamp as per which the contract matures according to the initial terms or as per unscheduled events
-  , nt    :: a              -- ^ Notional Principal (NT): The outstanding nominal value
-  , ipnr  :: a              -- ^ Nominal Interest Rate (IPNR) : The applicable nominal rate
-  , ipac  :: a              -- ^ Accrued Interest (IPAC): The current value of accrued interest
-  , ipac1 :: Maybe a        -- ^ Accrued Interest (IPAC1): The current value of accrued interest of the first leg
-  , ipac2 :: Maybe a        -- ^ Accrued Interest (IPAC2): The current value of accrued interest of the second leg
-  , ipla  :: Maybe a        -- ^ Last Interst Period
-  , feac  :: a              -- ^ Fee Accrued (FEAC): The current value of accrued fees
-  , nsc   :: a              -- ^ Notional Scaling Multiplier (SCNT): The multiplier being applied to principal cash flows
-  , isc   :: a              -- ^ InterestScalingMultiplier (SCIP): The multiplier being applied to interest cash flows
-  , prf   :: PRF            -- ^ Contract Performance (PRF)
-  , sd    :: DateTime       -- ^ Status Date (MD): The timestamp as per which the state is captured at any point in time
-  , prnxt :: a              -- ^ Next Principal Redemption Payment (PRNXT): The value at which principal is being repaid
-  , ipcb  :: a              -- ^ Interest Calculation Base (IPCB)
-  , xd    :: Maybe DateTime -- ^ Exercise Date (XD)
-  , xa    :: Maybe a        -- ^ Exercise Amount (XA)
+newtype ContractState a = ContractState
+  { tmd :: Maybe DateTime -- ^ Maturity Date (MD): The timestamp as per which the contract matures according to the initial terms or as per unscheduled events
+  , nt :: a -- ^ Notional Principal (NT): The outstanding nominal value
+  , ipnr :: a -- ^ Nominal Interest Rate (IPNR) : The applicable nominal rate
+  , ipac :: a -- ^ Accrued Interest (IPAC): The current value of accrued interest
+  , ipac1 :: Maybe a -- ^ Accrued Interest (IPAC1): The current value of accrued interest of the first leg
+  , ipac2 :: Maybe a -- ^ Accrued Interest (IPAC2): The current value of accrued interest of the second leg
+  , ipla :: Maybe a -- ^ Last Interst Period
+  , feac :: a -- ^ Fee Accrued (FEAC): The current value of accrued fees
+  , nsc :: a -- ^ Notional Scaling Multiplier (SCNT): The multiplier being applied to principal cash flows
+  , isc :: a -- ^ InterestScalingMultiplier (SCIP): The multiplier being applied to interest cash flows
+  , prf :: PRF -- ^ Contract Performance (PRF)
+  , sd :: DateTime -- ^ Status Date (MD): The timestamp as per which the state is captured at any point in time
+  , prnxt :: a -- ^ Next Principal Redemption Payment (PRNXT): The value at which principal is being repaid
+  , ipcb :: a -- ^ Interest Calculation Base (IPCB)
+  , xd :: Maybe DateTime -- ^ Exercise Date (XD)
+  , xa :: Maybe a -- ^ Exercise Amount (XA)
   }
---  deriving stock (Show, Eq)
 
--- makeLensesFor
---   [ ("sd", "statusDate")
---   , ("nt", "notionalPrincipal")
---   , ("ipnr", "nominalInterest")
---   , ("ipac", "accruedInterest")
---   , ("ipac1", "accruedInterestFirstLeg")
---   , ("ipac2", "accruedInterestSecondLeg")
---   , ("ipla", "lastInterestPeriod")
---   , ("ipcb", "interestCalculationBase")
---   , ("feac", "accruedFees")
---   , ("nsc", "notionalScalingMultiplier")
---   , ("isc", "interestScalingMultiplier")
---   , ("prnxt", "nextPrincipalRedemptionPayment")
---   , ("xa", "exerciseAmount")
---   ] ''ContractState
+derive instance Newtype (ContractState a) _
+
+type Lens'' :: forall k. (k -> k -> Type) -> k -> k -> Type
+type Lens'' p s a = p a a -> p s s
+
+_ContractState
+  :: forall a p
+   . Strong p
+  => { feac :: Lens'' p (ContractState a) a
+     , ipac :: Lens'' p (ContractState a) a
+     , ipac1 :: Lens'' p (ContractState a) (Maybe a)
+     , ipac2 :: Lens'' p (ContractState a) (Maybe a)
+     , ipcb :: Lens'' p (ContractState a) a
+     , ipla :: Lens'' p (ContractState a) (Maybe a)
+     , ipnr :: Lens'' p (ContractState a) a
+     , isc :: Lens'' p (ContractState a) a
+     , nsc :: Lens'' p (ContractState a) a
+     , nt :: Lens'' p (ContractState a) a
+     , prf :: Lens'' p (ContractState a) PRF
+     , prnxt :: Lens'' p (ContractState a) a
+     , sd :: Lens'' p (ContractState a) DateTime
+     , tmd :: Lens'' p (ContractState a) (Maybe DateTime)
+     , xa :: Lens'' p (ContractState a) (Maybe a)
+     , xd :: Lens'' p (ContractState a) (Maybe DateTime)
+     }
+_ContractState = mkNewtyped1Lenses (Proxy :: Proxy ContractState)
+
