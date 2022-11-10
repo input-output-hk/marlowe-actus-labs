@@ -1,7 +1,7 @@
 module Actus.Domain.ContractState where
 
 import Actus.Domain.ContractTerms (PRF)
-import Contrib.Data.Lens.Record.Generic (mkNewtyped1Lenses)
+import Contrib.Data.Lens.Record.Generic (Lens'', mkNewtyped1Lenses)
 import Data.DateTime (DateTime)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
@@ -32,9 +32,6 @@ newtype ContractState a = ContractState
   }
 
 derive instance Newtype (ContractState a) _
-
-type Lens'' :: forall k. (k -> k -> Type) -> k -> k -> Type
-type Lens'' p s a = p a a -> p s s
 
 _ContractState
   :: forall a p
