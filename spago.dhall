@@ -22,6 +22,7 @@
   , "profunctor-lenses"
   , "record"
   , "refined"
+  , "transformers"
   , "tuples"
   , "typelevel-prelude"
   ]

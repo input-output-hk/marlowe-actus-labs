@@ -226,6 +226,10 @@ data IPCB
   | IPCB_NTIED -- ^ Notional remains constant amount as per IED
   | IPCB_NTL -- ^ Calculation base is notional base laged
 
+derive instance Generic IPCB _
+derive instance Eq IPCB
+derive instance Ord IPCB
+
 --           deriving stock (Show, Read, Eq, Generic)
 --
 -- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''IPCB)

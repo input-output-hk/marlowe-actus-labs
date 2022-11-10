@@ -18,8 +18,6 @@ newtype ContractState a = ContractState
   , nt :: a -- ^ Notional Principal (NT): The outstanding nominal value
   , ipnr :: a -- ^ Nominal Interest Rate (IPNR) : The applicable nominal rate
   , ipac :: a -- ^ Accrued Interest (IPAC): The current value of accrued interest
-  , ipac1 :: Maybe a -- ^ Accrued Interest (IPAC1): The current value of accrued interest of the first leg
-  , ipac2 :: Maybe a -- ^ Accrued Interest (IPAC2): The current value of accrued interest of the second leg
   , ipla :: Maybe a -- ^ Last Interst Period
   , feac :: a -- ^ Fee Accrued (FEAC): The current value of accrued fees
   , nsc :: a -- ^ Notional Scaling Multiplier (SCNT): The multiplier being applied to principal cash flows
@@ -28,8 +26,6 @@ newtype ContractState a = ContractState
   , sd :: DateTime -- ^ Status Date (MD): The timestamp as per which the state is captured at any point in time
   , prnxt :: a -- ^ Next Principal Redemption Payment (PRNXT): The value at which principal is being repaid
   , ipcb :: a -- ^ Interest Calculation Base (IPCB)
-  , xd :: Maybe DateTime -- ^ Exercise Date (XD)
-  , xa :: Maybe a -- ^ Exercise Amount (XA)
   }
 
 derive instance Newtype (ContractState a) _
@@ -39,8 +35,6 @@ _ContractState
    . Strong p
   => { feac :: Lens'' p (ContractState a) a
      , ipac :: Lens'' p (ContractState a) a
-     , ipac1 :: Lens'' p (ContractState a) (Maybe a)
-     , ipac2 :: Lens'' p (ContractState a) (Maybe a)
      , ipcb :: Lens'' p (ContractState a) a
      , ipla :: Lens'' p (ContractState a) (Maybe a)
      , ipnr :: Lens'' p (ContractState a) a
@@ -51,8 +45,6 @@ _ContractState
      , prnxt :: Lens'' p (ContractState a) a
      , sd :: Lens'' p (ContractState a) DateTime
      , tmd :: Lens'' p (ContractState a) (Maybe DateTime)
-     , xa :: Lens'' p (ContractState a) (Maybe a)
-     , xd :: Lens'' p (ContractState a) (Maybe DateTime)
      }
 _ContractState = mkNewtyped1Lenses (Proxy :: Proxy ContractState)
 
