@@ -14,10 +14,11 @@ import Data.List (List)
 import Data.Maybe (Maybe)
 
 -- |ContractType
-data CT = PAM   -- ^ Principal at maturity
-        | LAM   -- ^ Linear amortizer
-        | NAM   -- ^ Negative amortizer
-        | ANN   -- ^ Annuity
+data CT
+  = PAM -- ^ Principal at maturity
+  | LAM -- ^ Linear amortizer
+  | NAM -- ^ Negative amortizer
+  | ANN -- ^ Annuity
 
 derive instance Generic CT _
 derive instance Eq CT
@@ -30,19 +31,20 @@ instance DecodeJson CT where
   decodeJson a = genericDecodeJson a
 
 -- |ContractRole
-data CR = CR_RPA -- ^ Real position asset
-        | CR_RPL -- ^ Real position liability
-        | CR_CLO -- ^ Role of a collateral
-        | CR_CNO -- ^ Role of a close-out-netting
-        | CR_COL -- ^ Role of an underlying to a collateral
-        | CR_LG  -- ^ Long position
-        | CR_ST  -- ^ Short position
-        | CR_BUY -- ^ Protection buyer
-        | CR_SEL -- ^ Protection seller
-        | CR_RFL -- ^ Receive first leg
-        | CR_PFL -- ^ Pay first leg
-        | CR_RF  -- ^ Receive fix leg
-        | CR_PF  -- ^ Pay fix leg
+data CR
+  = CR_RPA -- ^ Real position asset
+  | CR_RPL -- ^ Real position liability
+  | CR_CLO -- ^ Role of a collateral
+  | CR_CNO -- ^ Role of a close-out-netting
+  | CR_COL -- ^ Role of an underlying to a collateral
+  | CR_LG -- ^ Long position
+  | CR_ST -- ^ Short position
+  | CR_BUY -- ^ Protection buyer
+  | CR_SEL -- ^ Protection seller
+  | CR_RFL -- ^ Receive first leg
+  | CR_PFL -- ^ Pay first leg
+  | CR_RF -- ^ Receive fix leg
+  | CR_PF -- ^ Pay fix leg
 
 instance EncodeJson CR where
   encodeJson CR_RPA = encodeJson "RPA"
@@ -65,40 +67,47 @@ instance DecodeJson CR where
     decode
     json
     where
-      decode "RPL" = pure CR_RPL
-      decode "CLO" = pure CR_CLO
-      decode "CNO" = pure CR_CNO
-      decode "COL" = pure CR_COL
-      decode "LG" = pure CR_LG
-      decode "ST" = pure CR_ST
-      decode "BUY" = pure CR_BUY
-      decode "SEL" = pure CR_SEL
-      decode "RFL" = pure CR_RFL
-      decode "PFL" = pure CR_PFL
-      decode "RF" = pure CR_RF
-      decode "PF" = pure CR_PF
-      decode c = Left (TypeMismatch $ "Unexpected constructor name:" <> c)
-
+    decode "RPL" = pure CR_RPL
+    decode "CLO" = pure CR_CLO
+    decode "CNO" = pure CR_CNO
+    decode "COL" = pure CR_COL
+    decode "LG" = pure CR_LG
+    decode "ST" = pure CR_ST
+    decode "BUY" = pure CR_BUY
+    decode "SEL" = pure CR_SEL
+    decode "RFL" = pure CR_RFL
+    decode "PFL" = pure CR_PFL
+    decode "RF" = pure CR_RF
+    decode "PF" = pure CR_PF
+    decode c = Left (TypeMismatch $ "Unexpected constructor name:" <> c)
 
 -- |DayCountConvention
-data DCC = DCC_A_AISDA     -- ^ Actual/Actual ISDA
-         | DCC_A_360       -- ^ Actual/360
-         | DCC_A_365       -- ^ Actual/365
-         | DCC_E30_360ISDA -- ^ 30E/360 ISDA
-         | DCC_E30_360     -- ^ 30E/360
-         | DCC_B_252       -- ^ Business / 252
+data DCC
+  = DCC_A_AISDA -- ^ Actual/Actual ISDA
+  | DCC_A_360 -- ^ Actual/360
+  | DCC_A_365 -- ^ Actual/365
+  | DCC_E30_360ISDA -- ^ 30E/360 ISDA
+  | DCC_E30_360 -- ^ 30E/360
+  | DCC_B_252 -- ^ Business / 252
 
 derive instance Generic DCC _
 derive instance Eq DCC
-derive instance Ord DCC
+
+instance Show DCC where
+  show DCC_A_AISDA = "AA"
+  show DCC_A_360 = "A360"
+  show DCC_A_365 = "A365"
+  show DCC_E30_360ISDA = "30E360ISDA"
+  show DCC_E30_360 = "30E360"
+  show DCC_B_252 = "B252"
 
 instance EncodeJson DCC where
-  encodeJson DCC_A_AISDA     = fromString "AA"
-  encodeJson DCC_A_360       = fromString "A360"
-  encodeJson DCC_A_365       = fromString "A365"
+  encodeJson DCC_A_AISDA = fromString "AA"
+  encodeJson DCC_A_360 = fromString "A360"
+  encodeJson DCC_A_365 = fromString "A365"
   encodeJson DCC_E30_360ISDA = fromString "30E360ISDA"
-  encodeJson DCC_E30_360     = fromString "30E360"
-  encodeJson DCC_B_252       = fromString "B252"
+  encodeJson DCC_E30_360 = fromString "30E360"
+  encodeJson DCC_B_252 = fromString "B252"
 
 -- instance FromJSON DCC where
 --   parseJSON (String "AA")         = return DCC_A_AISDA
@@ -110,35 +119,47 @@ instance EncodeJson DCC where
 --   parseJSON _                     = mzero
 --
 -- -- |EndOfMonthConvention
-data EOMC = EOMC_EOM -- ^ End of month
-          | EOMC_SD  -- ^ Same day
+data EOMC
+  = EOMC_EOM -- ^ End of month
+  | EOMC_SD -- ^ Same day
+
+derive instance Generic EOMC _
+derive instance Eq EOMC
+
 --           deriving stock (Show, Read, Eq, Generic)
 --
 -- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''EOMC)
 --
 -- -- |BusinessDayConvention
-data BDC = BDC_NULL -- ^ No shift
-         | BDC_SCF  -- ^ Shift/calculate following
-         | BDC_SCMF -- ^ Shift/calculate modified following
-         | BDC_CSF  -- ^ Calculate/shift following
-         | BDC_CSMF -- ^ Calculate/shift modified following
-         | BDC_SCP  -- ^ Shift/calculate preceding
-         | BDC_SCMP -- ^ Shift/calculate modified preceding
-         | BDC_CSP  -- ^ Calculate/shift preceding
-         | BDC_CSMP -- ^ Calculate/shift modified preceding
+data BDC
+  = BDC_NULL -- ^ No shift
+  | BDC_SCF -- ^ Shift/calculate following
+  | BDC_SCMF -- ^ Shift/calculate modified following
+  | BDC_CSF -- ^ Calculate/shift following
+  | BDC_CSMF -- ^ Calculate/shift modified following
+  | BDC_SCP -- ^ Shift/calculate preceding
+  | BDC_SCMP -- ^ Shift/calculate modified preceding
+  | BDC_CSP -- ^ Calculate/shift preceding
+  | BDC_CSMP -- ^ Calculate/shift modified preceding
+
+derive instance Generic BDC _
+derive instance Eq BDC
+
 --          deriving stock (Show, Read, Eq, Generic)
 --
 -- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''BDC)
 --
-data Calendar = CLDR_MF -- ^ Monday to Friday
-              | CLDR_NC -- ^ No calendar
+data Calendar
+  = CLDR_MF -- ^ Monday to Friday
+  | CLDR_NC -- ^ No calendar
+
 --               deriving stock (Show, Read, Eq, Generic)
 --
 -- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''Calendar)
 
-newtype ScheduleConfig = ScheduleConfig
-  { calendar              :: Maybe Calendar
-  , endOfMonthConvention  :: Maybe EOMC
+type ScheduleConfig =
+  { calendar :: Maybe Calendar
+  , endOfMonthConvention :: Maybe EOMC
   , businessDayConvention :: Maybe BDC
   }
 
@@ -161,117 +182,149 @@ newtype ScheduleConfig = ScheduleConfig
 --  deriving anyclass (FromJSON, ToJSON)
 
 -- |ContractPerformance
-data PRF = PRF_PF -- ^ Performant
-         | PRF_DL -- ^ Delayed
-         | PRF_DQ -- ^ Delinquent
-         | PRF_DF -- ^ Default
+data PRF
+  = PRF_PF -- ^ Performant
+  | PRF_DL -- ^ Delayed
+  | PRF_DQ -- ^ Delinquent
+  | PRF_DF -- ^ Default
+
 --          deriving stock (Show, Read, Eq, Generic)
 --
 -- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''PRF)
 --
 -- |CreditEventTypeCovered
-data CETC = CETC_DL -- ^ Delayed
-          | CETC_DQ -- ^ Delinquent
-          | CETC_DF -- ^ Default
+data CETC
+  = CETC_DL -- ^ Delayed
+  | CETC_DQ -- ^ Delinquent
+  | CETC_DF -- ^ Default
+
 --         deriving stock (Show, Read, Eq, Generic)
 
 -- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''CETC)
 --
 -- |GuaranteedExposure
-data CEGE = CEGE_NO -- ^ Nominal value
-          | CEGE_NI -- ^ Nominal value plus interest
+data CEGE
+  = CEGE_NO -- ^ Nominal value
+  | CEGE_NI -- ^ Nominal value plus interest
+
 --         deriving stock (Show, Read, Eq, Generic)
 
 -- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''CEGE)
 --
 -- |FeeBasis
-data FEB = FEB_A -- ^ Absolute value
-         | FEB_N -- ^ Notional of underlying
+data FEB
+  = FEB_A -- ^ Absolute value
+  | FEB_N -- ^ Notional of underlying
+
 --         deriving stock (Show, Read, Eq, Generic)
 
 -- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''FEB)
 --
 -- |InterestCalculationBase
-data IPCB = IPCB_NT    -- ^ Calculation base always equals to NT
-          | IPCB_NTIED -- ^ Notional remains constant amount as per IED
-          | IPCB_NTL   -- ^ Calculation base is notional base laged
+data IPCB
+  = IPCB_NT -- ^ Calculation base always equals to NT
+  | IPCB_NTIED -- ^ Notional remains constant amount as per IED
+  | IPCB_NTL -- ^ Calculation base is notional base laged
+
 --           deriving stock (Show, Read, Eq, Generic)
 --
 -- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''IPCB)
 --
 -- |ScalingEffect
-data SCEF = SE_OOO -- ^ No scaling
-          | SE_IOO -- ^ Only interest payments scaled
-          | SE_ONO -- ^ Only nominal payments scaled
-          | SE_OOM -- ^ Only maximum deferred amount scaled
-          | SE_INO -- ^ Interest and nominal payments scaled
-          | SE_ONM -- ^ Nominal and maximum deferred amount scaled
-          | SE_IOM -- ^ Interest and maximum deferred amount scaled
-          | SE_INM -- ^ Interest, nominal and maximum deferred amount scaled
+data SCEF
+  = SE_OOO -- ^ No scaling
+  | SE_IOO -- ^ Only interest payments scaled
+  | SE_ONO -- ^ Only nominal payments scaled
+  | SE_OOM -- ^ Only maximum deferred amount scaled
+  | SE_INO -- ^ Interest and nominal payments scaled
+  | SE_ONM -- ^ Nominal and maximum deferred amount scaled
+  | SE_IOM -- ^ Interest and maximum deferred amount scaled
+  | SE_INM -- ^ Interest, nominal and maximum deferred amount scaled
+
 --           deriving stock (Show, Read, Eq, Generic)
 --
 -- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''SCEF)
 --
 -- |PenaltyType
-data PYTP = PYTP_A -- ^ Absolute
-          | PYTP_N -- ^ Nominal rate
-          | PYTP_I -- ^ Current interest rate differential
-          | PYTP_O -- ^ No penalty
+data PYTP
+  = PYTP_A -- ^ Absolute
+  | PYTP_N -- ^ Nominal rate
+  | PYTP_I -- ^ Current interest rate differential
+  | PYTP_O -- ^ No penalty
+
 --           deriving stock (Show, Read, Eq, Generic)
 --
 -- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''PYTP)
 --
 -- |Option Type
-data OPTP = OPTP_C  -- ^ Call Option
-          | OPTP_P  -- ^ Put Option
-          | OPTP_CP -- ^ Call-Put Option
+data OPTP
+  = OPTP_C -- ^ Call Option
+  | OPTP_P -- ^ Put Option
+  | OPTP_CP -- ^ Call-Put Option
+
 --           deriving stock (Show, Read, Eq, Generic)
 --
 -- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''OPTP)
 --
 -- |Option Exercise Type
-data OPXT = OPXT_E -- ^ European
-          | OPXT_B -- ^ Bermudan
-          | OPXT_A -- ^ American
+data OPXT
+  = OPXT_E -- ^ European
+  | OPXT_B -- ^ Bermudan
+  | OPXT_A -- ^ American
+
 --           deriving stock (Show, Read, Eq, Generic)
 --
 -- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''OPXT)
 --
 -- |Settlement
-data DS = DS_S -- ^ Cash Settlement
-        | DS_D -- ^ Physical Settlement
+data DS
+  = DS_S -- ^ Cash Settlement
+  | DS_D -- ^ Physical Settlement
+
 --           deriving stock (Show, Read, Eq, Generic)
 --
 -- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''DS)
 --
 -- |PrepaymentEffect
-data PPEF = PPEF_N -- ^ No prepayment
-          | PPEF_A -- ^ Prepayment allowed, prepayment results in reduction of PRNXT while MD remains
-          | PPEF_M -- ^ Prepayment allowed, prepayment results in reduction of MD while PRNXT remains
+data PPEF
+  = PPEF_N -- ^ No prepayment
+  | PPEF_A -- ^ Prepayment allowed, prepayment results in reduction of PRNXT while MD remains
+  | PPEF_M -- ^ Prepayment allowed, prepayment results in reduction of MD while PRNXT remains
+
 --           deriving stock (Show, Read, Eq, Ord, Generic)
 --
 -- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''PPEF)
 --
-data CalendarType = NoCalendar
-                  | MondayToFriday
-                  | CustomCalendar {holidays :: List Date}
+data CalendarType
+  = NoCalendar
+  | MondayToFriday
+  | CustomCalendar { holidays :: List Date }
+
 --                   deriving stock (Show, Generic)
 --                   deriving anyclass (FromJSON, ToJSON)
 --
 -- |CyclePeriod
-data Period = P_D -- ^ Day
-            | P_W -- ^ Week
-            | P_M -- ^ Month
-            | P_Q -- ^ Quarter
-            | P_H -- ^ Half year
-            | P_Y -- ^ Year
+data Period
+  = P_D -- ^ Day
+  | P_W -- ^ Week
+  | P_M -- ^ Month
+  | P_Q -- ^ Quarter
+  | P_H -- ^ Half year
+  | P_Y -- ^ Year
+
+derive instance Generic Period _
+derive instance Eq Period
+derive instance Ord Period
+
 --             deriving stock (Show, Read, Eq, Ord, Generic)
 --
 -- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''Period)
 --
 -- |CycleStub
-data Stub = ShortStub -- ^ Short last stub
-          | LongStub  -- ^ Long last stub
+data Stub
+  = ShortStub -- ^ Short last stub
+  | LongStub -- ^ Long last stub
+
 --           deriving stock (Show, Eq, Ord, Generic)
 --
 -- instance ToJSON Stub where
@@ -285,11 +338,12 @@ data Stub = ShortStub -- ^ Short last stub
 --
 -- |Cycle
 data Cycle = Cycle
-  { n             :: Int
-  , p             :: Period
-  , stub          :: Stub
+  { n :: Int
+  , p :: Period
+  , stub :: Stub
   , includeEndDay :: Boolean
   }
+
 --   deriving stock (Show, Eq, Ord, Generic)
 --
 -- instance ToJSON Cycle where
@@ -354,110 +408,110 @@ data Cycle = Cycle
 -}
 data ContractTerms a = ContractTerms
   { -- General
-    contractId                               :: String
-  , contractType                             :: CT
-  , contractRole                             :: CR
-  , settlementCurrency                       :: Maybe String
+    contractId :: String
+  , contractType :: CT
+  , contractRole :: CR
+  , settlementCurrency :: Maybe String
 
   -- Calendar
-  , initialExchangeDate                      :: Maybe DateTime  -- ^ Initial Exchange Date
-  , dayCountConvention                       :: Maybe DCC        -- ^ Day Count Convention
-  , scheduleConfig                           :: ScheduleConfig
+  , initialExchangeDate :: Maybe DateTime -- ^ Initial Exchange Date
+  , dayCountConvention :: Maybe DCC -- ^ Day Count Convention
+  , scheduleConfig :: ScheduleConfig
 
   -- Contract Identification
-  , statusDate                               :: DateTime        -- ^ Status Date
-  , marketObjectCodeRef                      :: Maybe String     -- ^ Market Object Code
+  , statusDate :: DateTime -- ^ Status Date
+  , marketObjectCodeRef :: Maybe String -- ^ Market Object Code
 
   -- Counterparty
-  , contractPerformance                      :: Maybe PRF        -- ^ Contract Performance
-  , creditEventTypeCovered                   :: Maybe CETC       -- ^ Credit Event Type Covered
-  , coverageOfCreditEnhancement              :: Maybe a          -- ^ Coverage Of Credit Enhancement
-  , guaranteedExposure                       :: Maybe CEGE       -- ^ Guaranteed Exposure
+  , contractPerformance :: Maybe PRF -- ^ Contract Performance
+  , creditEventTypeCovered :: Maybe CETC -- ^ Credit Event Type Covered
+  , coverageOfCreditEnhancement :: Maybe a -- ^ Coverage Of Credit Enhancement
+  , guaranteedExposure :: Maybe CEGE -- ^ Guaranteed Exposure
 
   -- Fees
-  , cycleOfFee                               :: Maybe Cycle      -- ^ Cycle Of Fee
-  , cycleAnchorDateOfFee                     :: Maybe DateTime  -- ^ Cycle Anchor Date Of Fee
-  , feeAccrued                               :: Maybe a          -- ^ Fee Accrued
-  , feeBasis                                 :: Maybe FEB        -- ^ Fee Basis
-  , feeRate                                  :: Maybe a          -- ^ Fee Rate
+  , cycleOfFee :: Maybe Cycle -- ^ Cycle Of Fee
+  , cycleAnchorDateOfFee :: Maybe DateTime -- ^ Cycle Anchor Date Of Fee
+  , feeAccrued :: Maybe a -- ^ Fee Accrued
+  , feeBasis :: Maybe FEB -- ^ Fee Basis
+  , feeRate :: Maybe a -- ^ Fee Rate
 
   -- Interest
-  , cycleAnchorDateOfInterestPayment         :: Maybe DateTime  -- ^ Cycle Anchor Date Of Interest Payment
-  , cycleOfInterestPayment                   :: Maybe Cycle      -- ^ Cycle Of Interest Payment
-  , accruedInterest                          :: Maybe a          -- ^ Accrued Interest
-  , capitalizationEndDate                    :: Maybe DateTime  -- ^ Capitalization End Date
-  , cycleAnchorDateOfInterestCalculationBase :: Maybe DateTime  -- ^ Cycle Anchor Date Of Interest Calculation Base
-  , cycleOfInterestCalculationBase           :: Maybe Cycle      -- ^ Cycle Of Interest Calculation Base
-  , interestCalculationBase                  :: Maybe IPCB       -- ^ Interest Calculation Base
-  , interestCalculationBaseA                 :: Maybe a          -- ^ Interest Calculation Base Amount
-  , nominalInterestRate                      :: Maybe a          -- ^ Nominal Interest Rate
-  , nominalInterestRate2                     :: Maybe a          -- ^ Nominal Interest Rate (Second Leg in Plain Vanilla Swap)
-  , interestScalingMultiplier                :: Maybe a          -- ^ Interest Scaling Multiplier
+  , cycleAnchorDateOfInterestPayment :: Maybe DateTime -- ^ Cycle Anchor Date Of Interest Payment
+  , cycleOfInterestPayment :: Maybe Cycle -- ^ Cycle Of Interest Payment
+  , accruedInterest :: Maybe a -- ^ Accrued Interest
+  , capitalizationEndDate :: Maybe DateTime -- ^ Capitalization End Date
+  , cycleAnchorDateOfInterestCalculationBase :: Maybe DateTime -- ^ Cycle Anchor Date Of Interest Calculation Base
+  , cycleOfInterestCalculationBase :: Maybe Cycle -- ^ Cycle Of Interest Calculation Base
+  , interestCalculationBase :: Maybe IPCB -- ^ Interest Calculation Base
+  , interestCalculationBaseA :: Maybe a -- ^ Interest Calculation Base Amount
+  , nominalInterestRate :: Maybe a -- ^ Nominal Interest Rate
+  , nominalInterestRate2 :: Maybe a -- ^ Nominal Interest Rate (Second Leg in Plain Vanilla Swap)
+  , interestScalingMultiplier :: Maybe a -- ^ Interest Scaling Multiplier
 
   -- Dates
-  , maturityDate                             :: Maybe DateTime  -- ^ Maturity Date
-  , amortizationDate                         :: Maybe DateTime  -- ^ Amortization Date
-  , exerciseDate                             :: Maybe DateTime  -- ^ Exercise Date
+  , maturityDate :: Maybe DateTime -- ^ Maturity Date
+  , amortizationDate :: Maybe DateTime -- ^ Amortization Date
+  , exerciseDate :: Maybe DateTime -- ^ Exercise Date
 
   -- Notional Principal
-  , notionalPrincipal                        :: Maybe a          -- ^ Notional Principal
-  , premiumDiscountAtIED                     :: Maybe a          -- ^ Premium Discount At IED
-  , cycleAnchorDateOfPrincipalRedemption     :: Maybe DateTime  -- ^ Cycle Anchor Date Of Principal Redemption
-  , cycleOfPrincipalRedemption               :: Maybe Cycle      -- ^ Cycle Of Principal Redemption
-  , nextPrincipalRedemptionPayment           :: Maybe a          -- ^ Next Principal Redemption Payment
-  , purchaseDate                             :: Maybe DateTime  -- ^ Purchase Date
-  , priceAtPurchaseDate                      :: Maybe a          -- ^ Price At Purchase Date
-  , terminationDate                          :: Maybe DateTime  -- ^ Termination Date
-  , priceAtTerminationDate                   :: Maybe a          -- ^ Price At Termination Date
-  , quantity                                 :: Maybe a          -- ^ Quantity
-  , currency                                 :: Maybe String     -- ^ The currency of the cash flows
-  , currency2                                :: Maybe String     -- ^ The currency of the cash flows of the second leg
+  , notionalPrincipal :: Maybe a -- ^ Notional Principal
+  , premiumDiscountAtIED :: Maybe a -- ^ Premium Discount At IED
+  , cycleAnchorDateOfPrincipalRedemption :: Maybe DateTime -- ^ Cycle Anchor Date Of Principal Redemption
+  , cycleOfPrincipalRedemption :: Maybe Cycle -- ^ Cycle Of Principal Redemption
+  , nextPrincipalRedemptionPayment :: Maybe a -- ^ Next Principal Redemption Payment
+  , purchaseDate :: Maybe DateTime -- ^ Purchase Date
+  , priceAtPurchaseDate :: Maybe a -- ^ Price At Purchase Date
+  , terminationDate :: Maybe DateTime -- ^ Termination Date
+  , priceAtTerminationDate :: Maybe a -- ^ Price At Termination Date
+  , quantity :: Maybe a -- ^ Quantity
+  , currency :: Maybe String -- ^ The currency of the cash flows
+  , currency2 :: Maybe String -- ^ The currency of the cash flows of the second leg
 
   -- Scaling Index
-  , scalingIndexAtStatusDate                 :: Maybe a          -- ^ Scaling Index At Status Date
-  , cycleAnchorDateOfScalingIndex            :: Maybe DateTime  -- ^ Cycle Anchor Date Of Scaling Index
-  , cycleOfScalingIndex                      :: Maybe Cycle      -- ^ Cycle Of Scaling Index
-  , scalingEffect                            :: Maybe SCEF       -- ^ Scaling Effect
-  , scalingIndexAtContractDealDate           :: Maybe a          -- ^ Scaling Index At Contract Deal Date
-  , marketObjectCodeOfScalingIndex           :: Maybe String     -- ^ Market Object Code Of Scaling Index
-  , notionalScalingMultiplier                :: Maybe a          -- ^ Notional Scaling Multiplier
+  , scalingIndexAtStatusDate :: Maybe a -- ^ Scaling Index At Status Date
+  , cycleAnchorDateOfScalingIndex :: Maybe DateTime -- ^ Cycle Anchor Date Of Scaling Index
+  , cycleOfScalingIndex :: Maybe Cycle -- ^ Cycle Of Scaling Index
+  , scalingEffect :: Maybe SCEF -- ^ Scaling Effect
+  , scalingIndexAtContractDealDate :: Maybe a -- ^ Scaling Index At Contract Deal Date
+  , marketObjectCodeOfScalingIndex :: Maybe String -- ^ Market Object Code Of Scaling Index
+  , notionalScalingMultiplier :: Maybe a -- ^ Notional Scaling Multiplier
 
   -- Optionality
-  , cycleOfOptionality                       :: Maybe Cycle      -- ^ Cycle Of Optionality
-  , cycleAnchorDateOfOptionality             :: Maybe DateTime  -- ^ Cycle Anchor Date Of Optionality
-  , optionType                               :: Maybe OPTP       -- ^ Option Type
-  , optionStrike1                            :: Maybe a          -- ^ Option Strike 1
-  , optionExerciseType                       :: Maybe OPXT       -- ^ Option Exercise Type
+  , cycleOfOptionality :: Maybe Cycle -- ^ Cycle Of Optionality
+  , cycleAnchorDateOfOptionality :: Maybe DateTime -- ^ Cycle Anchor Date Of Optionality
+  , optionType :: Maybe OPTP -- ^ Option Type
+  , optionStrike1 :: Maybe a -- ^ Option Strike 1
+  , optionExerciseType :: Maybe OPXT -- ^ Option Exercise Type
 
   -- Settlement
-  , settlementPeriod                         :: Maybe Cycle      -- ^ Settlement Period
-  , deliverySettlement                       :: Maybe DS         -- ^ Delivery Settlement
-  , exerciseAmount                           :: Maybe a          -- ^ Exercise Amount
-  , futuresPrice                             :: Maybe a          -- ^ Futures Price
+  , settlementPeriod :: Maybe Cycle -- ^ Settlement Period
+  , deliverySettlement :: Maybe DS -- ^ Delivery Settlement
+  , exerciseAmount :: Maybe a -- ^ Exercise Amount
+  , futuresPrice :: Maybe a -- ^ Futures Price
 
   -- Penalty
-  , penaltyRate                              :: Maybe a          -- ^ Penalty Rate
-  , penaltyType                              :: Maybe PYTP       -- ^ Penalty Type
-  , prepaymentEffect                         :: Maybe PPEF       -- ^ Prepayment Effect
+  , penaltyRate :: Maybe a -- ^ Penalty Rate
+  , penaltyType :: Maybe PYTP -- ^ Penalty Type
+  , prepaymentEffect :: Maybe PPEF -- ^ Prepayment Effect
 
   -- Rate Reset
-  , cycleOfRateReset                         :: Maybe Cycle      -- ^ Cycle Of Rate Reset
-  , cycleAnchorDateOfRateReset               :: Maybe DateTime  -- ^ Cycle Anchor Date Of Rate Reset
-  , nextResetRate                            :: Maybe a          -- ^ Next Reset Rate
-  , rateSpread                               :: Maybe a          -- ^ Rate Spread
-  , rateMultiplier                           :: Maybe a          -- ^ Rate Multiplier
-  , periodFloor                              :: Maybe a          -- ^ Period Floor
-  , periodCap                                :: Maybe a          -- ^ Period Cap
-  , lifeCap                                  :: Maybe a          -- ^ Life Cap
-  , lifeFloor                                :: Maybe a          -- ^ Life Floor
-  , marketObjectCodeOfRateReset              :: Maybe String     -- ^ Market Object Code Of Rate Reset
+  , cycleOfRateReset :: Maybe Cycle -- ^ Cycle Of Rate Reset
+  , cycleAnchorDateOfRateReset :: Maybe DateTime -- ^ Cycle Anchor Date Of Rate Reset
+  , nextResetRate :: Maybe a -- ^ Next Reset Rate
+  , rateSpread :: Maybe a -- ^ Rate Spread
+  , rateMultiplier :: Maybe a -- ^ Rate Multiplier
+  , periodFloor :: Maybe a -- ^ Period Floor
+  , periodCap :: Maybe a -- ^ Period Cap
+  , lifeCap :: Maybe a -- ^ Life Cap
+  , lifeFloor :: Maybe a -- ^ Life Floor
+  , marketObjectCodeOfRateReset :: Maybe String -- ^ Market Object Code Of Rate Reset
 
   -- Dividend
-  , cycleOfDividend                          :: Maybe Cycle      -- ^ Cycle Of Dividend
-  , cycleAnchorDateOfDividend                :: Maybe DateTime  -- ^ Cycle Anchor Date Of Dividend
-  , nextDividendPaymentAmount                :: Maybe a          -- ^ Next Dividend Payment Amount
+  , cycleOfDividend :: Maybe Cycle -- ^ Cycle Of Dividend
+  , cycleAnchorDateOfDividend :: Maybe DateTime -- ^ Cycle Anchor Date Of Dividend
+  , nextDividendPaymentAmount :: Maybe a -- ^ Next Dividend Payment Amount
 
-  , enableSettlement                         :: Boolean          -- ^ Enable settlement currency
+  , enableSettlement :: Boolean -- ^ Enable settlement currency
   }
 --   deriving stock (Show, Generic)
 --   deriving anyclass (ToJSON)

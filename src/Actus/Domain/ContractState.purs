@@ -3,6 +3,7 @@ module Actus.Domain.ContractState where
 import Actus.Domain.ContractTerms (PRF)
 import Contrib.Data.Lens.Record.Generic (Lens'', mkNewtyped1Lenses)
 import Data.DateTime (DateTime)
+import Data.Lens.Record (prop)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
 import Data.Profunctor.Strong (class Strong)
@@ -55,3 +56,14 @@ _ContractState
      }
 _ContractState = mkNewtyped1Lenses (Proxy :: Proxy ContractState)
 
+statusDate = prop (Proxy :: Proxy "sd")
+notionalPrincipal = prop (Proxy :: Proxy "nt")
+nominalInterest = prop (Proxy :: Proxy "ipnr")
+accruedInterest = prop (Proxy :: Proxy "ipac")
+lastInterestPeriod = prop (Proxy :: Proxy "ipla")
+interestCalculationBase = prop (Proxy :: Proxy "ipcb")
+accruedFees = prop (Proxy :: Proxy "feac")
+notionalScalingMultiplier = prop (Proxy :: Proxy "nsc")
+interestScalingMultiplier = prop (Proxy :: Proxy "isc")
+nextPrincipalRedemptionPayment = prop (Proxy :: Proxy "prnxt")
+exerciseAmount = prop (Proxy :: Proxy "xa")
