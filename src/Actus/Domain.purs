@@ -5,6 +5,7 @@ module Actus.Domain
   , module Actus.Domain.Schedule
   , class ActusFrac
   , _ceiling
+  , _abs
   , _max
   , _min
   , class ActusOps
@@ -17,11 +18,12 @@ module Actus.Domain
 import Actus.Domain.BusinessEvents (EventType(..))
 import Actus.Domain.ContractState (ContractState(..))
 import Actus.Domain.ContractTerms (BDC(..), CEGE(..), CETC(..), CR(..), CT(..), Calendar(..), CalendarType(..), ContractTerms(..), Cycle(..), DCC(..), DS(..), EOMC(..), FEB(..), IPCB(..), OPTP(..), OPXT(..), PPEF(..), PRF(..), PYTP(..), Period(..), SCEF(..), ScheduleConfig, Stub(..))
-import Actus.Domain.Schedule (ShiftedDay(..), ShiftedSchedule, mkShiftedDay)
+import Actus.Domain.Schedule (ShiftedDay, ShiftedSchedule, mkShiftedDay)
 import Control.Alt ((<|>))
 import Data.DateTime (DateTime)
 import Data.Int (ceil)
 import Data.Maybe (Maybe(..))
+import Data.Number (abs)
 import Prelude (class Ring, max, min, negate, one, ($), (/))
 
 class ActusOps a <= ActusFrac a where
@@ -30,10 +32,12 @@ class ActusOps a <= ActusFrac a where
 class ActusOps a where
   _min :: a -> a -> a
   _max :: a -> a -> a
+  _abs :: a -> a
 
 instance ActusOps Number where
   _min = min
   _max = max
+  _abs = abs
 
 instance ActusFrac Number where
   _ceiling = ceil

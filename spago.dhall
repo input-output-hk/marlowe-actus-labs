@@ -17,6 +17,7 @@
   , "lists"
   , "maybe"
   , "newtype"
+  , "numbers"
   , "prelude"
   , "profunctor"
   , "profunctor-lenses"
