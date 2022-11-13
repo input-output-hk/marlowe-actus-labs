@@ -23,6 +23,7 @@
   , "profunctor-lenses"
   , "record"
   , "refined"
+  , "strings"
   , "transformers"
   , "tuples"
   , "typelevel-prelude"

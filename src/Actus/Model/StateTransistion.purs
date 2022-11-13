@@ -6,19 +6,16 @@ module Actus.Model.StateTransition
 
 import Prelude
 
-import Actus.Domain (CEGE(..), CT(..), ContractState(..), ContractTerms(..), EventType(..), FEB(..), IPCB(..), OPTP(..), RiskFactors(..), SCEF(..), ShiftedDay(..), _max, _min, sign)
+import Actus.Domain (class ActusOps, CT(..), ContractState(..), ContractTerms(..), EventType(..), FEB(..), IPCB(..), RiskFactors(..), SCEF(..), _abs, _max, _min, sign)
 import Actus.Domain.ContractState as L
 import Actus.Utility (annuity, inf, sup)
 import Actus.Utility.YearFraction (yearFraction)
-import Control.Monad.Reader (Reader, withReader)
+import Control.Monad.Reader (Reader, asks)
 import Data.DateTime (DateTime)
-import Data.Lens (withLens, (+~), (-~), (.~), (^.))
-import Data.List (List(..), elem, filter, singleton, tail, zipWith, (:))
+import Data.Lens ((+~), (-~), (.~), (^.))
+import Data.List (List(..), filter, singleton, tail, zipWith, (:))
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Monoid (mempty)
-import Data.Ord (abs)
-import Data.Ring (class Ring)
-import Data.Semiring (zero)
+import Data.String (Pattern(..), contains)
 
 -- |The context for state transitions provides the contract terms in addition with
 -- schedules and the maturity of the contract. Furthermore a function to retrieve
@@ -43,777 +40,947 @@ type CtxSTF a =
     riskFactors :: String -> EventType -> DateTime -> RiskFactors a
   }
 
--- -- |A state transition updates the contract state based on the type of event and the time.
--- -- `CtxSTF` provides in particular the contract terms and risk factors.
--- stateTransition ::
---   forall a. Ring a =>
---   -- | Event type
---   EventType ->
---   -- | Time
---   DateTime ->
---   -- | Contract state
---   ContractState a ->
---   -- | Updated contract state
---   Reader (CtxSTF a) (ContractState a)
--- stateTransition ev t sn = withReader stateTransition'
---   where
---     stateTransition' (CtxSTF ctx) = stf ev (ctx.riskFactors (ctx.contractTerms.contractId ctx.contractTerms) ev t) ctx.contractTerms sn
---       where
---         stf AD _ ct st                                          = _STF_AD_ALL ct st t
---         stf IED _ ct@(ContractTerms { contractType : PAM}) st     = _STF_IED_PAM ct st t
---         stf IED _ ct@(ContractTerms { contractType : LAM }) st    = _STF_IED_LAM ct st t
---         stf IED _ ct@(ContractTerms { contractType : NAM }) st    = _STF_IED_LAM ct st t
---         stf IED _ ct@(ContractTerms { contractType : ANN }) st    = _STF_IED_LAM ct st t
---         stf PR _ ct@(ContractTerms { contractType : LAM }) st     = _STF_PR_LAM ct st t
---         stf PR _ ct@(ContractTerms { contractType : NAM }) st     = _STF_PR_NAM ct st t
---         stf PR _ ct@(ContractTerms { contractType : ANN }) st     = _STF_PR_NAM ct st t
---         stf MD _ ct st                                          = _STF_MD_ALL ct st t
---         stf PP rf ct@(ContractTerms { contractType : PAM }) st    = _STF_PP_PAM fs rf ct st t
---         stf PP rf ct@(ContractTerms { contractType : LAM }) st    = _STF_PP_LAM fs rf ct st t
---         stf PP rf ct@(ContractTerms { contractType : NAM }) st    = _STF_PP_LAM fs rf ct st t
---         stf PP rf ct@(ContractTerms { contractType : ANN }) st    = _STF_PP_LAM fs rf ct st t
---         stf PY _ ct@(ContractTerms { contractType : PAM }) st     = _STF_PY_PAM fs ct st t
---         stf PY _ ct@(ContractTerms { contractType : LAM }) st     = _STF_PY_LAM fs ct st t
---         stf PY _ ct@(ContractTerms { contractType : NAM }) st     = _STF_PY_LAM fs ct st t
---         stf PY _ ct@(ContractTerms { contractType : ANN }) st     = _STF_PY_LAM fs ct st t
---         stf FP _ ct@(ContractTerms { contractType : PAM }) st     = _STF_FP_PAM ct st t
---         stf FP _ ct@(ContractTerms { contractType : LAM }) st     = _STF_FP_LAM ct st t
---         stf FP _ ct@(ContractTerms { contractType : NAM }) st     = _STF_FP_LAM ct st t
---         stf FP _ ct@(ContractTerms { contractType : ANN }) st     = _STF_FP_LAM ct st t
---         stf PRD _ ct@(ContractTerms { contractType : PAM }) st    = _STF_PY_PAM fs ct st t
---         stf PRD _ ct@(ContractTerms { contractType : LAM }) st    = _STF_PY_PAM fs ct st t
---         stf PRD _ ct@(ContractTerms { contractType : NAM }) st    = _STF_PY_PAM fs ct st t
---         stf PRD _ ct@(ContractTerms { contractType : ANN }) st    = _STF_PY_PAM fs ct st t
---         stf TD _ _ st                                           = _STF_TD_ALL st t
---         stf IP _ ct st                                          = _STF_IP_PAM ct st t
---         stf IPCI _ ct@(ContractTerms { contractType : PAM }) st   = _STF_IPCI_PAM ct st t
---         stf IPCI _ ct@(ContractTerms { contractType : LAM }) st   = _STF_IPCI_LAM ct st t
---         stf IPCI _ ct@(ContractTerms { contractType : NAM }) st   = _STF_IPCI_LAM ct st t
---         stf IPCI _ ct@(ContractTerms { contractType : ANN }) st   = _STF_IPCI_LAM ct st t
---         stf IPCB _ ct@(ContractTerms { contractType : LAM }) st   = _STF_IPCB_LAM fs ct st t
---         stf IPCB _ ct@(ContractTerms { contractType : NAM }) st   = _STF_IPCB_LAM fs ct st t
---         stf IPCB _ ct@(ContractTerms { contractType : ANN }) st   = _STF_IPCB_LAM fs ct st t
---         stf RR rf ct@(ContractTerms { contractType : PAM }) st    = _STF_RR_PAM fs rf ct st t
---         stf RR rf ct@(ContractTerms { contractType : LAM }) st    = _STF_RR_LAM fs rf ct st t
---         stf RR rf ct@(ContractTerms { contractType : NAM }) st    = _STF_RR_LAM fs rf ct st t
---         stf RR rf ct@(ContractTerms { contractType : ANN }) st    = _STF_RR_ANN ps fs rf ct st t
---         stf RRF rf ct@(ContractTerms { contractType : PAM }) st   = _STF_RRF_PAM fs rf ct st t
---         stf RRF rf ct@(ContractTerms { contractType : LAM }) st   = _STF_RRF_LAM fs rf ct st t
---         stf RRF rf ct@(ContractTerms { contractType : NAM }) st   = _STF_RRF_LAM fs rf ct st t
---         stf RRF rf ct@(ContractTerms { contractType : ANN }) st   = _STF_RRF_ANN ps fs rf ct st t
---         stf PRF _ ct@(ContractTerms { contractType : ANN }) st    = _STF_PRF_ANN ps fs ct st t
---         stf SC rf ct@(ContractTerms { contractType : PAM }) st    = _STF_SC_PAM fs rf ct st t
---         stf SC rf ct@(ContractTerms { contractType : LAM }) st    = _STF_SC_LAM fs rf ct st t
---         stf SC rf ct@(ContractTerms { contractType : NAM }) st    = _STF_SC_LAM fs rf ct st t
---         stf SC rf ct@(ContractTerms { contractType : ANN }) st    = _STF_SC_LAM fs rf ct st t
--- 
---         -----------------------
---         -- Credit Event (CE) --
---         -----------------------
---         stf CE rf ct st                                         = stf AD rf ct st
---         -------------
---         -- Default --
---         -------------
---         stf _ _ _ _                                             = sn
--- 
---         fs =
---           FeeSchedule
---             (fromMaybe t (sup ctx.fpSchedule t))
---             (fromMaybe t (inf ctx.fpSchedule t))
--- 
---         ps =
---           PrincipalRedemptionSchedule
---             ( let principalRedemptionDates = ctx.prSchedule ++ maybeToList ctx.maturity
---                in filter (_ > ctx.sd sn) principalRedemptionDates
---             )
---             (fromMaybe t (inf ctx.prSchedule t))
--- 
--- append' :: forall a. List a -> List a -> List a
--- append' Nil ys = ys
--- append' (x:xs) ys = x : (append' xs ys)
--- 
--- infixl 8 append' as ++
--- 
--- maybeToList :: forall a. Maybe a -> List a
--- maybeToList (Just x) = singleton x
--- maybeToList Nothing = mempty
--- 
--- data FeeSchedule = FeeSchedule
---   { latestFeePayment :: DateTime,
---     nextFeePayment   :: DateTime
---   }
--- 
--- data PrincipalRedemptionSchedule = PrincipalRedemptionSchedule
---   { laterPrincipalRedemptionDates :: List DateTime,
---     nextPrincipalRedemption       :: DateTime
---   }
--- 
--- thisOr0 :: forall a. Ring a => Maybe a -> a
--- thisOr0 = fromMaybe zero
--- 
--- flipAp :: forall a b. a -> (a -> b) -> b
--- flipAp x f = f x
--- 
--- infixl 8 flipAp as &
--- 
--- ---------------------
--- -- Monitoring (AD) --
--- ---------------------
--- 
--- _STF_AD_ALL :: Ring a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_AD_ALL
---   (ContractTerms
---     { dayCountConvention: Just dcc,
---       maturityDate
---     })
---   s
---   t =
---     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
---      in s & L.statusDate .~ t
---           & L.accruedInterest +~ timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
--- _STF_AD_ALL _ s _ = s
--- 
--- ----------------------------
--- -- Initial Exchange (IED) --
--- ----------------------------
--- 
--- _STF_IED_PAM :: Ring a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_IED_PAM
---   (ContractTerms
---     { nominalInterestRate,
---       notionalPrincipal: Just nt,
---       accruedInterest: Just ipac,
---       contractRole
---     })
---   s
---   t =
---     s & L.notionalPrincipal .~ sign contractRole * nt
---       & L.nominalInterest .~ thisOr0 nominalInterestRate
---       & L.accruedInterest .~ ipac
---       & L.statusDate .~ t
--- _STF_IED_PAM
---   (ContractTerms
---     { nominalInterestRate: Just ipnr,
---       notionalPrincipal: Just nt,
---       cycleAnchorDateOfInterestPayment: Just ipanx,
---       dayCountConvention: Just dcc,
---       contractRole,
---       maturityDate
---     })
---   s
---   t =
---     let nt' = sign contractRole * nt
---         timeFromInterestPaymentAnchorToNow = yearFraction dcc ipanx t maturityDate
---         timeFromInterestPaymentAnchorToNow' = yearFraction dcc ipanx t Nothing
---         ipnr' = ipnr
---      in s & L.notionalPrincipal .~ nt'
---           & L.nominalInterest .~ ipnr'
---           & L.accruedInterest .~ timeFromInterestPaymentAnchorToNow' * timeFromInterestPaymentAnchorToNow * nt' * ipnr' -- TODO: correct?
---           & L.statusDate .~ t
--- _STF_IED_PAM
---   (ContractTerms
---     { nominalInterestRate: Nothing,
---       notionalPrincipal: Just nt,
---       contractRole
---     })
---   s
---   t =
---     s & L.notionalPrincipal .~ sign contractRole * nt
---       & L.accruedInterest .~ zero
---       & L.statusDate .~ t
--- _STF_IED_PAM _ s _ = s
--- 
--- _STF_IED_LAM :: Ring a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_IED_LAM
---   ct@(ContractTerms
---     { notionalPrincipal: Just nt,
---       nominalInterestRate: Just ipnr,
---       dayCountConvention: Just dcc,
---       maturityDate,
---       contractRole
---     })
---   s
---   t =
---     let nt' = sign contractRole * nt
---         ipcb' = interestCalculationBase' ct
---           where
---             interestCalculationBase' (ContractTerms {interestCalculationBase: Just IPCB_NT}) = nt'
---             interestCalculationBase' (ContractTerms {interestCalculationBaseA: Just ipcba})  = sign contractRole * ipcba
---             interestCalculationBase' _                                                      = zero
---         ipac' = interestAccrued' ct
---           where
---             interestAccrued' (ContractTerms {accruedInterest: Just ipac}) = sign contractRole * ipac
---             interestAccrued' (ContractTerms {cycleAnchorDateOfInterestPayment: Just ipanx})
---               | ipanx < t =
---                 let timeFromInterestPaymentAnchorToNow = yearFraction dcc ipanx t maturityDate
---                  in timeFromInterestPaymentAnchorToNow * nt' * ipcb'
---             interestAccrued' _ = zero
---      in s & L.notionalPrincipal .~ nt'
---           & L.nominalInterest .~ ipnr
---           & L.accruedInterest .~ ipac'
---           & L.interestCalculationBase .~ ipcb'
---           & L.statusDate .~ t
--- _STF_IED_LAM _ s _ = s
--- 
--- -------------------------------
--- -- Principal Redemption (PR) --
--- -------------------------------
--- 
--- _STF_PR_LAM :: Ring a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_PR_LAM
---   ct@(ContractTerms
---     { dayCountConvention: Just dcc,
---       feeRate,
---       contractRole,
---       maturityDate
---     })
---   s
---   t =
---     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
---         nt' = (s ^. L.notionalPrincipal)
---                   - sign contractRole * ((s ^. L.nextPrincipalRedemptionPayment)
---                   - sign contractRole * _max zero (abs (s ^. L.nextPrincipalRedemptionPayment) - abs (s ^. L.notionalPrincipal)))
---         ipcb' = interestCalculationBase' ct
---           where
---             interestCalculationBase' (ContractTerms {interestCalculationBase: Just IPCB_NTL}) = s ^. L.interestCalculationBase
---             interestCalculationBase' _ = nt'
---      in s & L.notionalPrincipal .~ nt'
---           & L.accruedFees +~ timeFromLastEvent * (s ^. L.notionalPrincipal) * thisOr0 feeRate
---           & L.interestCalculationBase .~ ipcb'
---           & L.accruedInterest +~ (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase) * timeFromLastEvent
---           & L.statusDate .~ t
--- _STF_PR_LAM _ s _ = s
--- 
--- _STF_PR_NAM :: Ring a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_PR_NAM
---   ct@(ContractTerms
---     { dayCountConvention: Just dcc,
---       feeRate,
---       contractRole,
---       maturityDate
---     })
---   s
---   t =
---     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
---         ipac' = (s ^. L.accruedInterest) + (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase) * timeFromLastEvent
---         nt' = (s ^. L.notionalPrincipal) - sign contractRole * r
---           where
---             r = ra - _max zero (ra - abs (s ^. L.notionalPrincipal))
---             ra = (s ^. L.nextPrincipalRedemptionPayment) - sign contractRole * ipac'
---         ipcb' = interestCalculationBase' ct
---           where
---             interestCalculationBase' (ContractTerms {interestCalculationBase: Just IPCB_NT}) = nt'
---             interestCalculationBase' _ = s ^. L.interestCalculationBase
---      in s & L.notionalPrincipal .~ nt'
---           & L.accruedFees +~ timeFromLastEvent * (s ^. L.notionalPrincipal) * thisOr0 feeRate
---           & L.interestCalculationBase .~ ipcb'
---           & L.accruedInterest .~ ipac'
---           & L.statusDate .~ t
--- _STF_PR_NAM _ s _ = s
--- 
--- -------------------
--- -- Maturity (MD) --
--- -------------------
--- 
--- _STF_MD_ALL :: Ring a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_MD_ALL _ s t =
---   s & L.notionalPrincipal .~ zero
---     & L.accruedInterest .~ zero
---     & L.accruedFees .~ zero
---     & L.statusDate .~ t
--- 
--- -------------------------------
--- -- Principal Prepayment (PP) --
--- -------------------------------
--- 
--- _STF_PP_PAM :: Ring a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_PP_PAM
---   fs
---   RiskFactors
---     { pp_payoff
---     }
---   ct
---   s
---   t = _STF_PY_PAM fs ct s t & L.notionalPrincipal -~ pp_payoff
--- 
--- _STF_PP_LAM :: Ring a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_PP_LAM
---   fs
---   (RiskFactors
---     { pp_payoff
---     })
---   ct@(ContractTerms
---     { interestCalculationBase: Just IPCB_NT
---     })
---   s
---   t =
---     _STF_PY_PAM fs ct s t & L.notionalPrincipal .~ (s ^. L.notionalPrincipal) - pp_payoff
---       & L.interestCalculationBase .~ (s ^. L.notionalPrincipal)
--- _STF_PP_LAM
---   fs
---   (RiskFactors
---     { pp_payoff
---     })
---   ct
---   s
---   t =
---     _STF_PY_PAM fs ct s t & L.notionalPrincipal .~ (s ^. L.notionalPrincipal) - pp_payoff
---       & L.interestCalculationBase .~ (s ^. L.interestCalculationBase)
--- 
--- --------------------------
--- -- Penalty Payment (PY) --
--- --------------------------
--- 
--- _STF_PY_PAM :: Ring a => FeeSchedule -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_PY_PAM
---   _
---   (ContractTerms
---     { dayCountConvention: Just dcc,
---       notionalPrincipal: Just nt',
---       maturityDate,
---       feeBasis: Just FEB_N,
---       feeRate: Just fer
---     })
---   s
---   t =
---     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
---      in s & L.accruedInterest +~ timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
---           & L.accruedFees +~ timeFromLastEvent * fer * nt'
---           & L.statusDate .~ t
--- _STF_PY_PAM
---   (FeeSchedule fs)
---   (ContractTerms
---     { dayCountConvention: Just dcc,
---       maturityDate,
---       contractRole,
---       feeRate: Just fer
---     })
---   s
---   t =
---     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
---         timeFromLatestFeePayment = yearFraction dcc fs.latestFeePayment t maturityDate
---         timeFromLatestToNextFeePayment = yearFraction dcc fs.latestFeePayment fs.nextFeePayment maturityDate
---      in s & L.accruedInterest +~ timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
---           & L.accruedFees .~ _max zero (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * fer
---           & L.statusDate .~ t
--- _STF_PY_PAM _ _ s _ = s
--- 
--- _STF_PY_LAM :: Ring a => FeeSchedule -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_PY_LAM
---   (FeeSchedule fs)
---   ct@(ContractTerms
---     { feeRate: Just fer,
---       dayCountConvention: Just dcc,
---       maturityDate,
---       contractRole
---     })
---   s
---   t =
---     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
---         feac' = feeAccrued' ct
---           where
---             feeAccrued' (ContractTerms {feeBasis: Just FEB_N}) = (s ^. L.accruedFees) + timeFromLastEvent * (s ^. L.notionalPrincipal) * fer
---             feeAccrued' _ = (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * fer
---               where
---                 timeFromLatestFeePayment = yearFraction dcc fs.latestFeePayment t maturityDate
---                 timeFromLatestToNextFeePayment = yearFraction dcc fs.latestFeePayment fs.nextFeePayment maturityDate
---      in s & L.accruedInterest +~ timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase)
---           & L.accruedFees .~ feac'
---           & L.statusDate .~ t
--- _STF_PY_LAM
---   _
---   ct@(ContractTerms
---     { dayCountConvention: Just dcc,
---       maturityDate
---     })
---   s
---   t =
---     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
---         feac' = feeAccrued' ct
---           where
---             feeAccrued' (ContractTerms {feeBasis: Just FEB_N}) = s ^. L.accruedFees
---             feeAccrued' _                                     = zero
---      in s & L.accruedInterest +~ timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase)
---           & L.accruedFees .~ feac'
---           & L.statusDate .~ t
--- _STF_PY_LAM _ _ s _ = s
--- 
--- ----------------------
--- -- Fee Payment (FP) --
--- ----------------------
--- 
--- _STF_FP_PAM :: Ring a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_FP_PAM
---   (ContractTerms
---     { dayCountConvention: Just dcc,
---       maturityDate
---     })
---   s
---   t =
---     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
---      in s & L.accruedInterest +~ timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
---           & L.accruedFees .~ zero
---           & L.statusDate .~ t
--- _STF_FP_PAM _ s _ = s
--- 
--- _STF_FP_LAM :: Ring a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_FP_LAM
---   (ContractTerms
---     { dayCountConvention: Just dcc,
---       maturityDate
---     })
---   s
---   t =
---     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
---      in s & L.accruedInterest +~ timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase)
---           & L.accruedFees .~ zero
---           & L.statusDate .~ t
--- _STF_FP_LAM _ s _ = s
--- 
--- ----------------------
--- -- Termination (TD) --
--- ----------------------
--- 
--- _STF_TD_ALL :: forall a. Ring a => ContractState a -> DateTime -> ContractState a
--- _STF_TD_ALL
---   s
---   t =
---     s & L.notionalPrincipal .~ zero
---       & L.accruedInterest .~ zero
---       & L.accruedFees .~ zero
---       & L.nominalInterest .~ zero
---       & L.statusDate .~ t
--- 
--- ---------------------------
--- -- Interest Payment (IP) --
--- ---------------------------
--- 
--- _STF_IP_PAM :: forall a. Ring a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_IP_PAM
---   (ContractTerms
---     { dayCountConvention: Just dcc,
---       feeRate,
---       maturityDate
---     })
---   s
---   t =
---     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
---      in s & L.accruedInterest .~ zero
---           & L.accruedFees .~ timeFromLastEvent * (s ^. L.notionalPrincipal) * thisOr0 feeRate
---           & L.statusDate .~ t
--- _STF_IP_PAM _ s _ = s
--- 
--- ------------------------------------
--- -- Interest Capitalization (IPCI) --
--- ------------------------------------
--- 
--- _STF_IPCI_PAM :: forall a. Ring a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_IPCI_PAM
---   ct@(ContractTerms
---     { dayCountConvention: Just dcc,
---       maturityDate
---     })
---   s
---   t =
---     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
---      in _STF_IP_PAM ct s t & L.notionalPrincipal .~ (s ^. L.notionalPrincipal) + (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
--- _STF_IPCI_PAM _ s _ = s
--- 
--- _STF_IPCI_LAM :: forall a. Ring a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_IPCI_LAM
---           ct@(ContractTerms
---             { dayCountConvention: Just dcc,
---               maturityDate
---             })
---           s t =
---               let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
---                   nt' = (s ^. L.notionalPrincipal) + (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase)
---                   ipcb' = interestCalculationBase ct
---                     where
---                       interestCalculationBase (ContractTerms {interestCalculationBase: Just IPCB_NT}) = nt'
---                       interestCalculationBase _                                                      = s ^. L.interestCalculationBase
---                in _STF_IP_PAM ct s t & L.notionalPrincipal .~ nt'
---                                      & L.interestCalculationBase  .~ ipcb'
--- _STF_IPCI_LAM _ s _ = s
--- 
--- ---------------------------------------------
--- -- Interest Calculation Base Fixing (IPCB) --
--- ---------------------------------------------
--- 
--- _STF_IPCB_LAM :: forall a. Ring a => FeeSchedule -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_IPCB_LAM fs ct s t = _STF_PY_LAM fs ct s t & L.interestCalculationBase .~ (s ^. L.notionalPrincipal)
--- 
--- -------------------------------
--- -- Rate Reset (RR) --
--- -------------------------------
--- 
--- _STF_RR_PAM :: forall a. Ring a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_RR_PAM
---   fs
---   (RiskFactors
---     { o_rf_RRMO
---     })
---   ct@(ContractTerms
---     { feeBasis: Just FEB_N,
---       feeRate: Just fer,
---       lifeFloor: Just rrlf,
---       lifeCap: Just rrlc,
---       periodCap: Just rrpc,
---       periodFloor: Just rrpf,
---       rateMultiplier: Just rrmlt,
---       rateSpread: Just rrsp,
---       dayCountConvention: Just dcc,
---       maturityDate
---     })
---   s
---   t =
---     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
---         delta_r = _min (_max (o_rf_RRMO * rrmlt + rrsp - (s ^. L.nominalInterest)) rrpf) rrpc
---         ipnr' = _min (_max (s ^. L.nominalInterest + delta_r) rrlf) rrlc
---      in _STF_PY_PAM fs ct s t
---           & L.accruedInterest .~ (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
---           & L.accruedFees .~ (s ^. L.accruedFees) + timeFromLastEvent * fer * (s ^. L.notionalPrincipal)
---           & L.nominalInterest .~ ipnr'
---           & L.statusDate .~ t
--- _STF_RR_PAM
---   (FeeSchedule fs)
---   (RiskFactors
---     { o_rf_RRMO
---     })
---   ct@(ContractTerms
---     { feeRate: Just fer,
---       lifeFloor: Just rrlf,
---       lifeCap: Just rrlc,
---       periodCap: Just rrpc,
---       periodFloor: Just rrpf,
---       rateMultiplier: Just rrmlt,
---       rateSpread: Just rrsp,
---       dayCountConvention: Just dcc,
---       contractRole,
---       maturityDate
---     })
---   s
---   t =
---     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
---         timeFromLatestFeePayment = yearFraction dcc fs.latestFeePayment t maturityDate
---         timeFromLatestToNextFeePayment = yearFraction dcc fs.latestFeePayment fs.nextFeePayment maturityDate
---         delta_r = _min (_max (o_rf_RRMO * rrmlt + rrsp - (s ^. L.nominalInterest)) rrpf) rrpc
---         ipnr' = _min (_max (s ^. L.nominalInterest + delta_r) rrlf) rrlc
---      in _STF_PY_PAM fs ct s t
---           & L.accruedInterest .~ (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
---           & L.accruedFees .~ (if fs.latestFeePayment == fs.nextFeePayment then zero else (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * fer)
---           & L.nominalInterest .~ ipnr'
---           & L.statusDate .~ t
--- _STF_RR_PAM _ _ _ s _ = s
--- 
--- _STF_RR_LAM :: forall a. Ring a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_RR_LAM
---   fs
---   (RiskFactors
---     { o_rf_RRMO
---     })
---   ct@(ContractTerms
---     { lifeFloor: Just rrlf,
---       lifeCap: Just rrlc,
---       periodCap: Just rrpc,
---       periodFloor: Just rrpf,
---       rateMultiplier: Just rrmlt,
---       rateSpread: Just rrsp
---     })
---   s
---   t =
---     let delta_r = _min (_max (o_rf_RRMO * rrmlt + rrsp - (s ^. L.nominalInterest)) rrpf) rrpc
---         ipnr' = _min (_max ((s ^. L.nominalInterest) + delta_r) rrlf) rrlc
---      in _STF_PY_LAM fs ct s t
---           & L.nominalInterest .~ ipnr'
---           & L.statusDate .~ t
--- _STF_RR_LAM _ _ _ s _ = s
--- 
--- _STF_RR_ANN :: forall a. Ring a => PrincipalRedemptionSchedule -> FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_RR_ANN
---   (PrincipalRedemptionSchedule prs)
---   (FeeSchedule fs)
---   (RiskFactors
---     { o_rf_RRMO
---     })
---   ct@(ContractTerms
---     { dayCountConvention: Just dcc,
---       lifeFloor: Just rrlf,
---       lifeCap: Just rrlc,
---       periodCap: Just rrpc,
---       periodFloor: Just rrpf,
---       rateMultiplier: Just rrmlt,
---       rateSpread: Just rrsp,
---       feeRate,
---       contractRole,
---       maturityDate
---     })
---   (ContractState s)
---   t =
---     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
---         timeFromLatestFeePayment = yearFraction dcc fs.latestFeePayment t maturityDate
---         timeFromLatestToNextFeePayment = yearFraction dcc fs.latestFeePayment fs.nextFeePayment maturityDate
---         ti = zipWith (\tn tm -> yearFraction dcc tn tm maturityDate) prs.laterPrincipalRedemptionDates (tail prs.laterPrincipalRedemptionDates)
--- 
---         ipac' = (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase)
---         feac' = feeAccrued' ct
---           where
---             feeAccrued' (ContractTerms {feeBasis: Just FEB_N}) = (s ^. L.accruedFees) + timeFromLastEvent * (s ^. L.notionalPrincipal) * thisOr0 feeRate
---             feeAccrued' _ = (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * thisOr0 feeRate
--- 
---         ipnr' = _min (_max ((s ^. L.nominalInterest) + delta_r) rrlf) rrlc
---           where
---             delta_r = _min (_max (o_rf_RRMO * rrmlt + rrsp - (s ^. L.nominalInterest)) rrpf) rrpc
--- 
---         prnxt' = annuity ipnr' ti
---      in s & L.accruedInterest .~ ipac'
---           & L.accruedFees .~ feac'
---           & L.nominalInterest .~ ipnr'
---           & L.nextPrincipalRedemptionPayment .~ prnxt'
---           & L.statusDate .~ t
--- _STF_RR_ANN _ _ _ _ s _ = s
--- 
--- -----------------------------
--- -- Rate Reset Fixing (RRF) --
--- -----------------------------
--- 
--- _STF_RRF_PAM :: forall a. Ring a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_RRF_PAM
---   fs
---   _
---   ct@(ContractTerms
---     { nextResetRate: rrnxt
---     })
---   s
---   t =
---     _STF_PY_PAM fs ct s t
---       & L.nominalInterest .~ thisOr0 rrnxt
--- 
--- _STF_RRF_LAM :: forall a. Ring a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_RRF_LAM
---   fs
---   _
---   ct@(ContractTerms
---     { nextResetRate: rrnxt
---     })
---   s
---   t =
---     _STF_PY_LAM fs ct s t
---       & L.nominalInterest .~ thisOr0 rrnxt
--- 
--- _STF_RRF_ANN :: forall a. Ring a => PrincipalRedemptionSchedule -> FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_RRF_ANN
---   (PrincipalRedemptionSchedule prs)
---   (FeeSchedule fs)
---   _
---   ct@(ContractTerms
---     { dayCountConvention: Just dcc,
---       nextResetRate: Just rrnxt,
---       contractRole,
---       maturityDate
---     })
---   s
---   t =
---     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
---         timeFromLatestFeePayment = yearFraction dcc fs.latestFeePayment t maturityDate
---         timeFromLatestToNextFeePayment = yearFraction dcc fs.latestFeePayment fs.nextFeePayment maturityDate
---         ti = zipWith (\tn tm -> yearFraction dcc tn tm maturityDate) prs.laterPrincipalRedemptionDates (tail prs.laterPrincipalRedemptionDates)
--- 
---         ipac' = (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase)
---         feac' = feeAccrued' ct
---           where
---             feeAccrued' (ContractTerms {feeBasis: Just FEB_N}) = (s ^. L.accruedFees) + timeFromLastEvent * (s ^. L.notionalPrincipal) * thisOr0 (fs.feeRate ct)
---             feeAccrued' _ = (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * thisOr0 (fs.feeRate ct)
--- 
---         ipnr' = rrnxt
---         prnxt' = annuity ipnr' ti
---      in s & L.accruedInterest .~ ipac'
---           & L.accruedFees .~ feac'
---           & L.nominalInterest .~ ipnr'
---           & L.nextPrincipalRedemptionPayment .~ prnxt'
---           & L.statusDate .~ t
--- _STF_RRF_ANN _ _ _ _ s _ = s
--- 
--- -------------------------------------------
--- -- Principal Payment Amount Fixing (PRF) --
--- -------------------------------------------
--- 
--- _STF_PRF_ANN :: forall a. Ring a => PrincipalRedemptionSchedule -> FeeSchedule -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_PRF_ANN
---   (PrincipalRedemptionSchedule prs)
---   (FeeSchedule fs)
---   ct@(ContractTerms
---     { dayCountConvention: Just dcc,
---       contractRole,
---       maturityDate
---     })
---   s
---   t =
---     let timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
---         timeFromLatestFeePayment = yearFraction dcc fs.latestFeePayment t maturityDate
---         timeFromLatestToNextFeePayment = yearFraction dcc fs.latestFeePayment fs.nextFeePayment maturityDate
---         timeToNextPrincipalRedemption = yearFraction dcc t prs.nextPrincipalRedemption maturityDate
---         ti = zipWith (\tn tm -> yearFraction dcc tn tm maturityDate) prs.laterPrincipalRedemptionDates (tail prs.laterPrincipalRedemptionDates)
--- 
---         ipac' = (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase)
---         feac' = feeAccrued' ct
---           where
---             feeAccrued' (ContractTerms {feeBasis: Just FEB_N}) = (s ^. L.accruedFees) + timeFromLastEvent * (s ^. L.notionalPrincipal) * thisOr0 (fs.feeRate ct)
---             feeAccrued' _ = (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * thisOr0 (fs.feeRate ct)
--- 
---         prnxt' = sign contractRole * frac * scale
---           where
---             scale = (s ^. L.notionalPrincipal) + ipac' + timeToNextPrincipalRedemption * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
---             frac = annuity (s ^. L.nominalInterest) ti
---      in s & L.accruedInterest .~ ipac'
---           & L.accruedFees .~ feac'
---           & L.nextPrincipalRedemptionPayment .~ prnxt'
---           & L.statusDate .~ t
--- _STF_PRF_ANN _ _ _ s _ = s
--- 
--- -------------------------------
--- -- Scaling Index Fixing (SC) --
--- -------------------------------
--- 
--- _STF_SC_PAM :: forall a. Ring a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_SC_PAM
---   fs
---   (RiskFactors
---     { o_rf_SCMO
---     })
---   ct@(ContractTerms
---     { scalingEffect: Just scef,
---       scalingIndexAtStatusDate: Just scied
---     })
---   s
---   t =
---     let nsc' = case scef of
---           SE_OOM -> s ^. L.notionalScalingMultiplier
---           SE_IOO -> s ^. L.notionalScalingMultiplier
---           _      -> (o_rf_SCMO - scied) / scied
---         isc' = case scef of
---           SE_ONO -> s ^. L.interestScalingMultiplier
---           SE_OOM -> s ^. L.interestScalingMultiplier
---           SE_ONM -> s ^. L.interestScalingMultiplier
---           _      -> (o_rf_SCMO - scied) / scied
---      in _STF_PY_PAM fs ct s t
---           & L.notionalScalingMultiplier .~ nsc'
---           & L.interestScalingMultiplier .~ isc'
--- _STF_SC_PAM _ _ _ s _ = s
--- 
--- _STF_SC_LAM :: forall a. Ring a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
--- _STF_SC_LAM
---   fs
---   (RiskFactors
---     { o_rf_SCMO
---     })
---   ct@(ContractTerms
---     { scalingIndexAtContractDealDate: Just sccdd,
---       scalingEffect: Just scef
---     })
---   s
---   t =
---     _STF_PY_LAM fs ct s t
---       & L.notionalScalingMultiplier .~ (if elem 'N' (show scef) then o_rf_SCMO / sccdd else s ^. L.notionalScalingMultiplier)
---       & L.interestScalingMultiplier .~ (if elem 'I' (show scef) then o_rf_SCMO / sccdd else s ^. L.interestScalingMultiplier)
--- _STF_SC_LAM _ _ _ s _ = s
+-- |A state transition updates the contract state based on the type of event and the time.
+-- `CtxSTF` provides in particular the contract terms and risk factors.
+stateTransition
+  :: forall a
+   . EuclideanRing a
+  => ActusOps a
+  =>
+  -- | Event type
+  EventType
+  ->
+  -- | Time
+  DateTime
+  ->
+  -- | Contract state
+  ContractState a
+  ->
+  -- | Updated contract state
+  Reader (CtxSTF a) (ContractState a)
+stateTransition ev t sn = asks stateTransition'
+  where
+  stateTransition' ctx = let (ContractTerms ct') = ctx.contractTerms in stf ev (ctx.riskFactors ct'.contractId ev t) ctx.contractTerms sn
+    where
+    stf AD _ ct st = _STF_AD_ALL ct st t
+    stf IED _ ct@(ContractTerms { contractType: PAM }) st = _STF_IED_PAM ct st t
+    stf IED _ ct@(ContractTerms { contractType: LAM }) st = _STF_IED_LAM ct st t
+    stf IED _ ct@(ContractTerms { contractType: NAM }) st = _STF_IED_LAM ct st t
+    stf IED _ ct@(ContractTerms { contractType: ANN }) st = _STF_IED_LAM ct st t
+    stf PR _ ct@(ContractTerms { contractType: LAM }) st = _STF_PR_LAM ct st t
+    stf PR _ ct@(ContractTerms { contractType: NAM }) st = _STF_PR_NAM ct st t
+    stf PR _ ct@(ContractTerms { contractType: ANN }) st = _STF_PR_NAM ct st t
+    stf MD _ ct st = _STF_MD_ALL ct st t
+    stf PP rf ct@(ContractTerms { contractType: PAM }) st = _STF_PP_PAM fs rf ct st t
+    stf PP rf ct@(ContractTerms { contractType: LAM }) st = _STF_PP_LAM fs rf ct st t
+    stf PP rf ct@(ContractTerms { contractType: NAM }) st = _STF_PP_LAM fs rf ct st t
+    stf PP rf ct@(ContractTerms { contractType: ANN }) st = _STF_PP_LAM fs rf ct st t
+    stf PY _ ct@(ContractTerms { contractType: PAM }) st = _STF_PY_PAM fs ct st t
+    stf PY _ ct@(ContractTerms { contractType: LAM }) st = _STF_PY_LAM fs ct st t
+    stf PY _ ct@(ContractTerms { contractType: NAM }) st = _STF_PY_LAM fs ct st t
+    stf PY _ ct@(ContractTerms { contractType: ANN }) st = _STF_PY_LAM fs ct st t
+    stf FP _ ct@(ContractTerms { contractType: PAM }) st = _STF_FP_PAM ct st t
+    stf FP _ ct@(ContractTerms { contractType: LAM }) st = _STF_FP_LAM ct st t
+    stf FP _ ct@(ContractTerms { contractType: NAM }) st = _STF_FP_LAM ct st t
+    stf FP _ ct@(ContractTerms { contractType: ANN }) st = _STF_FP_LAM ct st t
+    stf PRD _ ct@(ContractTerms { contractType: PAM }) st = _STF_PY_PAM fs ct st t
+    stf PRD _ ct@(ContractTerms { contractType: LAM }) st = _STF_PY_PAM fs ct st t
+    stf PRD _ ct@(ContractTerms { contractType: NAM }) st = _STF_PY_PAM fs ct st t
+    stf PRD _ ct@(ContractTerms { contractType: ANN }) st = _STF_PY_PAM fs ct st t
+    stf TD _ _ st = _STF_TD_ALL st t
+    stf IP _ ct st = _STF_IP_PAM ct st t
+    stf IPCI _ ct@(ContractTerms { contractType: PAM }) st = _STF_IPCI_PAM ct st t
+    stf IPCI _ ct@(ContractTerms { contractType: LAM }) st = _STF_IPCI_LAM ct st t
+    stf IPCI _ ct@(ContractTerms { contractType: NAM }) st = _STF_IPCI_LAM ct st t
+    stf IPCI _ ct@(ContractTerms { contractType: ANN }) st = _STF_IPCI_LAM ct st t
+    stf IPCB _ ct@(ContractTerms { contractType: LAM }) st = _STF_IPCB_LAM fs ct st t
+    stf IPCB _ ct@(ContractTerms { contractType: NAM }) st = _STF_IPCB_LAM fs ct st t
+    stf IPCB _ ct@(ContractTerms { contractType: ANN }) st = _STF_IPCB_LAM fs ct st t
+    stf RR rf ct@(ContractTerms { contractType: PAM }) st = _STF_RR_PAM fs rf ct st t
+    stf RR rf ct@(ContractTerms { contractType: LAM }) st = _STF_RR_LAM fs rf ct st t
+    stf RR rf ct@(ContractTerms { contractType: NAM }) st = _STF_RR_LAM fs rf ct st t
+    stf RR rf ct@(ContractTerms { contractType: ANN }) st = _STF_RR_ANN ps fs rf ct st t
+    stf RRF rf ct@(ContractTerms { contractType: PAM }) st = _STF_RRF_PAM fs rf ct st t
+    stf RRF rf ct@(ContractTerms { contractType: LAM }) st = _STF_RRF_LAM fs rf ct st t
+    stf RRF rf ct@(ContractTerms { contractType: NAM }) st = _STF_RRF_LAM fs rf ct st t
+    stf RRF rf ct@(ContractTerms { contractType: ANN }) st = _STF_RRF_ANN ps fs rf ct st t
+    stf PRF _ ct@(ContractTerms { contractType: ANN }) st = _STF_PRF_ANN ps fs ct st t
+    stf SC rf ct@(ContractTerms { contractType: PAM }) st = _STF_SC_PAM fs rf ct st t
+    stf SC rf ct@(ContractTerms { contractType: LAM }) st = _STF_SC_LAM fs rf ct st t
+    stf SC rf ct@(ContractTerms { contractType: NAM }) st = _STF_SC_LAM fs rf ct st t
+    stf SC rf ct@(ContractTerms { contractType: ANN }) st = _STF_SC_LAM fs rf ct st t
+
+    -----------------------
+    -- Credit Event (CE) --
+    -----------------------
+    stf CE rf ct st = stf AD rf ct st
+    -------------
+    -- Default --
+    -------------
+    stf _ _ _ _ = sn
+
+    fs =
+      FeeSchedule
+        { latestFeePayment: (fromMaybe t (sup ctx.fpSchedule t))
+        , nextFeePayment: (fromMaybe t (inf ctx.fpSchedule t))
+        }
+
+    ps =
+      PrincipalRedemptionSchedule
+        { laterPrincipalRedemptionDates:
+            ( let
+                principalRedemptionDates = ctx.prSchedule ++ (maybeToList ctx.maturity)
+                ContractState sn' = sn
+              in
+                filter (_ > sn'.sd) principalRedemptionDates
+            )
+        , nextPrincipalRedemption: (fromMaybe t (inf ctx.prSchedule t))
+        }
+
+append' :: forall a. List a -> List a -> List a
+append' Nil ys = ys
+append' (x : xs) ys = x : (append' xs ys)
+
+infixl 8 append' as ++
+
+maybeToList :: forall a. Maybe a -> List a
+maybeToList (Just x) = singleton x
+maybeToList Nothing = mempty
+
+data FeeSchedule = FeeSchedule
+  { latestFeePayment :: DateTime
+  , nextFeePayment :: DateTime
+  }
+
+data PrincipalRedemptionSchedule = PrincipalRedemptionSchedule
+  { laterPrincipalRedemptionDates :: List DateTime
+  , nextPrincipalRedemption :: DateTime
+  }
+
+thisOr0 :: forall a. Ring a => Maybe a -> a
+thisOr0 = fromMaybe zero
+
+flipAp :: forall a b. a -> (a -> b) -> b
+flipAp x f = f x
+
+infixl 8 flipAp as &
+
+---------------------
+-- Monitoring (AD) --
+---------------------
+
+_STF_AD_ALL :: forall a. EuclideanRing a => ActusOps a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_AD_ALL
+  ( ContractTerms
+      { dayCountConvention: Just dcc
+      , maturityDate
+      }
+  )
+  (ContractState s)
+  t =
+  let
+    timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
+  in
+    ContractState $
+      s # L.statusDate .~ t
+        # L.accruedInterest +~ timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
+_STF_AD_ALL _ s _ = s
+
+----------------------------
+-- Initial Exchange (IED) --
+----------------------------
+
+_STF_IED_PAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_IED_PAM
+  ( ContractTerms
+      { nominalInterestRate
+      , notionalPrincipal: Just nt
+      , accruedInterest: Just ipac
+      , contractRole
+      }
+  )
+  (ContractState s)
+  t = ContractState $
+  s # L.notionalPrincipal .~ sign contractRole * nt
+    # L.nominalInterest .~ thisOr0 nominalInterestRate
+    # L.accruedInterest .~ ipac
+    # L.statusDate .~ t
+_STF_IED_PAM
+  ( ContractTerms
+      { nominalInterestRate: Just ipnr
+      , notionalPrincipal: Just nt
+      , cycleAnchorDateOfInterestPayment: Just ipanx
+      , dayCountConvention: Just dcc
+      , contractRole
+      , maturityDate
+      }
+  )
+  (ContractState s)
+  t =
+  let
+    nt' = sign contractRole * nt
+    timeFromInterestPaymentAnchorToNow = yearFraction dcc ipanx t maturityDate
+    timeFromInterestPaymentAnchorToNow' = yearFraction dcc ipanx t Nothing
+    ipnr' = ipnr
+  in
+    ContractState $
+      s # L.notionalPrincipal .~ nt'
+        # L.nominalInterest .~ ipnr'
+        # L.accruedInterest .~ timeFromInterestPaymentAnchorToNow' * timeFromInterestPaymentAnchorToNow * nt' * ipnr' -- TODO: correct?
+        # L.statusDate .~ t
+_STF_IED_PAM
+  ( ContractTerms
+      { nominalInterestRate: Nothing
+      , notionalPrincipal: Just nt
+      , contractRole
+      }
+  )
+  (ContractState s)
+  t = ContractState $
+  s # L.notionalPrincipal .~ sign contractRole * nt
+    # L.accruedInterest .~ zero
+    # L.statusDate .~ t
+_STF_IED_PAM _ s _ = s
+
+_STF_IED_LAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_IED_LAM
+  ct@
+    ( ContractTerms
+        { notionalPrincipal: Just nt
+        , nominalInterestRate: Just ipnr
+        , dayCountConvention: Just dcc
+        , maturityDate
+        , contractRole
+        }
+    )
+  (ContractState s)
+  t =
+  let
+    nt' = sign contractRole * nt
+    ipcb' = interestCalculationBase' ct
+      where
+      interestCalculationBase' (ContractTerms { interestCalculationBase: Just IPCB_NT }) = nt'
+      interestCalculationBase' (ContractTerms { interestCalculationBaseA: Just ipcba }) = sign contractRole * ipcba
+      interestCalculationBase' _ = zero
+    ipac' = interestAccrued' ct
+      where
+      interestAccrued' (ContractTerms { accruedInterest: Just ipac }) = sign contractRole * ipac
+      interestAccrued' (ContractTerms { cycleAnchorDateOfInterestPayment: Just ipanx })
+        | ipanx < t =
+            let
+              timeFromInterestPaymentAnchorToNow = yearFraction dcc ipanx t maturityDate
+            in
+              timeFromInterestPaymentAnchorToNow * nt' * ipcb'
+      interestAccrued' _ = zero
+  in
+    ContractState $
+      s # L.notionalPrincipal .~ nt'
+        # L.nominalInterest .~ ipnr
+        # L.accruedInterest .~ ipac'
+        # L.interestCalculationBase .~ ipcb'
+        # L.statusDate .~ t
+_STF_IED_LAM _ s _ = s
+
+-------------------------------
+-- Principal Redemption (PR) --
+-------------------------------
+
+_STF_PR_LAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_PR_LAM
+  ct@
+    ( ContractTerms
+        { dayCountConvention: Just dcc
+        , feeRate
+        , contractRole
+        , maturityDate
+        }
+    )
+  (ContractState s)
+  t =
+  let
+    timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
+    nt' = (s ^. L.notionalPrincipal)
+      - sign contractRole *
+          ( (s ^. L.nextPrincipalRedemptionPayment)
+              - sign contractRole * _max zero (_abs (s ^. L.nextPrincipalRedemptionPayment) - _abs (s ^. L.notionalPrincipal))
+          )
+    ipcb' = interestCalculationBase' ct
+      where
+      interestCalculationBase' (ContractTerms { interestCalculationBase: Just IPCB_NTL }) = s ^. L.interestCalculationBase
+      interestCalculationBase' _ = nt'
+  in
+    ContractState $
+      s # L.notionalPrincipal .~ nt'
+        # L.accruedFees +~ timeFromLastEvent * (s ^. L.notionalPrincipal) * thisOr0 feeRate
+        # L.interestCalculationBase .~ ipcb'
+        # L.accruedInterest +~ (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase) * timeFromLastEvent
+        # L.statusDate .~ t
+_STF_PR_LAM _ s _ = s
+
+_STF_PR_NAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_PR_NAM
+  ct@
+    ( ContractTerms
+        { dayCountConvention: Just dcc
+        , feeRate
+        , contractRole
+        , maturityDate
+        }
+    )
+  (ContractState s)
+  t =
+  let
+    timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
+    ipac' = (s ^. L.accruedInterest) + (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase) * timeFromLastEvent
+    nt' = (s ^. L.notionalPrincipal) - sign contractRole * r
+      where
+      r = ra - _max zero (ra - _abs (s ^. L.notionalPrincipal))
+      ra = (s ^. L.nextPrincipalRedemptionPayment) - sign contractRole * ipac'
+    ipcb' = interestCalculationBase' ct
+      where
+      interestCalculationBase' (ContractTerms { interestCalculationBase: Just IPCB_NT }) = nt'
+      interestCalculationBase' _ = s ^. L.interestCalculationBase
+  in
+    ContractState $
+      s # L.notionalPrincipal .~ nt'
+        # L.accruedFees +~ timeFromLastEvent * (s ^. L.notionalPrincipal) * thisOr0 feeRate
+        # L.interestCalculationBase .~ ipcb'
+        # L.accruedInterest .~ ipac'
+        # L.statusDate .~ t
+_STF_PR_NAM _ s _ = s
+
+-------------------
+-- Maturity (MD) --
+-------------------
+
+_STF_MD_ALL :: forall a. Ring a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_MD_ALL _ (ContractState s) t = ContractState $
+  s # L.notionalPrincipal .~ zero
+    # L.accruedInterest .~ zero
+    # L.accruedFees .~ zero
+    # L.statusDate .~ t
+
+-------------------------------
+-- Principal Prepayment (PP) --
+-------------------------------
+
+_STF_PP_PAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_PP_PAM
+  fs
+  ( RiskFactors
+      { pp_payoff
+      }
+  )
+  ct
+  s
+  t =
+  let
+    (ContractState s') = _STF_PY_PAM fs ct s t
+  in
+    ContractState $ s' # L.notionalPrincipal -~ pp_payoff
+
+_STF_PP_LAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_PP_LAM
+  fs
+  ( RiskFactors
+      { pp_payoff
+      }
+  )
+  ct@
+    ( ContractTerms
+        { interestCalculationBase: Just IPCB_NT
+        }
+    )
+  s'@(ContractState s)
+  t =
+  let
+    (ContractState s'') = _STF_PY_PAM fs ct s' t
+  in
+    ContractState $
+      s'' # L.notionalPrincipal .~ (s ^. L.notionalPrincipal) - pp_payoff
+        # L.interestCalculationBase .~ (s ^. L.notionalPrincipal)
+_STF_PP_LAM
+  fs
+  ( RiskFactors
+      { pp_payoff
+      }
+  )
+  ct
+  s'@(ContractState s)
+  t =
+  let
+    (ContractState s'') = _STF_PY_PAM fs ct s' t
+  in
+    ContractState $ s'' # L.notionalPrincipal .~ (s ^. L.notionalPrincipal) - pp_payoff
+      # L.interestCalculationBase .~ (s ^. L.interestCalculationBase)
+
+--------------------------
+-- Penalty Payment (PY) --
+--------------------------
+
+_STF_PY_PAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_PY_PAM
+  _
+  ( ContractTerms
+      { dayCountConvention: Just dcc
+      , notionalPrincipal: Just nt'
+      , maturityDate
+      , feeBasis: Just FEB_N
+      , feeRate: Just fer
+      }
+  )
+  (ContractState s)
+  t =
+  let
+    timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
+  in
+    ContractState $
+      s # L.accruedInterest +~ timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
+        # L.accruedFees +~ timeFromLastEvent * fer * nt'
+        # L.statusDate .~ t
+_STF_PY_PAM
+  (FeeSchedule fs)
+  ( ContractTerms
+      { dayCountConvention: Just dcc
+      , maturityDate
+      , contractRole
+      , feeRate: Just fer
+      }
+  )
+  (ContractState s)
+  t =
+  let
+    timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
+    timeFromLatestFeePayment = yearFraction dcc fs.latestFeePayment t maturityDate
+    timeFromLatestToNextFeePayment = yearFraction dcc fs.latestFeePayment fs.nextFeePayment maturityDate
+  in
+    ContractState $
+      s # L.accruedInterest +~ timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
+        # L.accruedFees .~ _max zero (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * fer
+        # L.statusDate .~ t
+_STF_PY_PAM _ _ s _ = s
+
+_STF_PY_LAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_PY_LAM
+  (FeeSchedule fs)
+  ct@
+    ( ContractTerms
+        { feeRate: Just fer
+        , dayCountConvention: Just dcc
+        , maturityDate
+        , contractRole
+        }
+    )
+  (ContractState s)
+  t =
+  let
+    timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
+    feac' = feeAccrued' ct
+      where
+      feeAccrued' (ContractTerms { feeBasis: Just FEB_N }) = (s ^. L.accruedFees) + timeFromLastEvent * (s ^. L.notionalPrincipal) * fer
+      feeAccrued' _ = (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * fer
+        where
+        timeFromLatestFeePayment = yearFraction dcc fs.latestFeePayment t maturityDate
+        timeFromLatestToNextFeePayment = yearFraction dcc fs.latestFeePayment fs.nextFeePayment maturityDate
+  in
+    ContractState $
+      s # L.accruedInterest +~ timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase)
+        # L.accruedFees .~ feac'
+        # L.statusDate .~ t
+_STF_PY_LAM
+  _
+  ct@
+    ( ContractTerms
+        { dayCountConvention: Just dcc
+        , maturityDate
+        }
+    )
+  (ContractState s)
+  t =
+  let
+    timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
+    feac' = feeAccrued' ct
+      where
+      feeAccrued' (ContractTerms { feeBasis: Just FEB_N }) = s ^. L.accruedFees
+      feeAccrued' _ = zero
+  in
+    ContractState $
+      s # L.accruedInterest +~ timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase)
+        # L.accruedFees .~ feac'
+        # L.statusDate .~ t
+_STF_PY_LAM _ _ s _ = s
+
+----------------------
+-- Fee Payment (FP) --
+----------------------
+
+_STF_FP_PAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_FP_PAM
+  ( ContractTerms
+      { dayCountConvention: Just dcc
+      , maturityDate
+      }
+  )
+  (ContractState s)
+  t =
+  let
+    timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
+  in
+    ContractState $
+      s # L.accruedInterest +~ timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
+        # L.accruedFees .~ zero
+        # L.statusDate .~ t
+_STF_FP_PAM _ s _ = s
+
+_STF_FP_LAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_FP_LAM
+  ( ContractTerms
+      { dayCountConvention: Just dcc
+      , maturityDate
+      }
+  )
+  (ContractState s)
+  t =
+  let
+    timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
+  in
+    ContractState $
+      s # L.accruedInterest +~ timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase)
+        # L.accruedFees .~ zero
+        # L.statusDate .~ t
+_STF_FP_LAM _ s _ = s
+
+----------------------
+-- Termination (TD) --
+----------------------
+
+_STF_TD_ALL :: forall a. Ring a => ContractState a -> DateTime -> ContractState a
+_STF_TD_ALL
+  (ContractState s)
+  t = ContractState $
+  s # L.notionalPrincipal .~ zero
+    # L.accruedInterest .~ zero
+    # L.accruedFees .~ zero
+    # L.nominalInterest .~ zero
+    # L.statusDate .~ t
+
+---------------------------
+-- Interest Payment (IP) --
+---------------------------
+
+_STF_IP_PAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_IP_PAM
+  ( ContractTerms
+      { dayCountConvention: Just dcc
+      , feeRate
+      , maturityDate
+      }
+  )
+  (ContractState s)
+  t =
+  let
+    timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
+  in
+    ContractState $
+      s # L.accruedInterest .~ zero
+        # L.accruedFees .~ timeFromLastEvent * (s ^. L.notionalPrincipal) * thisOr0 feeRate
+        # L.statusDate .~ t
+_STF_IP_PAM _ s _ = s
+
+------------------------------------
+-- Interest Capitalization (IPCI) --
+------------------------------------
+
+_STF_IPCI_PAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_IPCI_PAM
+  ct@
+    ( ContractTerms
+        { dayCountConvention: Just dcc
+        , maturityDate
+        }
+    )
+  s'@(ContractState s)
+  t =
+  let
+    timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
+  in
+    let
+      (ContractState s'') = _STF_IP_PAM ct s' t
+    in
+      ContractState $ s'' # L.notionalPrincipal .~ (s ^. L.notionalPrincipal) + (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
+_STF_IPCI_PAM _ s _ = s
+
+_STF_IPCI_LAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_IPCI_LAM
+  ct@
+    ( ContractTerms
+        { dayCountConvention: Just dcc
+        , maturityDate
+        }
+    )
+  s'@(ContractState s)
+  t =
+  let
+    timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
+    nt' = (s ^. L.notionalPrincipal) + (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase)
+    ipcb' = interestCalculationBase ct
+      where
+      interestCalculationBase (ContractTerms { interestCalculationBase: Just IPCB_NT }) = nt'
+      interestCalculationBase _ = s ^. L.interestCalculationBase
+  in
+    let
+      (ContractState s'') = _STF_IP_PAM ct s' t
+    in
+      ContractState $ s'' # L.notionalPrincipal .~ nt'
+        # L.interestCalculationBase .~ ipcb'
+_STF_IPCI_LAM _ s _ = s
+
+---------------------------------------------
+-- Interest Calculation Base Fixing (IPCB) --
+---------------------------------------------
+
+_STF_IPCB_LAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_IPCB_LAM fs ct s'@(ContractState s) t =
+  let
+    (ContractState s'') = _STF_PY_LAM fs ct s' t
+  in
+    ContractState $ s'' # L.interestCalculationBase .~ (s ^. L.notionalPrincipal)
+
+-------------------------------
+-- Rate Reset (RR) --
+-------------------------------
+
+_STF_RR_PAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_RR_PAM
+  fs
+  ( RiskFactors
+      { o_rf_RRMO
+      }
+  )
+  ct@
+    ( ContractTerms
+        { feeBasis: Just FEB_N
+        , feeRate: Just fer
+        , lifeFloor: Just rrlf
+        , lifeCap: Just rrlc
+        , periodCap: Just rrpc
+        , periodFloor: Just rrpf
+        , rateMultiplier: Just rrmlt
+        , rateSpread: Just rrsp
+        , dayCountConvention: Just dcc
+        , maturityDate
+        }
+    )
+  s'@(ContractState s)
+  t =
+  let
+    timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
+    delta_r = _min (_max (o_rf_RRMO * rrmlt + rrsp - (s ^. L.nominalInterest)) rrpf) rrpc
+    ipnr' = _min (_max (s ^. L.nominalInterest + delta_r) rrlf) rrlc
+  in
+    let
+      (ContractState s'') = _STF_PY_PAM fs ct s' t
+    in
+      ContractState $ s''
+        # L.accruedInterest .~ (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
+        # L.accruedFees .~ (s ^. L.accruedFees) + timeFromLastEvent * fer * (s ^. L.notionalPrincipal)
+        # L.nominalInterest .~ ipnr'
+        # L.statusDate .~ t
+_STF_RR_PAM
+  fs'@(FeeSchedule fs)
+  ( RiskFactors
+      { o_rf_RRMO
+      }
+  )
+  ct@
+    ( ContractTerms
+        { feeRate: Just fer
+        , lifeFloor: Just rrlf
+        , lifeCap: Just rrlc
+        , periodCap: Just rrpc
+        , periodFloor: Just rrpf
+        , rateMultiplier: Just rrmlt
+        , rateSpread: Just rrsp
+        , dayCountConvention: Just dcc
+        , contractRole
+        , maturityDate
+        }
+    )
+  s'@(ContractState s)
+  t =
+  let
+    timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
+    timeFromLatestFeePayment = yearFraction dcc fs.latestFeePayment t maturityDate
+    timeFromLatestToNextFeePayment = yearFraction dcc fs.latestFeePayment fs.nextFeePayment maturityDate
+    delta_r = _min (_max (o_rf_RRMO * rrmlt + rrsp - (s ^. L.nominalInterest)) rrpf) rrpc
+    ipnr' = _min (_max (s ^. L.nominalInterest + delta_r) rrlf) rrlc
+  in
+    let
+      (ContractState s'') = _STF_PY_PAM fs' ct s' t
+    in
+      ContractState $ s''
+        # L.accruedInterest .~ (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
+        # L.accruedFees .~ (if fs.latestFeePayment == fs.nextFeePayment then zero else (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * fer)
+        # L.nominalInterest .~ ipnr'
+        # L.statusDate .~ t
+_STF_RR_PAM _ _ _ s _ = s
+
+_STF_RR_LAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_RR_LAM
+  fs
+  ( RiskFactors
+      { o_rf_RRMO
+      }
+  )
+  ct@
+    ( ContractTerms
+        { lifeFloor: Just rrlf
+        , lifeCap: Just rrlc
+        , periodCap: Just rrpc
+        , periodFloor: Just rrpf
+        , rateMultiplier: Just rrmlt
+        , rateSpread: Just rrsp
+        }
+    )
+  s'@(ContractState s)
+  t =
+  let
+    delta_r = _min (_max (o_rf_RRMO * rrmlt + rrsp - (s ^. L.nominalInterest)) rrpf) rrpc
+    ipnr' = _min (_max ((s ^. L.nominalInterest) + delta_r) rrlf) rrlc
+  in
+    let
+      (ContractState s'') = _STF_PY_LAM fs ct s' t
+    in
+      ContractState $ s''
+        # L.nominalInterest .~ ipnr'
+        # L.statusDate .~ t
+_STF_RR_LAM _ _ _ s _ = s
+
+_STF_RR_ANN :: forall a. EuclideanRing a => ActusOps a => PrincipalRedemptionSchedule -> FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_RR_ANN
+  (PrincipalRedemptionSchedule prs)
+  (FeeSchedule fs)
+  ( RiskFactors
+      { o_rf_RRMO
+      }
+  )
+  ct@
+    ( ContractTerms
+        { dayCountConvention: Just dcc
+        , lifeFloor: Just rrlf
+        , lifeCap: Just rrlc
+        , periodCap: Just rrpc
+        , periodFloor: Just rrpf
+        , rateMultiplier: Just rrmlt
+        , rateSpread: Just rrsp
+        , feeRate
+        , contractRole
+        , maturityDate
+        }
+    )
+  (ContractState s)
+  t =
+  let
+    timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
+    timeFromLatestFeePayment = yearFraction dcc fs.latestFeePayment t maturityDate
+    timeFromLatestToNextFeePayment = yearFraction dcc fs.latestFeePayment fs.nextFeePayment maturityDate
+    ti = zipWith (\tn tm -> yearFraction dcc tn tm maturityDate) prs.laterPrincipalRedemptionDates (fromMaybe Nil $ tail prs.laterPrincipalRedemptionDates)
+
+    ipac' = (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase)
+    feac' = feeAccrued' ct
+      where
+      feeAccrued' (ContractTerms { feeBasis: Just FEB_N }) = (s ^. L.accruedFees) + timeFromLastEvent * (s ^. L.notionalPrincipal) * thisOr0 feeRate
+      feeAccrued' _ = (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * thisOr0 feeRate
+
+    ipnr' = _min (_max ((s ^. L.nominalInterest) + delta_r) rrlf) rrlc
+      where
+      delta_r = _min (_max (o_rf_RRMO * rrmlt + rrsp - (s ^. L.nominalInterest)) rrpf) rrpc
+
+    prnxt' = annuity ipnr' ti
+  in
+    ContractState $
+      s # L.accruedInterest .~ ipac'
+        # L.accruedFees .~ feac'
+        # L.nominalInterest .~ ipnr'
+        # L.nextPrincipalRedemptionPayment .~ prnxt'
+        # L.statusDate .~ t
+_STF_RR_ANN _ _ _ _ s _ = s
+
+-----------------------------
+-- Rate Reset Fixing (RRF) --
+-----------------------------
+
+_STF_RRF_PAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_RRF_PAM
+  fs
+  _
+  ct@
+    ( ContractTerms
+        { nextResetRate: rrnxt
+        }
+    )
+  s
+  t =
+  let
+    (ContractState s') = _STF_PY_PAM fs ct s t
+  in
+    ContractState $ s' # L.nominalInterest .~ thisOr0 rrnxt
+
+_STF_RRF_LAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_RRF_LAM
+  fs
+  _
+  ct@
+    ( ContractTerms
+        { nextResetRate: rrnxt
+        }
+    )
+  s
+  t =
+  let
+    (ContractState s') = _STF_PY_LAM fs ct s t
+  in
+    ContractState $ s' # L.nominalInterest .~ thisOr0 rrnxt
+
+_STF_RRF_ANN :: forall a. EuclideanRing a => PrincipalRedemptionSchedule -> FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_RRF_ANN
+  (PrincipalRedemptionSchedule prs)
+  (FeeSchedule fs)
+  _
+  ct@
+    ( ContractTerms
+        { dayCountConvention: Just dcc
+        , nextResetRate: Just rrnxt
+        , contractRole
+        , maturityDate
+        , feeRate
+        }
+    )
+  (ContractState s)
+  t =
+  let
+    timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
+    timeFromLatestFeePayment = yearFraction dcc fs.latestFeePayment t maturityDate
+    timeFromLatestToNextFeePayment = yearFraction dcc fs.latestFeePayment fs.nextFeePayment maturityDate
+    ti = zipWith (\tn tm -> yearFraction dcc tn tm maturityDate) prs.laterPrincipalRedemptionDates (fromMaybe Nil $ tail prs.laterPrincipalRedemptionDates)
+
+    ipac' = (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase)
+    feac' = feeAccrued' ct
+      where
+      feeAccrued' (ContractTerms { feeBasis: Just FEB_N }) = (s ^. L.accruedFees) + timeFromLastEvent * (s ^. L.notionalPrincipal) * thisOr0 feeRate
+      feeAccrued' _ = (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * thisOr0 feeRate
+
+    ipnr' = rrnxt
+    prnxt' = annuity ipnr' ti
+  in
+    ContractState $
+      s # L.accruedInterest .~ ipac'
+        # L.accruedFees .~ feac'
+        # L.nominalInterest .~ ipnr'
+        # L.nextPrincipalRedemptionPayment .~ prnxt'
+        # L.statusDate .~ t
+_STF_RRF_ANN _ _ _ _ s _ = s
+
+-------------------------------------------
+-- Principal Payment Amount Fixing (PRF) --
+-------------------------------------------
+
+_STF_PRF_ANN :: forall a. EuclideanRing a => ActusOps a => PrincipalRedemptionSchedule -> FeeSchedule -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_PRF_ANN
+  (PrincipalRedemptionSchedule prs)
+  (FeeSchedule fs)
+  ct@
+    ( ContractTerms
+        { dayCountConvention: Just dcc
+        , contractRole
+        , maturityDate
+        , feeRate
+        }
+    )
+  (ContractState s)
+  t =
+  let
+    timeFromLastEvent = yearFraction dcc (s ^. L.statusDate) t maturityDate
+    timeFromLatestFeePayment = yearFraction dcc fs.latestFeePayment t maturityDate
+    timeFromLatestToNextFeePayment = yearFraction dcc fs.latestFeePayment fs.nextFeePayment maturityDate
+    timeToNextPrincipalRedemption = yearFraction dcc t prs.nextPrincipalRedemption maturityDate
+    ti = zipWith (\tn tm -> yearFraction dcc tn tm maturityDate) prs.laterPrincipalRedemptionDates (fromMaybe Nil $ tail prs.laterPrincipalRedemptionDates)
+
+    ipac' = (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.interestCalculationBase)
+    feac' = feeAccrued' ct
+      where
+      feeAccrued' (ContractTerms { feeBasis: Just FEB_N }) = (s ^. L.accruedFees) + timeFromLastEvent * (s ^. L.notionalPrincipal) * thisOr0 feeRate
+      feeAccrued' _ = (timeFromLatestFeePayment / timeFromLatestToNextFeePayment) * sign contractRole * thisOr0 feeRate
+
+    prnxt' = sign contractRole * frac * scale
+      where
+      scale = (s ^. L.notionalPrincipal) + ipac' + timeToNextPrincipalRedemption * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
+      frac = annuity (s ^. L.nominalInterest) ti
+  in
+    ContractState $
+      s # L.accruedInterest .~ ipac'
+        # L.accruedFees .~ feac'
+        # L.nextPrincipalRedemptionPayment .~ prnxt'
+        # L.statusDate .~ t
+_STF_PRF_ANN _ _ _ s _ = s
+
+-------------------------------
+-- Scaling Index Fixing (SC) --
+-------------------------------
+
+_STF_SC_PAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_SC_PAM
+  fs
+  ( RiskFactors
+      { o_rf_SCMO
+      }
+  )
+  ct@
+    ( ContractTerms
+        { scalingEffect: Just scef
+        , scalingIndexAtStatusDate: Just scied
+        }
+    )
+  s'@(ContractState s)
+  t =
+  let
+    nsc' = case scef of
+      SE_OOM -> s ^. L.notionalScalingMultiplier
+      SE_IOO -> s ^. L.notionalScalingMultiplier
+      _ -> (o_rf_SCMO - scied) / scied
+    isc' = case scef of
+      SE_ONO -> s ^. L.interestScalingMultiplier
+      SE_OOM -> s ^. L.interestScalingMultiplier
+      SE_ONM -> s ^. L.interestScalingMultiplier
+      _ -> (o_rf_SCMO - scied) / scied
+  in
+    let
+      (ContractState s'') = _STF_PY_PAM fs ct s' t
+    in
+      ContractState $ s''
+        # L.notionalScalingMultiplier .~ nsc'
+        # L.interestScalingMultiplier .~ isc'
+_STF_SC_PAM _ _ _ s _ = s
+
+_STF_SC_LAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms a -> ContractState a -> DateTime -> ContractState a
+_STF_SC_LAM
+  fs
+  ( RiskFactors
+      { o_rf_SCMO
+      }
+  )
+  ct@
+    ( ContractTerms
+        { scalingIndexAtContractDealDate: Just sccdd
+        , scalingEffect: Just scef
+        }
+    )
+  s'@(ContractState s)
+  t =
+  let
+    (ContractState s'') = _STF_PY_LAM fs ct s' t
+  in
+    ContractState $ s''
+      # L.notionalScalingMultiplier .~ (if contains (Pattern "N") (show scef) then o_rf_SCMO / sccdd else s ^. L.notionalScalingMultiplier)
+      # L.interestScalingMultiplier .~ (if contains (Pattern "I") (show scef) then o_rf_SCMO / sccdd else s ^. L.interestScalingMultiplier)
+_STF_SC_LAM _ _ _ s _ = s

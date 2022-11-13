@@ -245,6 +245,19 @@ data SCEF
   | SE_IOM -- ^ Interest and maximum deferred amount scaled
   | SE_INM -- ^ Interest, nominal and maximum deferred amount scaled
 
+derive instance Generic SCEF _
+derive instance Eq SCEF
+
+instance Show SCEF where
+  show SE_OOO = "OOO"
+  show SE_IOO = "IOO"
+  show SE_ONO = "ONO"
+  show SE_OOM = "OOM"
+  show SE_INO = "INO"
+  show SE_ONM = "ONM"
+  show SE_IOM = "IOM"
+  show SE_INM = "INM"
+
 --           deriving stock (Show, Read, Eq, Generic)
 --
 -- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''SCEF)
