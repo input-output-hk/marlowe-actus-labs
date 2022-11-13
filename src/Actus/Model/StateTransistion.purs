@@ -160,11 +160,6 @@ data PrincipalRedemptionSchedule = PrincipalRedemptionSchedule
 thisOr0 :: forall a. Ring a => Maybe a -> a
 thisOr0 = fromMaybe zero
 
-flipAp :: forall a b. a -> (a -> b) -> b
-flipAp x f = f x
-
-infixl 8 flipAp as &
-
 ---------------------
 -- Monitoring (AD) --
 ---------------------
