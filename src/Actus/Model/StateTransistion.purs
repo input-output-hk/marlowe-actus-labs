@@ -1,7 +1,7 @@
 {-| = ACTUS state transformation functions -}
 module Actus.Model.StateTransition
   ( CtxSTF(..)
-  -- , stateTransition
+  , stateTransition
   ) where
 
 import Prelude

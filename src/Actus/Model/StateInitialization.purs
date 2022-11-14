@@ -1,29 +1,21 @@
-{-| = ACTUS contract state initialization per t0
-The implementation is a transliteration of the ACTUS specification v1.1
-Note: initial states rely also on some schedules (and vice versa)
--}
-
+-- | ACTUS contract state initialization per t0
+-- The implementation is a transliteration of the ACTUS specification v1.1
+-- Note: initial states rely also on some schedules (and vice versa)
 module Actus.Model.StateInitialization
   ( initializeState
   ) where
 
-import Prelude
-
-import Actus.Domain (CEGE(..), CT(..), ContractState(..), ContractTerms(..), Cycle(..), FEB(..), IPCB(..), PRF(..), SCEF(..), sign)
-import Actus.Model.StateTransition (CtxSTF(..))
-import Actus.Utility (annuity, generateRecurrentSchedule, inf, sup, yearFraction)
-import Control.Alt ((<|>))
+import Actus.Domain (CT(..), ContractState(..), ContractTerms(..), FEB(..), IPCB(..), PRF(..), SCEF(..), sign)
+import Actus.Model.StateTransition (CtxSTF)
+import Actus.Utility (annuity, inf, sup, yearFraction)
 import Control.Monad.Reader (Reader, asks)
-import Data.List (List(..), dropEnd, length, singleton, tail, zipWith, (:))
+import Data.List (List(..), dropEnd, singleton, zipWith, (:))
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Ring (class Ring, zero)
-import Data.Semiring (one)
-
-{-# ANN module "HLint: ignore Use camelCase" #-}
+import Prelude
 
 -- |'initializeState' initializes the state variables at t0 based on the
 -- provided context
-initializeState :: forall a. EuclideanRing a => Reader (CtxSTF a) (ContractState a)
+initializeState :: forall b. EuclideanRing b => Reader (CtxSTF b) (ContractState b)
 initializeState = asks initializeState'
   where
   initializeState' :: forall a. EuclideanRing a => CtxSTF a -> ContractState a
@@ -226,4 +218,3 @@ infixl 8 append' as ++
 maybeToList :: forall a. Maybe a -> List a
 maybeToList (Just x) = singleton x
 maybeToList Nothing = mempty
-

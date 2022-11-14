@@ -1,5 +1,6 @@
 module Actus.Utility.DateShift
-  ( applyBDC
+  ( addDays
+  , applyBDC
   , applyBDCWithCfg
   , applyEOMC
   , getFollowingBusinessDay
@@ -8,17 +9,14 @@ module Actus.Utility.DateShift
   , shiftDate
   ) where
 
-import Prelude
-
-import Actus.Domain (BDC(..), Calendar(..), Cycle(..), EOMC(..), Period(..), ScheduleConfig(..), ShiftedDay(..))
-import Data.Array ((!!))
-import Data.Date (Date(..), Day, Month, Weekday(..), Year, adjust, canonicalDate, day, isLeapYear, lastDayOfMonth, month, weekday, year)
-import Data.DateTime (DateTime(..), date)
-import Data.Enum (fromEnum, toEnum)
-import Data.Maybe (Maybe(..), fromJust, fromMaybe, maybe)
+import Actus.Domain (BDC(..), Calendar(..), Cycle(..), EOMC(..), Period(..), ScheduleConfig, ShiftedDay)
+import Data.Date (Date, Weekday(..), adjust, canonicalDate, day, lastDayOfMonth, month, weekday, year)
+import Data.DateTime (DateTime(..))
+import Data.Enum (toEnum)
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Refined (fromInt)
 import Data.Time.Duration (Days(..))
-import Data.Tuple.Nested (Tuple3(..), Tuple3)
+import Prelude
 
 {- Business Day Convention -}
 
@@ -128,7 +126,7 @@ shiftDate (DateTime d t) n p =
 
 {- End of Month Convention -}
 applyEOMC :: DateTime -> Cycle -> EOMC -> DateTime -> DateTime
-applyEOMC s (Cycle cycle) endOfMonthConvention dt
+applyEOMC s cycle endOfMonthConvention dt
   | isLastDayOfMonthWithLessThan31Days s
       && cycle.p /= P_D
       && cycle.p /= P_W

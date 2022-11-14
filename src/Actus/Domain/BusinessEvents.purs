@@ -1,8 +1,10 @@
 module Actus.Domain.BusinessEvents where
 
-{-| ACTUS event types
-    https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-event.json
--}
+import Data.Generic.Rep (class Generic)
+import Data.Enum
+import Prelude
+
+-- | ACTUS event types, https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-event.json
 data EventType
   = IED -- ^ Initial Exchange
   | FP -- ^ Fee Payment
@@ -30,5 +32,6 @@ data EventType
   | PI -- ^ Principal Increase
   | AD -- ^ Monitoring
 
---    deriving stock (Eq, Show, Read, Ord, Enum, Generic)
---    deriving anyclass (FromJSON, ToJSON)
+derive instance Generic EventType _
+derive instance Eq EventType
+derive instance Ord EventType

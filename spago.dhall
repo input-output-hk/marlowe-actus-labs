@@ -18,6 +18,7 @@
   , "maybe"
   , "newtype"
   , "numbers"
+  , "orders"
   , "prelude"
   , "profunctor"
   , "profunctor-lenses"

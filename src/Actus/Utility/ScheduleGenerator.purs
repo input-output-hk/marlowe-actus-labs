@@ -36,10 +36,9 @@ init' ls = fromMaybe Nil $ init ls
 
 correction :: Cycle -> DateTime -> DateTime -> List DateTime -> List DateTime
 correction
-  ( Cycle
-      { stub: ShortStub
-      , includeEndDay: false
-      }
+  ( { stub: ShortStub
+    , includeEndDay: false
+    }
   )
   anchorDate
   endDate
@@ -47,18 +46,16 @@ correction
   | endDate == anchorDate =
       delete anchorDate $ init' schedule
 correction
-  ( Cycle
-      { stub: ShortStub
-      }
+  ( { stub: ShortStub
+    }
   )
   _
   _
   schedule = init' schedule
 correction
-  ( Cycle
-      { stub: LongStub
-      , includeEndDay: true
-      }
+  ( { stub: LongStub
+    , includeEndDay: true
+    }
   )
   _
   endDate
@@ -71,19 +68,17 @@ correction
         if l > 2 then dropEnd 1 s
         else s
 correction
-  ( Cycle
-      { stub: LongStub
-      , includeEndDay: true
-      }
+  ( { stub: LongStub
+    , includeEndDay: true
+    }
   )
   _
   _
   schedule = init' schedule
 correction
-  ( Cycle
-      { stub: LongStub
-      , includeEndDay: false
-      }
+  ( { stub: LongStub
+    , includeEndDay: false
+    }
   )
   anchorDate
   endDate
@@ -97,10 +92,9 @@ correction
         if l > 2 then dropEnd 1 s
         else s
 correction
-  ( Cycle
-      { stub: LongStub
-      , includeEndDay: false
-      }
+  ( { stub: LongStub
+    , includeEndDay: false
+    }
   )
   anchorDate
   endDate
@@ -113,10 +107,9 @@ correction
         if l > 2 then dropEnd 1 s
         else s
 correction
-  ( Cycle
-      { stub: LongStub
-      , includeEndDay: false
-      }
+  ( { stub: LongStub
+    , includeEndDay: false
+    }
   )
   _
   endDate
@@ -129,10 +122,9 @@ correction
         if l > 2 then dropEnd 1 s
         else s
 correction
-  ( Cycle
-      { stub: LongStub
-      , includeEndDay: false
-      }
+  ( { stub: LongStub
+    , includeEndDay: false
+    }
   )
   _
   _
@@ -143,7 +135,7 @@ addEndDay true endDate schedule = snoc schedule (mkShiftedDay endDate)
 addEndDay _ _ schedule = schedule
 
 generateRecurrentSchedule' :: Cycle -> DateTime -> DateTime -> List DateTime
-generateRecurrentSchedule' (Cycle cycle) anchorDate endDate =
+generateRecurrentSchedule' cycle anchorDate endDate =
   let
     go :: DateTime -> Int -> List DateTime -> List DateTime
     go current k acc =
@@ -164,24 +156,24 @@ generateRecurrentSchedule
   -> ShiftedSchedule -- ^ New schedule
 generateRecurrentSchedule
   a
-  c@(Cycle cycle)
+  c
   e
   { endOfMonthConvention: Just eomc
   , calendar: Just cal
   , businessDayConvention: Just bdc
   } =
-  addEndDay cycle.includeEndDay e
+  addEndDay c.includeEndDay e
     <<< map (applyBDC bdc cal <<< applyEOMC a c eomc)
     <<<
       correction c a e $ generateRecurrentSchedule' c a e
 generateRecurrentSchedule _ _ _ _ = Nil
 
 plus_sched :: DateTime -> Cycle -> DateTime
-plus_sched d (Cycle c) = shiftDate d c.n c.p
+plus_sched d c = shiftDate d c.n c.p
 
 infixl 8 plus_sched as <+>
 
 minus_sched :: DateTime -> Cycle -> DateTime
-minus_sched d (Cycle c) = shiftDate d (-c.n) c.p
+minus_sched d c = shiftDate d (-c.n) c.p
 
 infixl 8 minus_sched as <->

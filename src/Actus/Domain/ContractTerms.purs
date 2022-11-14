@@ -1,7 +1,5 @@
 module Actus.Domain.ContractTerms where
 
-import Prelude
-
 import Data.Argonaut (JsonDecodeError(..), caseJsonString, encodeJson, fromString, stringify)
 import Data.Argonaut.Decode.Class (class DecodeJson)
 import Data.Argonaut.Decode.Generic (genericDecodeJson)
@@ -12,6 +10,7 @@ import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
 import Data.List (List)
 import Data.Maybe (Maybe)
+import Prelude
 
 -- |ContractType
 data CT
@@ -354,7 +353,7 @@ data Stub
 --   parseJSON _            = mzero
 --
 -- |Cycle
-data Cycle = Cycle
+type Cycle =
   { n :: Int
   , p :: Period
   , stub :: Stub

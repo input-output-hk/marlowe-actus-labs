@@ -58,7 +58,6 @@ data RiskFactors a = RiskFactors
 -- | Cash flows
 data CashFlow a = CashFlow
   { tick :: Int
-  , cashContractId :: String
   , cashParty :: String
   , cashCounterParty :: String
   , cashPaymentDay :: DateTime
