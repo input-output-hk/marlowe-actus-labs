@@ -20,8 +20,12 @@ import Data.Enum (enumFromTo, fromEnum, toEnum)
 import Data.Enum.Generic (class GenericBoundedEnum, genericFromEnum, genericToEnum)
 import Data.Eq ((==))
 import Data.Generic.Rep (class Generic)
-import Data.List (List(..), concat, concatMap, dropWhile, filter, filterM, foldl, groupBy, mapMaybe, nub, sortBy, zip, (..), (:))
+import Data.List (List(..), concat, concatMap, dropWhile, filter, filterM, foldl, groupBy, mapMaybe, nub, zip, (..), (:))
+import Data.List as List
+import Data.List.NonEmpty (NonEmptyList, toList)
+import Data.List.NonEmpty as NonEmptyList
 import Data.Maybe (Maybe(..), fromMaybe, isNothing)
+import Data.Semigroup.Foldable (foldl1)
 import Data.Traversable (mapAccumL, traverse)
 import Data.Tuple (snd)
 import Data.Tuple.Nested (type (/\), (/\))
@@ -42,36 +46,36 @@ genProjectedCashflows
   -- | Contract terms
   ContractTerms a
   ->
-  -- | Unscheduled events
-  List Event
-  ->
   -- | List of projected cash flows
   List (CashFlow a)
-genProjectedCashflows rf ct us =
+genProjectedCashflows rf ct =
   let
-    ctx = buildCtx rf ct us
+    ctx = buildCtx rf ct
   in
-    check ct $ genCashflow ct <$> runReader (genProjectedPayoffs us) ctx
+    check ct $ genCashflow ct <$> runReader genProjectedPayoffs ctx
   where
   check :: ContractTerms a -> List (CashFlow a) -> List (CashFlow a)
   check (ContractTerms { deliverySettlement: Just DS_S }) = netCashflows
   check _ = \x -> x
 
-  netCashflows :: List (CashFlow a) -> List (CashFlow a)
-  netCashflows cf = cf -- FIXME: map (foldl plus) $ groupBy f cf
+  groupCashflows :: List (CashFlow a) -> List (NonEmptyList (CashFlow a))
+  groupCashflows cf = groupBy f cf
+    where
+    f (CashFlow a) (CashFlow b) =
+      a.cashEvent == b.cashEvent
+        && a.cashPaymentDay == b.cashPaymentDay
+        && a.cashParty == b.cashParty
+        && a.cashCounterParty == b.cashCounterParty
+        && a.cashCurrency == b.cashCurrency
 
---    where
---    f (CashFlow a) (CashFlow b) =
---      a.cashEvent == b.cashEvent
---        && a.cashPaymentDay == b.cashPaymentDay
---        && a.cashParty == b.cashParty
---        && a.cashCounterParty == b.cashCounterParty
---        && a.cashCurrency == b.cashCurrency
---    plus a b =
---      a
---        { amount= a.amount + b.amount
---        , notional= a.notional + b.notional
---        }
+  netCashflows cf = map (foldl1 plus) $ groupCashflows cf
+    where
+    plus :: CashFlow a -> CashFlow a -> CashFlow a
+    plus (CashFlow a) (CashFlow b) = CashFlow $
+      a
+        { amount = a.amount + b.amount
+        , notional = a.notional + b.notional
+        }
 
 -- | Bulid the context allowing to perform state transitions
 buildCtx
@@ -86,12 +90,9 @@ buildCtx
   -- | Contract terms
   ContractTerms a
   ->
-  -- | Unscheduled events
-  List Event
-  ->
   -- | Context
   CtxSTF a
-buildCtx rf ct us =
+buildCtx rf ct =
   { contractTerms: ct
   , fpSchedule: (_.calculationDay <$> schedule FP ct)
   , -- init & stf rely on the fee payment schedule
@@ -137,14 +138,11 @@ genProjectedPayoffs
    . ActusOps a
   => EuclideanRing a
   => ActusFrac a
-  =>
-  -- | Unscheduled events
-  List Event
-  -> Reader (CtxSTF a) (List (Event /\ ContractState a /\ a))
-genProjectedPayoffs us =
+  => Reader (CtxSTF a) (List (Event /\ ContractState a /\ a))
+genProjectedPayoffs =
   do
     ct <- _.contractTerms <$> ask
-    genProjectedPayoffs' $ genSchedule ct us
+    genProjectedPayoffs' $ genSchedule ct
 
 -- |Generate projected cash flows
 genProjectedPayoffs'
@@ -170,11 +168,8 @@ genSchedule
   ->
   -- | Schedule
   List Event
-  ->
-  -- | Schedule
-  List Event
-genSchedule ct us =
-  sortBy (comparing \(ev /\ { paymentDay }) -> (paymentDay /\ ev)) $ genFixedSchedule ct <> us
+genSchedule ct =
+  List.sortBy (comparing \(ev /\ { paymentDay }) -> (paymentDay /\ ev)) $ genFixedSchedule ct
 
 genFixedSchedule
   :: forall a
@@ -188,30 +183,39 @@ genFixedSchedule
   -- | Schedule
   List Event
 genFixedSchedule ct@(ContractTerms { terminationDate, statusDate }) =
-  -- filter filtersSchedules <<< postProcessSchedules <<< sortBy (\(_ /\ ev /\ {paymentDay}) -> (paymentDay /\ ev)) $
-  sortBy (comparing \(ev /\ { paymentDay }) -> (paymentDay /\ ev)) $ concatMap scheduleEvent allElements
+  filter filtersSchedules <<< postProcessSchedules <<< List.sortBy (comparing \(ev /\ { paymentDay }) -> (paymentDay /\ ev)) $ concatMap scheduleEvent allElements
   where
 
-  allElements :: forall a rep. Generic a rep => GenericBoundedEnum rep => GenericTop rep => GenericBottom rep => List a
+  allElements :: forall b rep. Generic b rep => GenericBoundedEnum rep => GenericTop rep => GenericBottom rep => List b
   allElements = mapMaybe genericToEnum (idxFrom .. idxTo)
     where
-    idxFrom = genericFromEnum (genericBottom :: a)
-    idxTo = genericFromEnum (genericTop :: a)
+    idxFrom = genericFromEnum (genericBottom :: b)
+    idxTo = genericFromEnum (genericTop :: b)
 
   scheduleEvent ev = map (\d -> (ev /\ d)) $ schedule ev ct
 
---  filtersSchedules :: Event -> Boolean
---  filtersSchedules (_ /\ _ /\ {calculationDay}) = isNothing terminationDate || Just calculationDay <= terminationDate
+  filtersSchedules :: Event -> Boolean
+  filtersSchedules (_ /\ { calculationDay }) = isNothing terminationDate || Just calculationDay <= terminationDate
 
--- FIXME:
---  postProcessSchedules :: List Event -> List Event
---  postProcessSchedules =
---    let
---      trim = dropWhile (\(_ /\ _ /\ {calculationDay}) -> calculationDay < statusDate)
---      regroup = groupBy (\(_ /\ _ /\ {calculationDay:l}) (_ /\ _ /\ {calculationDay:r}) -> l == r)
---      overwrite = map (sortBy (\(_ /\ ev /\ _) -> fromEnum ev)).regroup
---    in
---      concat <<< overwrite <<< trim
+  postProcessSchedules :: List Event -> List Event
+  postProcessSchedules =
+    let
+      trim :: List Event -> List Event
+      trim = dropWhile (\(_ /\ { calculationDay }) -> calculationDay < statusDate)
+
+      regroup :: List Event -> List (NonEmptyList Event)
+      regroup = groupBy (\(_ /\ { calculationDay: l }) (_ /\ { calculationDay: r }) -> l == r)
+
+      overwrite :: List (NonEmptyList Event) -> List (NonEmptyList Event)
+      overwrite = map f
+
+      f :: NonEmptyList Event -> NonEmptyList Event
+      f = NonEmptyList.sortBy g
+
+      g :: Event -> Event -> Ordering
+      g = comparing $ \(ev /\ _) -> fromEnum ev
+    in
+      concat <<< map toList <<< overwrite <<< regroup <<< trim
 
 type Event = EventType /\ ShiftedDay
 

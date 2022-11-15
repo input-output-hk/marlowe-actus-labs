@@ -1,7 +1,11 @@
 module Actus.Domain.BusinessEvents where
 
-import Data.Generic.Rep (class Generic)
 import Prelude
+
+import Data.Bounded.Generic (genericTop, genericBottom)
+import Data.Enum (class Enum, class BoundedEnum)
+import Data.Enum.Generic (genericCardinality, genericPred, genericSucc, genericFromEnum, genericToEnum)
+import Data.Generic.Rep (class Generic)
 
 -- | ACTUS event types, https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-event.json
 data EventType
@@ -34,3 +38,16 @@ data EventType
 derive instance Generic EventType _
 derive instance Eq EventType
 derive instance Ord EventType
+
+instance Enum EventType where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded EventType where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum EventType where
+  cardinality = genericCardinality
+  toEnum = genericToEnum
+  fromEnum = genericFromEnum
