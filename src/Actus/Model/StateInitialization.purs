@@ -5,20 +5,22 @@ module Actus.Model.StateInitialization
   ( initializeState
   ) where
 
+import Prelude
+
 import Actus.Domain (CT(..), ContractState(..), ContractTerms(..), FEB(..), IPCB(..), PRF(..), SCEF(..), sign)
 import Actus.Model.StateTransition (CtxSTF)
-import Actus.Utility (annuity, inf, sup, yearFraction)
+import Actus.Utility (annuity, generateRecurrentSchedule, inf, sup, yearFraction)
 import Control.Monad.Reader (Reader, asks)
-import Data.List (List(..), dropEnd, singleton, zipWith, (:))
+import Data.List (List(..), dropEnd, length, singleton, zipWith, (:))
 import Data.Maybe (Maybe(..), fromMaybe)
-import Prelude
+import Data.Refined (fromInt)
 
 -- |'initializeState' initializes the state variables at t0 based on the
 -- provided context
-initializeState :: forall b. EuclideanRing b => Reader (CtxSTF b) (ContractState b)
+initializeState :: forall a. EuclideanRing a => Reader (CtxSTF a) (ContractState a)
 initializeState = asks initializeState'
   where
-  initializeState' :: forall a. EuclideanRing a => CtxSTF a -> ContractState a
+  initializeState' :: EuclideanRing a => CtxSTF a -> ContractState a
   initializeState' ctx =
     ContractState
       { sd: t0
@@ -123,17 +125,17 @@ initializeState = asks initializeState'
 
     nextPrincipalRedemptionPayment (ContractTerms { contractType: PAM }) = zero
     nextPrincipalRedemptionPayment (ContractTerms { nextPrincipalRedemptionPayment: Just prnxt }) = prnxt
-    -- FIXME
-    --         nextPrincipalRedemptionPayment
-    --           (ContractTerms
-    --             { contractType: LAM,
-    --               nextPrincipalRedemptionPayment: Nothing,
-    --               maturityDate: Just md,
-    --               notionalPrincipal: Just nt,
-    --               cycleOfPrincipalRedemption: Just prcl,
-    --               cycleAnchorDateOfPrincipalRedemption: Just pranx,
-    --               scheduleConfig
-    --             }) = nt / (length $ generateRecurrentSchedule pranx (prcl {includeEndDay: true}) md scheduleConfig) 
+    nextPrincipalRedemptionPayment
+      ( ContractTerms
+          { contractType: LAM
+          , nextPrincipalRedemptionPayment: Nothing
+          , maturityDate: Just md
+          , notionalPrincipal: Just nt
+          , cycleOfPrincipalRedemption: Just prcl
+          , cycleAnchorDateOfPrincipalRedemption: Just pranx
+          , scheduleConfig
+          }
+      ) = nt / (fromInt $ length $ generateRecurrentSchedule pranx (prcl { includeEndDay = true }) md scheduleConfig)
     nextPrincipalRedemptionPayment
       ( ContractTerms
           { contractType: ANN

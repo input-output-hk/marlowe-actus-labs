@@ -1,7 +1,6 @@
 module Actus.Domain.BusinessEvents where
 
 import Data.Generic.Rep (class Generic)
-import Data.Enum
 import Prelude
 
 -- | ACTUS event types, https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-event.json

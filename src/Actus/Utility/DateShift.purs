@@ -1,5 +1,6 @@
 module Actus.Utility.DateShift
   ( addDays
+  , addDays'
   , applyBDC
   , applyBDCWithCfg
   , applyEOMC
@@ -9,14 +10,17 @@ module Actus.Utility.DateShift
   , shiftDate
   ) where
 
-import Actus.Domain (BDC(..), Calendar(..), Cycle(..), EOMC(..), Period(..), ScheduleConfig, ShiftedDay)
-import Data.Date (Date, Weekday(..), adjust, canonicalDate, day, lastDayOfMonth, month, weekday, year)
+import Prelude
+
+import Actus.Domain (BDC(..), Calendar(..), Cycle, EOMC(..), Period(..), ScheduleConfig, ShiftedDay)
+import Data.Date (Date, Weekday(..), canonicalDate, day, lastDayOfMonth, month, weekday, year)
+import Data.Date as Date
 import Data.DateTime (DateTime(..))
-import Data.Enum (toEnum)
+import Data.DateTime as DateTime
+import Data.Enum (fromEnum, toEnum)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Refined (fromInt)
 import Data.Time.Duration (Days(..))
-import Prelude
 
 {- Business Day Convention -}
 
@@ -143,10 +147,17 @@ isLastDayOfMonth :: Date -> Boolean
 isLastDayOfMonth d = lastDayOfMonth (year d) (month d) == (day d)
 
 addDays :: Int -> Date -> Date
-addDays n d = fromMaybe d $ adjust (Days $ fromInt n) d
+addDays n d = fromMaybe d $ Date.adjust (Days $ fromInt n) d
+
+addDays' :: Int -> DateTime -> DateTime
+addDays' n d = fromMaybe d $ DateTime.adjust (Days $ fromInt n) d
 
 addGregorianMonthsClip :: Int -> Date -> Date
-addGregorianMonthsClip n d = d -- FIXME
+addGregorianMonthsClip n d =
+  let
+    m = month d
+  in
+    canonicalDate (year d) (fromMaybe m $ toEnum $ (n - 1 + (fromEnum m) `mod` 12) + 1) (day d)
 
 addGregorianYearsClip :: Int -> Date -> Date
 addGregorianYearsClip n = addGregorianMonthsClip (n * 12)

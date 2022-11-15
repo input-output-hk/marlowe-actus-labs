@@ -4,15 +4,17 @@ module Actus.Model.ContractSchedule
   , schedule
   ) where
 
+import Prelude
+
 import Actus.Domain (class ActusFrac, class ActusOps, CT(..), ContractTerms(..), EventType(..), IPCB(..), PPEF(..), PYTP(..), SCEF(..), ShiftedDay, _ceiling, mkShiftedDay)
 import Actus.Utility (applyBDCWithCfg, applyEOMC, generateRecurrentSchedule, inf, yearFraction, (<+>), (<->))
+import Actus.Utility.DateShift (addDays')
 import Control.Alt ((<|>))
 import Control.Apply (lift2, lift4)
 import Data.DateTime (DateTime)
+import Data.List (List(..), delete, filter, find, head, nub, singleton, snoc, sortBy, (:))
 import Data.Maybe (Maybe(..), fromMaybe, isJust, isNothing)
 import Data.Ord.Down (Down(..))
-import Data.List (List(..), delete, filter, find, head, nub, singleton, snoc, sortBy, (:))
-import Prelude
 
 -- |Generate the schedule for a given event type
 schedule
@@ -727,9 +729,7 @@ _SCHED_PRF_ANN
     ) =
   let
     prf
-      -- | pranx > ied = let p = addDays (-1) pranx in singleton $ {calculationDay: p, paymentDay: p}
-      -- FIXME
-      | pranx > ied = let p = pranx in singleton $ { calculationDay: p, paymentDay: p }
+      | pranx > ied = let p = addDays' (-1) pranx in singleton $ { calculationDay: p, paymentDay: p }
       | otherwise = Nil
     rr = _SCHED_RR_PAM ct
     rrf = _SCHED_RRF_PAM ct
