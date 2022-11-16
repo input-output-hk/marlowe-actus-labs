@@ -13,14 +13,13 @@ import Actus.Model.StateTransition (CtxSTF, stateTransition)
 import Control.Alt ((<|>))
 import Control.Monad (map)
 import Control.Monad.Reader (Reader, ask, runReader, withReader)
-import Data.Array (unzip)
 import Data.Bounded.Generic (class GenericBottom, class GenericTop, genericBottom, genericTop)
 import Data.DateTime (DateTime)
 import Data.Enum (enumFromTo, fromEnum, toEnum)
 import Data.Enum.Generic (class GenericBoundedEnum, genericFromEnum, genericToEnum)
 import Data.Eq ((==))
 import Data.Generic.Rep (class Generic)
-import Data.List (List(..), concat, concatMap, dropWhile, filter, filterM, foldl, groupBy, mapMaybe, nub, zip, (..), (:))
+import Data.List (List(..), concat, concatMap, dropWhile, filter, filterM, foldl, groupBy, mapMaybe, nub, zip, (..), (:), unzip)
 import Data.List as List
 import Data.List.NonEmpty (NonEmptyList, toList)
 import Data.List.NonEmpty as NonEmptyList
@@ -148,13 +147,26 @@ genProjectedPayoffs =
 genProjectedPayoffs'
   :: forall a
    . ActusOps a
+  => EuclideanRing a
+  => ActusFrac a
   =>
   -- | Events
   List Event
   ->
   -- | Projected cash flows
   Reader (CtxSTF a) (List (Event /\ ContractState a /\ a))
-genProjectedPayoffs' events = pure Nil -- FIXME
+genProjectedPayoffs' events =
+  do
+    st0 <- initializeState
+    states <- genStates events st0
+
+    let (x /\ y) = unzip states
+    payoffs <- trans $ genPayoffs x y
+
+    pure $ zip x (zip y payoffs)
+  where
+  trans :: forall b. Reader (CtxPOF a) b -> Reader (CtxSTF a) b
+  trans = withReader (\{ contractTerms, riskFactors } -> { contractTerms, riskFactors })
 
 -- |Generate schedules
 genSchedule
@@ -234,10 +246,24 @@ genStates
   ->
   -- | New states
   Reader (CtxSTF a) (List (Event /\ ContractState a))
-genStates scs stn@(ContractState { sd: statusDate }) = pure Nil -- FIXME
+genStates scs stn@(ContractState { sd: statusDate }) = mapAccumLM' apply st0 scs >>= filterM filtersStates <<< snd
   where
+  apply ((ev /\ { calculationDay }) /\ st) (ev' /\ t') =
+    do
+      newState <- stateTransition ev calculationDay st
+      pure (((ev' /\ t') /\ newState) /\ ((ev' /\ t') /\ newState))
+
   st0 :: Event /\ ContractState a
   st0 = (AD /\ { calculationDay: statusDate, paymentDay: statusDate }) /\ stn
+
+mapAccumLM' :: forall acc x y m. Monad m => (acc -> x -> m (acc /\ y)) -> acc -> List x -> m (acc /\ List y)
+mapAccumLM' f = go
+  where
+  go s (x : xs) = do
+    (s1 /\ x') <- f s x
+    (s2 /\ xs') <- go s1 xs
+    pure (s2 /\ x' : xs')
+  go s Nil = pure (s /\ Nil)
 
 filtersStates
   :: forall a
