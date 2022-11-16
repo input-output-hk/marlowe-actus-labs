@@ -15,6 +15,7 @@
   , "heterogeneous"
   , "integers"
   , "lists"
+  , "marlowe"
   , "maybe"
   , "newtype"
   , "numbers"

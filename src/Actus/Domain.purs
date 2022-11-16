@@ -17,13 +17,14 @@ module Actus.Domain
 
 import Actus.Domain.BusinessEvents (EventType(..))
 import Actus.Domain.ContractState (ContractState(..))
-import Actus.Domain.ContractTerms (BDC(..), CEGE(..), CETC(..), CR(..), CT(..), Calendar(..), CalendarType(..), ContractTerms(..), Cycle(..), DCC(..), DS(..), EOMC(..), FEB(..), IPCB(..), OPTP(..), OPXT(..), PPEF(..), PRF(..), PYTP(..), Period(..), SCEF(..), ScheduleConfig, Stub(..))
+import Actus.Domain.ContractTerms (BDC(..), CEGE(..), CETC(..), CR(..), CT(..), Calendar(..), CalendarType(..), ContractTerms(..), Cycle, DCC(..), DS(..), EOMC(..), FEB(..), IPCB(..), OPTP(..), OPXT(..), PPEF(..), PRF(..), PYTP(..), Period(..), SCEF(..), ScheduleConfig, Stub(..))
 import Actus.Domain.Schedule (ShiftedDay, ShiftedSchedule, mkShiftedDay)
 import Control.Alt ((<|>))
 import Data.DateTime (DateTime)
 import Data.Int (ceil)
 import Data.Maybe (Maybe(..))
 import Data.Number (abs)
+import Language.Marlowe.Core.V1.Semantics.Types (Observation(..), Value(..))
 import Prelude (class Ring, max, min, negate, one, ($), (/))
 
 class ActusOps a <= ActusFrac a where
@@ -38,6 +39,13 @@ instance ActusOps Number where
   _min = min
   _max = max
   _abs = abs
+
+instance ActusOps Value where
+  _min x y = Cond (ValueLT x y) x y
+  _max x y = Cond (ValueGT x y) x y
+  _abs a = _max a (NegValue a)
+    where
+    _max x y = Cond (ValueGT x y) x y
 
 instance ActusFrac Number where
   _ceiling = ceil

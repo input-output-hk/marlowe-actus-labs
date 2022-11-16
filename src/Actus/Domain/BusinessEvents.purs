@@ -39,6 +39,33 @@ derive instance Generic EventType _
 derive instance Eq EventType
 derive instance Ord EventType
 
+instance Show EventType where
+  show IED = "IED"
+  show FP = "FP"
+  show PR = "PR"
+  show PD = "PD"
+  show PY = "PY"
+  show PP = "PP"
+  show IP = "IP"
+  show IPFX = "IPFX"
+  show IPFL = "IPFL"
+  show IPCI = "IPCI"
+  show CE = "CE"
+  show RRF = "RRF"
+  show RR = "FF"
+  show PRF = "PRF"
+  show DV = "DV"
+  show PRD = "PRD"
+  show MR = "MR"
+  show TD = "TD"
+  show SC = "SC"
+  show IPCB = "IPCB"
+  show MD = "MD"
+  show XD = "XD"
+  show STD = "STD"
+  show PI = "PI"
+  show AD = "AD"
+
 instance Enum EventType where
   succ = genericSucc
   pred = genericPred
