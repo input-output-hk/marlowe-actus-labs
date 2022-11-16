@@ -70,3 +70,22 @@ in upstream
       ]
       "https://github.com/input-output-hk/purescript-marlowe.git"
       "main"
+  with typelevel-eval =mkPackage
+    [ "bifunctors"
+    , "console"
+    , "contravariant"
+    , "effect"
+    , "leibniz"
+    , "psci-support"
+    , "profunctor"
+    , "record"
+    , "typelevel-prelude"
+    , "tuples"
+    ]
+    "https://github.com/natefaubion/purescript-typelevel-eval"
+    "v0.5.0"
+  with
+    row-joins = mkPackage
+      [ "console", "effect", "prelude", "typelevel-eval" ]
+      "https://github.com/paluh/purescript-row-joins.git"
+      "c129c7531a0ccf2b82ac1e57ab796b3df17614ff"

@@ -22,7 +22,7 @@ import Prelude
 
 import Actus.Domain.BusinessEvents (EventType(..))
 import Actus.Domain.ContractState (ContractState(..))
-import Actus.Domain.ContractTerms (BDC(..), CEGE(..), CETC(..), CR(..), CT(..), Calendar(..), CalendarType(..), ContractTerms(..), Cycle, DCC(..), DS(..), EOMC(..), FEB(..), IPCB(..), OPTP(..), OPXT(..), PPEF(..), PRF(..), PYTP(..), Period(..), SCEF(..), ScheduleConfig, Stub(..))
+import Actus.Domain.ContractTerms (BDC(..), CEGE(..), CETC(..), CR(..), CT(..), Calendar(..), ContractTerms(..), Cycle, DCC(..), DS(..), EOMC(..), FEB(..), IPCB(..), OPTP(..), OPXT(..), PPEF(..), PRF(..), PYTP(..), Period(..), SCEF(..), ScheduleConfig, Stub(..))
 import Actus.Domain.Schedule (ShiftedDay, ShiftedSchedule, mkShiftedDay)
 import Control.Alt ((<|>))
 import Data.BigInt.Argonaut (BigInt, abs, fromInt, quot, rem)

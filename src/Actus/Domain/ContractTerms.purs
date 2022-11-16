@@ -1,16 +1,29 @@
 module Actus.Domain.ContractTerms where
 
-import Data.Argonaut (JsonDecodeError(..), caseJsonString, encodeJson, fromString, stringify)
+import Prelude
+
+import Contrib.Data.Argonaut (decodeJsonEnumWith, decodeFromString, encodeJsonEnumWith)
+import Contrib.Data.String (decodeEnumWith, tryStripPrefix)
+import Data.Argonaut (fromString)
 import Data.Argonaut.Decode.Class (class DecodeJson)
 import Data.Argonaut.Decode.Generic (genericDecodeJson)
 import Data.Argonaut.Encode.Class (class EncodeJson)
 import Data.Argonaut.Encode.Generic (genericEncodeJson)
-import Data.DateTime (Date, DateTime)
-import Data.Either (Either(..))
+import Data.Array.NonEmpty as NA
+import Data.Bounded.Generic (genericBottom, genericTop)
+import Data.DateTime (DateTime)
+import Data.Enum (class BoundedEnum, class Enum, upFrom)
+import Data.Enum.Generic (genericCardinality, genericFromEnum, genericPred, genericSucc, genericToEnum)
 import Data.Generic.Rep (class Generic)
-import Data.List (List)
+import Data.Int as Int
+import Data.Maybe (Maybe(..))
 import Data.Maybe (Maybe)
-import Prelude
+import Data.Show.Generic (genericShow)
+import Data.String (Pattern(..))
+import Data.String as String
+import Data.String.Regex (match)
+import Data.String.Regex.Unsafe (unsafeRegex)
+import Debug (traceM)
 
 -- |ContractType
 data CT
@@ -29,6 +42,7 @@ instance EncodeJson CT where
 instance DecodeJson CT where
   decodeJson a = genericDecodeJson a
 
+
 -- |ContractRole
 data CR
   = CR_RPA -- ^ Real position asset
@@ -45,40 +59,31 @@ data CR
   | CR_RF -- ^ Receive fix leg
   | CR_PF -- ^ Pay fix leg
 
+derive instance Generic CR _
+derive instance Eq CR
+derive instance Ord CR
+
+instance Show CR where
+  show = genericShow
+
+instance Enum CR where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded CR where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum CR where
+    cardinality = genericCardinality
+    fromEnum = genericFromEnum
+    toEnum = genericToEnum
+
 instance EncodeJson CR where
-  encodeJson CR_RPA = encodeJson "RPA"
-  encodeJson CR_RPL = encodeJson "RPL"
-  encodeJson CR_CLO = encodeJson "CLO"
-  encodeJson CR_CNO = encodeJson "CNO"
-  encodeJson CR_COL = encodeJson "COL"
-  encodeJson CR_LG = encodeJson "LG"
-  encodeJson CR_ST = encodeJson "ST"
-  encodeJson CR_BUY = encodeJson "BUY"
-  encodeJson CR_SEL = encodeJson "SEL"
-  encodeJson CR_RFL = encodeJson "RFL"
-  encodeJson CR_PFL = encodeJson "PFL"
-  encodeJson CR_RF = encodeJson "RF"
-  encodeJson CR_PF = encodeJson "PF"
+  encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "CR_")
 
 instance DecodeJson CR where
-  decodeJson json = caseJsonString
-    (Left $ TypeMismatch $ "Unexpected json value: " <> stringify json)
-    decode
-    json
-    where
-    decode "RPL" = pure CR_RPL
-    decode "CLO" = pure CR_CLO
-    decode "CNO" = pure CR_CNO
-    decode "COL" = pure CR_COL
-    decode "LG" = pure CR_LG
-    decode "ST" = pure CR_ST
-    decode "BUY" = pure CR_BUY
-    decode "SEL" = pure CR_SEL
-    decode "RFL" = pure CR_RFL
-    decode "PFL" = pure CR_PFL
-    decode "RF" = pure CR_RF
-    decode "PF" = pure CR_PF
-    decode c = Left (TypeMismatch $ "Unexpected constructor name:" <> c)
+  decodeJson = decodeJsonEnumWith (tryStripPrefix $ Pattern "CR_")
 
 -- |DayCountConvention
 data DCC
@@ -108,27 +113,32 @@ instance EncodeJson DCC where
   encodeJson DCC_E30_360 = fromString "30E360"
   encodeJson DCC_B_252 = fromString "B252"
 
--- instance FromJSON DCC where
---   parseJSON (String "AA")         = return DCC_A_AISDA
---   parseJSON (String "A360")       = return DCC_A_360
---   parseJSON (String "A365")       = return DCC_A_365
---   parseJSON (String "30E360ISDA") = return DCC_E30_360ISDA
---   parseJSON (String "30E360")     = return DCC_E30_360
---   parseJSON (String "B252")       = return DCC_B_252
---   parseJSON _                     = mzero
---
+instance DecodeJson DCC where
+  decodeJson = decodeFromString decode
+    where
+      decode "AA" = pure DCC_A_AISDA
+      decode "A360" = pure DCC_A_360
+      decode "A365" = pure DCC_A_365
+      decode "30E360ISDA" = pure DCC_E30_360ISDA
+      decode "30E360" = pure DCC_E30_360
+      decode "B252" = pure DCC_B_252
+      decode _ = Nothing
+
 -- -- |EndOfMonthConvention
-data EOMC
-  = EOMC_EOM -- ^ End of month
-  | EOMC_SD -- ^ Same day
+data EOMC = EOMC_EOM -- ^ End of month
+          | EOMC_SD  -- ^ Same day
 
 derive instance Generic EOMC _
 derive instance Eq EOMC
+derive instance Ord EOMC
 
---           deriving stock (Show, Read, Eq, Generic)
---
--- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''EOMC)
---
+instance EncodeJson EOMC where
+  encodeJson EOMC_EOM = fromString "AA"
+  encodeJson EOMC_SD = fromString "A360"
+
+instance DecodeJson EOMC where
+  decodeJson a = genericDecodeJson a
+
 -- -- |BusinessDayConvention
 data BDC
   = BDC_NULL -- ^ No shift
@@ -143,42 +153,66 @@ data BDC
 
 derive instance Generic BDC _
 derive instance Eq BDC
+derive instance Ord BDC
 
---          deriving stock (Show, Read, Eq, Generic)
---
--- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''BDC)
---
+instance Show BDC where
+  show = genericShow
+
+instance Enum BDC where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded BDC where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum BDC where
+    cardinality = genericCardinality
+    fromEnum = genericFromEnum
+    toEnum = genericToEnum
+
+instance EncodeJson BDC where
+  encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "BDC_")
+
+instance DecodeJson BDC where
+  decodeJson = decodeJsonEnumWith (tryStripPrefix $ Pattern "BDC_")
+
+
 data Calendar
   = CLDR_MF -- ^ Monday to Friday
   | CLDR_NC -- ^ No calendar
 
---               deriving stock (Show, Read, Eq, Generic)
---
--- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''Calendar)
+derive instance Generic Calendar _
+derive instance Eq Calendar
+derive instance Ord Calendar
+
+instance Show Calendar where
+  show = genericShow
+
+instance Enum Calendar where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded Calendar where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum Calendar where
+    cardinality = genericCardinality
+    fromEnum = genericFromEnum
+    toEnum = genericToEnum
+
+instance EncodeJson Calendar where
+  encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "CLDR_")
+
+instance DecodeJson Calendar where
+  decodeJson = decodeJsonEnumWith (tryStripPrefix $ Pattern "CLDR_")
 
 type ScheduleConfig =
   { calendar :: Maybe Calendar
   , endOfMonthConvention :: Maybe EOMC
   , businessDayConvention :: Maybe BDC
   }
-
---  decodeJson json = do
---    r <- { calendar: _, endoOfMonthConvention: _, bussinessDayConvention: _ }
---      <$> decodeJson (json :. "calendar")
---      <*> decodeJson ...
---      <*> decodeJson ...
---    pure $ ScheduleConfig r
---
---  decodeJson json = ado
---    r <- { calendar: _, endoOfMonthConvention: _, bussinessDayConvention: _ }
---    calendar <- decodeJson (json :. "calendar")
---    endOfMonthConvention <- decodeJson ...
---    businessDayConvention <- decodeJson ...
---    in $ ScheduleConfig
----     { calendar, endoOfMonthConvention, businessDayConvention }
-
---  deriving stock (Show, Generic)
---  deriving anyclass (FromJSON, ToJSON)
 
 -- |ContractPerformance
 data PRF
@@ -187,38 +221,128 @@ data PRF
   | PRF_DQ -- ^ Delinquent
   | PRF_DF -- ^ Default
 
---          deriving stock (Show, Read, Eq, Generic)
---
--- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''PRF)
---
+derive instance Generic PRF _
+derive instance Eq PRF
+derive instance Ord PRF
+
+instance Show PRF where
+  show = genericShow
+
+instance Enum PRF where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded PRF where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum PRF where
+    cardinality = genericCardinality
+    fromEnum = genericFromEnum
+    toEnum = genericToEnum
+
+instance EncodeJson PRF where
+  encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "PRF_")
+
+instance DecodeJson PRF where
+  decodeJson = decodeJsonEnumWith (tryStripPrefix $ Pattern "PRF_")
+
+
 -- |CreditEventTypeCovered
 data CETC
   = CETC_DL -- ^ Delayed
   | CETC_DQ -- ^ Delinquent
   | CETC_DF -- ^ Default
 
---         deriving stock (Show, Read, Eq, Generic)
+derive instance Generic CETC _
+derive instance Eq CETC
+derive instance Ord CETC
 
--- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''CETC)
---
+instance Show CETC where
+  show = genericShow
+
+instance Enum CETC where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded CETC where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum CETC where
+    cardinality = genericCardinality
+    fromEnum = genericFromEnum
+    toEnum = genericToEnum
+
+instance EncodeJson CETC where
+  encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "CETC_")
+
+instance DecodeJson CETC where
+  decodeJson = decodeJsonEnumWith (tryStripPrefix $ Pattern "CETC_")
+
+
 -- |GuaranteedExposure
 data CEGE
   = CEGE_NO -- ^ Nominal value
   | CEGE_NI -- ^ Nominal value plus interest
 
---         deriving stock (Show, Read, Eq, Generic)
+derive instance Generic CEGE _
+derive instance Eq CEGE
+derive instance Ord CEGE
 
--- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''CEGE)
---
+instance Show CEGE where
+  show = genericShow
+
+instance Enum CEGE where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded CEGE where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum CEGE where
+    cardinality = genericCardinality
+    fromEnum = genericFromEnum
+    toEnum = genericToEnum
+
+instance EncodeJson CEGE where
+  encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "CEGE_")
+
+instance DecodeJson CEGE where
+  decodeJson = decodeJsonEnumWith (tryStripPrefix $ Pattern "CEGE_")
+
 -- |FeeBasis
 data FEB
   = FEB_A -- ^ Absolute value
   | FEB_N -- ^ Notional of underlying
 
---         deriving stock (Show, Read, Eq, Generic)
+derive instance Generic FEB _
+derive instance Eq FEB
+derive instance Ord FEB
 
--- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''FEB)
---
+instance Show FEB where
+  show = genericShow
+
+instance Enum FEB where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded FEB where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum FEB where
+    cardinality = genericCardinality
+    fromEnum = genericFromEnum
+    toEnum = genericToEnum
+
+instance EncodeJson FEB where
+  encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "FEB_")
+
+instance DecodeJson FEB where
+  decodeJson = decodeJsonEnumWith (tryStripPrefix $ Pattern "FEB_")
+
 -- |InterestCalculationBase
 data IPCB
   = IPCB_NT -- ^ Calculation base always equals to NT
@@ -229,10 +353,28 @@ derive instance Generic IPCB _
 derive instance Eq IPCB
 derive instance Ord IPCB
 
---           deriving stock (Show, Read, Eq, Generic)
---
--- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''IPCB)
---
+instance Show IPCB where
+  show = genericShow
+
+instance Enum IPCB where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded IPCB where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum IPCB where
+    cardinality = genericCardinality
+    fromEnum = genericFromEnum
+    toEnum = genericToEnum
+
+instance EncodeJson IPCB where
+  encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "IPCB_")
+
+instance DecodeJson IPCB where
+  decodeJson = decodeJsonEnumWith (tryStripPrefix $ Pattern "IPCB_")
+
 -- |ScalingEffect
 data SCEF
   = SE_OOO -- ^ No scaling
@@ -246,21 +388,30 @@ data SCEF
 
 derive instance Generic SCEF _
 derive instance Eq SCEF
+derive instance Ord SCEF
 
 instance Show SCEF where
-  show SE_OOO = "OOO"
-  show SE_IOO = "IOO"
-  show SE_ONO = "ONO"
-  show SE_OOM = "OOM"
-  show SE_INO = "INO"
-  show SE_ONM = "ONM"
-  show SE_IOM = "IOM"
-  show SE_INM = "INM"
+  show = tryStripPrefix (Pattern "SE_") <<< genericShow
 
---           deriving stock (Show, Read, Eq, Generic)
---
--- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''SCEF)
---
+instance Enum SCEF where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded SCEF where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum SCEF where
+    cardinality = genericCardinality
+    fromEnum = genericFromEnum
+    toEnum = genericToEnum
+
+instance EncodeJson SCEF where
+  encodeJson = encodeJsonEnumWith identity
+
+instance DecodeJson SCEF where
+  decodeJson = decodeJsonEnumWith identity
+
 -- |PenaltyType
 data PYTP
   = PYTP_A -- ^ Absolute
@@ -268,57 +419,159 @@ data PYTP
   | PYTP_I -- ^ Current interest rate differential
   | PYTP_O -- ^ No penalty
 
---           deriving stock (Show, Read, Eq, Generic)
---
--- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''PYTP)
---
+derive instance Generic PYTP _
+derive instance Eq PYTP
+derive instance Ord PYTP
+
+instance Show PYTP where
+  show = genericShow
+
+instance Enum PYTP where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded PYTP where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum PYTP where
+    cardinality = genericCardinality
+    fromEnum = genericFromEnum
+    toEnum = genericToEnum
+
+instance EncodeJson PYTP where
+  encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "PYTP_")
+
+instance DecodeJson PYTP where
+  decodeJson = decodeJsonEnumWith (tryStripPrefix $ Pattern "PYTP_")
+
 -- |Option Type
 data OPTP
   = OPTP_C -- ^ Call Option
   | OPTP_P -- ^ Put Option
   | OPTP_CP -- ^ Call-Put Option
 
---           deriving stock (Show, Read, Eq, Generic)
---
--- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''OPTP)
---
+derive instance Generic OPTP _
+derive instance Eq OPTP
+derive instance Ord OPTP
+
+instance Show OPTP where
+  show = genericShow
+
+instance Enum OPTP where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded OPTP where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum OPTP where
+    cardinality = genericCardinality
+    fromEnum = genericFromEnum
+    toEnum = genericToEnum
+
+instance EncodeJson OPTP where
+  encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "OPTP_")
+
+instance DecodeJson OPTP where
+  decodeJson = decodeJsonEnumWith (tryStripPrefix $ Pattern "OPTP_")
+
 -- |Option Exercise Type
 data OPXT
   = OPXT_E -- ^ European
   | OPXT_B -- ^ Bermudan
   | OPXT_A -- ^ American
 
---           deriving stock (Show, Read, Eq, Generic)
---
--- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''OPXT)
---
+derive instance Generic OPXT _
+derive instance Eq OPXT
+derive instance Ord OPXT
+
+instance Show OPXT where
+  show = genericShow
+
+instance Enum OPXT where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded OPXT where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum OPXT where
+    cardinality = genericCardinality
+    fromEnum = genericFromEnum
+    toEnum = genericToEnum
+
+instance EncodeJson OPXT where
+  encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "OPXT_")
+
+instance DecodeJson OPXT where
+  decodeJson = decodeJsonEnumWith (tryStripPrefix $ Pattern "OPXT_")
+
 -- |Settlement
 data DS
   = DS_S -- ^ Cash Settlement
   | DS_D -- ^ Physical Settlement
 
---           deriving stock (Show, Read, Eq, Generic)
---
--- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''DS)
---
+derive instance Generic DS _
+derive instance Eq DS
+derive instance Ord DS
+
+instance Show DS where
+  show = genericShow
+
+instance Enum DS where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded DS where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum DS where
+    cardinality = genericCardinality
+    fromEnum = genericFromEnum
+    toEnum = genericToEnum
+
+instance EncodeJson DS where
+  encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "DS_")
+
+instance DecodeJson DS where
+  decodeJson = decodeJsonEnumWith (tryStripPrefix $ Pattern "DS_")
+
 -- |PrepaymentEffect
 data PPEF
   = PPEF_N -- ^ No prepayment
   | PPEF_A -- ^ Prepayment allowed, prepayment results in reduction of PRNXT while MD remains
   | PPEF_M -- ^ Prepayment allowed, prepayment results in reduction of MD while PRNXT remains
 
---           deriving stock (Show, Read, Eq, Ord, Generic)
---
--- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''PPEF)
---
-data CalendarType
-  = NoCalendar
-  | MondayToFriday
-  | CustomCalendar { holidays :: List Date }
+derive instance Generic PPEF _
+derive instance Eq PPEF
+derive instance Ord PPEF
 
---                   deriving stock (Show, Generic)
---                   deriving anyclass (FromJSON, ToJSON)
---
+instance Show PPEF where
+  show = genericShow
+
+instance Enum PPEF where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded PPEF where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum PPEF where
+    cardinality = genericCardinality
+    fromEnum = genericFromEnum
+    toEnum = genericToEnum
+
+instance EncodeJson PPEF where
+  encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "PPEF_")
+
+instance DecodeJson PPEF where
+  decodeJson = decodeJsonEnumWith (tryStripPrefix $ Pattern "PPEF_")
+
 -- |CyclePeriod
 data Period
   = P_D -- ^ Day
@@ -332,26 +585,50 @@ derive instance Generic Period _
 derive instance Eq Period
 derive instance Ord Period
 
---             deriving stock (Show, Read, Eq, Ord, Generic)
---
--- $(deriveJSON defaultOptions { constructorTagModifier = reverse . takeWhile (/= '_') . reverse } ''Period)
---
+instance Show Period where
+  show = genericShow
+
+instance Enum Period where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded Period where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum Period where
+    cardinality = genericCardinality
+    fromEnum = genericFromEnum
+    toEnum = genericToEnum
+
+periodToString :: Period -> String
+periodToString = tryStripPrefix (Pattern "P_") <<< show
+
+periodFromString :: String -> Maybe Period
+periodFromString = decodeEnumWith (tryStripPrefix (Pattern "P_"))
+
 -- |CycleStub
 data Stub
   = ShortStub -- ^ Short last stub
   | LongStub -- ^ Long last stub
 
---           deriving stock (Show, Eq, Ord, Generic)
---
--- instance ToJSON Stub where
---   toJSON ShortStub = String "1"
---   toJSON LongStub  = String "0"
---
--- instance FromJSON Stub where
---   parseJSON (String "1") = return ShortStub
---   parseJSON (String "0") = return LongStub
---   parseJSON _            = mzero
---
+derive instance Generic Stub _
+derive instance Eq Stub
+derive instance Ord Stub
+
+instance Show Stub where
+  show = genericShow
+
+stubToString :: Stub -> String
+stubToString ShortStub = "1"
+stubToString LongStub  = "0"
+
+stubFromString :: String -> Maybe Stub
+stubFromString = case _ of
+  "1" -> Just ShortStub
+  "0" -> Just LongStub
+  _ -> Nothing
+
 -- |Cycle
 type Cycle =
   { n :: Int
@@ -360,65 +637,39 @@ type Cycle =
   , includeEndDay :: Boolean
   }
 
---   deriving stock (Show, Eq, Ord, Generic)
---
--- instance ToJSON Cycle where
---   toJSON (Cycle n p s _) =
---     case toJSON p of
---       String p' ->
---         case toJSON s of
---           String s' ->
---             String $
---               'P'
---                 `cons` (pack $ show n)
---                 `append` p'
---                 `snoc` 'L'
---                 `append` s'
---           _ -> Null
---       _ -> Null
---
--- instance FromJSON Cycle where
---   parseJSON (String s) = fromMaybe mzero (parseCycle s)
---     where
---       parseCycle :: Text -> Maybe (Parser Cycle)
---       parseCycle c = do
---         r0 <- unconsConstant 'P' c
---         (n, r1) <- hush $ T.decimal r0
---         (p, r2) <- uncons r1
---         if T.null r2
---           then
---             Just $
---               return (Cycle n)
---                 <*> parseJSON (String $ singleton p)
---                 <*> return LongStub
---                 <*> return False
---           else do
---             r3 <- unconsConstant 'L' r2
---             Just $
---               return (Cycle n)
---                 <*> parseJSON (String $ singleton p)
---                 <*> parseJSON (String r3)
---                 <*> return False
---
---       unconsConstant :: Char -> Text -> Maybe Text
---       unconsConstant c t = do (ht, tt) <- uncons t
---                               guard (ht == c)
---                               return tt
---
---       hush :: Either a b -> Maybe b
---       hush = either (const Nothing) Just
---
---   parseJSON _ = mzero
---
--- -- For applicability failures
--- data TermValidationError =
---     Required String
---     | NotApplicable String
---     deriving stock (Eq)
--- instance Show TermValidationError where
---     show (Required s)      = "Missing required term: " ++ s
---     show (NotApplicable s) = "Term not applicable to contract: " ++ s
---
+encodeCycle :: Cycle -> String
+encodeCycle {n, p, stub } =
+  "P" <> show n <> periodToString p <> "L" <> stubToString stub
+
+decodeCycle :: String -> Maybe Cycle
+decodeCycle str = do
+  let
+    periods = String.joinWith "|" <<< map periodToString $ (upFrom bottom :: Array Period)
+    -- for example: "P1ML0
+    pattern = "P([0-9]+)([" <> periods <> "])" <> "L" <> "([0|1])"
+    regex = unsafeRegex pattern mempty
+  m <- match regex str
+  case NA.toArray m of
+    [_, Just n, Just p, Just s] -> do
+      { n: _, p: _, stub: _, includeEndDay: false }
+        <$> Int.fromString n
+        <*> periodFromString p
+        <*> stubFromString s
+    _ -> Nothing
+
+-- For applicability failures
+data TermValidationError =
+    Required String
+    | NotApplicable String
+
+derive instance Eq TermValidationError
+
+instance Show TermValidationError where
+    show (Required s)      = "Missing required term: " <> s
+    show (NotApplicable s) = "Term not applicable to contract: " <> s
+
+
+
 {-| ACTUS contract terms and attributes are defined in
     https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-terms.json
 -}
@@ -529,23 +780,12 @@ data ContractTerms a = ContractTerms
 
   , enableSettlement :: Boolean -- ^ Enable settlement currency
   }
---   deriving stock (Show, Generic)
---   deriving anyclass (ToJSON)
---
--- instance FromJSON (Reference Double) where
---   parseJSON = genericParseJSON defaultOptions { sumEncoding = UntaggedValue }
---
--- instance FromJSON (ContractStructure Double) where
---   parseJSON (Object v) =
---     ContractStructure
---       <$> v .: "object"
---       <*> v .: "referenceType"
---       <*> v .: "referenceRole"
---   parseJSON _ = mzero
---
--- instance FromJSON (ContractTerms Double) where
---   parseJSON (Object v) =
---     ContractTerms
+
+derive instance Generic (ContractTerms a) _
+derive instance Eq a => Eq (ContractTerms a)
+
+-- instance DecodeJson (ContractTerms Double) where
+--   parseJSON (Object v) = ContractTerms
 --       <$> (v .:  "contractID" <|> v .: "contractId")
 --       <*> v .:  "contractType"
 --       <*> (v .: "contractStructure" <|> return [])
