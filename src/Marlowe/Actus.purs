@@ -225,8 +225,8 @@ hasRiskFactor cf@(CashFlow { amount }) = hasRiskFactor' amount
 constant :: Number -> Value'
 constant n = Constant' $ toMarloweFixedPoint n
   where
-    toMarloweFixedPoint :: Number -> BigInt
-    toMarloweFixedPoint x = marloweFixedPoint * fromInt (round x)
+  toMarloweFixedPoint :: Number -> BigInt
+  toMarloweFixedPoint x = marloweFixedPoint * fromInt (round x)
 
 toMarlowe :: ContractTerms Number -> ContractTermsMarlowe
 toMarlowe (ContractTerms ct) =
