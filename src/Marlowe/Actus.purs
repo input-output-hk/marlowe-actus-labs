@@ -4,122 +4,43 @@ module Marlowe.Actus
   ( CashFlowMarlowe
   , ContractTermsMarlowe
   , RiskFactorsMarlowe
-  --, defaultRiskFactors
   , genContract
   -- == Conversion from Number to Marlowe representation
   -- re-export
-  , module Actus.Domain
   -- utility
-  , fromMarloweFixedPoint
   , toMarlowe
-  , toMarloweFixedPoint
   ) where
 
-import Actus.Domain
-import Language.Marlowe.Extended.V1
 import Prelude
 
 import Actus.Core (genProjectedCashflows)
-import Control.Alt (map)
-import Data.BigInt.Argonaut (BigInt, abs, fromInt, quot, rem)
-import Data.DateTime (DateTime(..))
-import Data.DateTime.Instant (Instant, fromDateTime, instant)
+import Actus.Domain (CashFlow(..), ContractState, ContractTerms(..), EventType, Observation'(..), RiskFactors, Value'(..), marloweFixedPoint)
+import Data.BigInt.Argonaut (BigInt, fromInt)
+import Data.DateTime (DateTime)
+import Data.DateTime.Instant (Instant, fromDateTime)
 import Data.Foldable (foldl)
-import Data.Function ((#), ($))
 import Data.Int (round)
-import Data.List (List(..), reverse)
-import Data.Maybe (Maybe(..), fromMaybe, maybe)
-import Data.Ord (signum)
+import Data.List (reverse)
+import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\), (/\))
 import Language.Marlowe.Core.V1.Semantics as MarloweSemantics
-import Language.Marlowe.Core.V1.Semantics.Types (Bound(..), ChoiceId(..), Party(..), TimeInterval(..), adaToken)
+import Language.Marlowe.Core.V1.Semantics.Types (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), TimeInterval(..), Value(..), adaToken)
 import Language.Marlowe.Core.V1.Semantics.Types as MarloweCore
 import Marlowe.Time (unixEpoch)
 
 type CashFlowMarlowe = CashFlow Value
-type ContractStateMarlowe = ContractState Value
-type ContractTermsMarlowe = ContractTerms Value
-type RiskFactorsMarlowe = RiskFactors Value
+type ContractStateMarlowe = ContractState Value'
+type ContractTermsMarlowe = ContractTerms Value'
+type RiskFactorsMarlowe = RiskFactors Value'
 
-marloweFixedPoint :: BigInt
-marloweFixedPoint = fromInt 1000000
-
-toMarloweFixedPoint :: Number -> BigInt
-toMarloweFixedPoint n = marloweFixedPoint * fromInt (round n)
-
-fromMarloweFixedPoint :: BigInt -> BigInt
-fromMarloweFixedPoint i = i `quot` marloweFixedPoint
-
--- In order to have manageble contract sizes, we need to reduce Value as
--- good as possible.
---
--- Note:
---
--- * This interfers with the semantics - ideally we would have formally
---   verified reduction semantics instead
---
--- * There are partial implementations, as the evaluation of a Value
---   is not always possible
---
--- * The semantics of division, i.e. rounding changed. In order to
---   preserve financial rounding, in ACTUS we always have to use `division`
---   rather than `DivValue`
-
--- instance Num Value where
---   x + y = reduceValue $ AddValue x y
---   x - y = reduceValue $ SubValue x y
---   x * y = reduceValue $ division (MulValue x y) (Constant marloweFixedPoint)
---   abs a = _max a (NegValue a)
---     where
---       _max x y = Cond (ValueGT x y) x y
---   fromInteger n = Constant $ n * marloweFixedPoint
---   negate a = NegValue a
---   signum a =
---     Cond (ValueLT a 0) (-1) $
---       Cond (ValueGT a 0) 1 0
-
---instance ActusFrac Value where
---  _ceiling x = fromMaybe (error "ActusFrac partially implemented") (evalVal x)
-
--- instance Fractional Value where
---   lhs / rhs = MulValue (division lhs rhs) (Constant marloweFixedPoint)
---   fromRational (x :% y) = MulValue (division (fromInteger x) (fromInteger y)) (Constant marloweFixedPoint)
-
--- |Division with financial rounding
-division :: Value -> Value -> Value
-division lhs rhs = fromMaybe (Constant $ fromInt 0) $ -- TODO: remove fromMaybe
-
-  do
-    n <- evalVal lhs
-    d <- evalVal rhs
-    pure $ Constant (division' n d)
-  where
-  -- division' :: BigInt -> BigInt -> BigInt
-  division' x _ | x == fromInt 0 = fromInt 0
-  division' _ y | y == fromInt 0 = fromInt 0
-  division' n d =
-    let
-      q = n `quot` d
-      r = n `rem` d
-      ar = abs r * (fromInt 2)
-      ad = abs d
-    in
-      if ar < ad then q -- reminder < 1/2
-      else if ar > ad then q + signum n * signum d -- reminder > 1/2
-      else
-        let -- reminder == 1/2
-          qIsEven = q `rem` (fromInt 2) == (fromInt 0)
-        in
-          if qIsEven then q else q + signum n * signum d
-
-evalVal :: Value -> Maybe BigInt
-evalVal d = MarloweSemantics.evalValue env state <$> toCore d
+evalVal :: Value -> BigInt
+evalVal d = MarloweSemantics.evalValue env state d
   where
   env = MarloweCore.Environment { timeInterval: TimeInterval unixEpoch unixEpoch }
   state = MarloweSemantics.emptyState
 
-evalObs :: Observation -> Maybe Boolean
-evalObs d = MarloweSemantics.evalObservation env state <$> toCore d
+evalObs :: Observation -> Boolean
+evalObs d = MarloweSemantics.evalObservation env state d
   where
   env = MarloweCore.Environment { timeInterval: TimeInterval unixEpoch unixEpoch }
   state = MarloweSemantics.emptyState
@@ -132,9 +53,11 @@ reduceContract (Pay a b c d e) = Pay a b c (reduceValue d) (reduceContract e)
 reduceContract (When cs t c) = When (map f cs) t (reduceContract c)
   where
   f (Case a x) = Case a (reduceContract x)
-reduceContract i@(If obs a b) = case evalObs obs of
-  Just c -> reduceContract (if c then a else b)
-  Nothing -> i
+reduceContract (If obs a b) =
+  let
+    c = evalObs obs
+  in
+    reduceContract (if c then a else b)
 reduceContract (Let v o c) = Let v (reduceValue o) (reduceContract c)
 reduceContract (Assert o c) = Assert (reduceObs o) (reduceContract c)
 
@@ -150,7 +73,52 @@ reduceObs (ValueEQ a b) = ValueEQ (reduceValue a) (reduceValue b)
 reduceObs x = x
 
 reduceValue :: Value -> Value
-reduceValue v = maybe v Constant (evalVal v)
+reduceValue v = Constant $ evalVal v
+
+toMarloweValue :: Value' -> Value
+toMarloweValue (Constant' n) = Constant n
+toMarloweValue (NegValue' n) = NegValue $ toMarloweValue n
+toMarloweValue (AddValue' a b) = AddValue (toMarloweValue a) (toMarloweValue b)
+toMarloweValue (SubValue' a b) = SubValue (toMarloweValue a) (toMarloweValue b)
+toMarloweValue (MulValue' a b) = MulValue (toMarloweValue a) (toMarloweValue b)
+toMarloweValue (Cond' o a b) = Cond (toMarloweObservation o) (toMarloweValue a) (toMarloweValue b)
+
+toMarloweObservation :: Observation' -> Observation
+toMarloweObservation (AndObs' a b) = AndObs (toMarloweObservation a) (toMarloweObservation b)
+toMarloweObservation (OrObs' a b) = OrObs (toMarloweObservation a) (toMarloweObservation b)
+toMarloweObservation (NotObs' a) = NotObs $ toMarloweObservation a
+toMarloweObservation (ValueGE' a b) = ValueGE (toMarloweValue a) (toMarloweValue b)
+toMarloweObservation (ValueGT' a b) = ValueGT (toMarloweValue a) (toMarloweValue b)
+toMarloweObservation (ValueLT' a b) = ValueLT (toMarloweValue a) (toMarloweValue b)
+toMarloweObservation (ValueLE' a b) = ValueLE (toMarloweValue a) (toMarloweValue b)
+toMarloweObservation (ValueEQ' a b) = ValueEQ (toMarloweValue a) (toMarloweValue b)
+toMarloweObservation TrueObs' = TrueObs
+toMarloweObservation FalseObs' = FalseObs
+
+toMarloweCashflow :: CashFlow Value' -> CashFlow Value
+toMarloweCashflow
+  ( CashFlow
+      { tick
+      , cashParty
+      , cashCounterParty
+      , cashPaymentDay
+      , cashCalculationDay
+      , cashEvent
+      , amount
+      , notional
+      , cashCurrency
+      }
+  ) = CashFlow
+  { tick: tick
+  , cashParty: cashParty
+  , cashCounterParty: cashCounterParty
+  , cashPaymentDay: cashPaymentDay
+  , cashCalculationDay: cashCalculationDay
+  , cashEvent: cashEvent
+  , amount: toMarloweValue amount
+  , notional: toMarloweValue notional
+  , cashCurrency: cashCurrency
+  }
 
 -- | 'genContract' validatates the applicabilty of the contract terms in order
 -- to genereate a Marlowe contract with risk factors observed at a given point
@@ -170,9 +138,9 @@ genContract
   Contract
 genContract (party /\ couterparty) rf ct =
   let
-    cfs = Nil -- FIXME: genProjectedCashflows rf ct
+    cfs = genProjectedCashflows rf ct
   in
-    foldl gen Close $ reverse cfs
+    foldl gen Close $ reverse (map toMarloweCashflow cfs)
   where
   gen :: Contract -> CashFlow Value -> Contract
   gen cont cf@(CashFlow { cashPaymentDay })
@@ -182,7 +150,7 @@ genContract (party /\ couterparty) rf ct =
               (Choice (cashFlowToChoiceId cf) [ Bound (fromInt 0) (fromInt 1000000000) ])
               (stub cont cf)
           ]
-          (TimeValue $ fromDateTime cashPaymentDay)
+          (fromDateTime cashPaymentDay)
           Close
   gen cont cf = stub cont cf
 
@@ -226,13 +194,13 @@ genContract (party /\ couterparty) rf ct =
               continue
           )
       ]
-      (TimeValue timeout)
+      timeout
       Close
 
 cashFlowToChoiceId :: forall a. CashFlow a -> ChoiceId
 cashFlowToChoiceId (CashFlow { cashEvent, cashPaymentDay }) =
   let
-    l = "" -- FIXME: show cashEvent <> show cashPaymentDay
+    l = show cashEvent <> show cashPaymentDay
   in
     ChoiceId l (Role "RiskFactor")
 
@@ -252,55 +220,13 @@ hasRiskFactor cf@(CashFlow { amount }) = hasRiskFactor' amount
   hasRiskFactor' (NegValue a) = hasRiskFactor' a
   hasRiskFactor' TimeIntervalStart = false
   hasRiskFactor' TimeIntervalEnd = false
-  hasRiskFactor' (ConstantParam _) = false
   hasRiskFactor' (Cond _ a b) = hasRiskFactor' a || hasRiskFactor' b
 
---defaultRiskFactors :: String -> EventType -> DateTime -> RiskFactors Value
---defaultRiskFactors _ ev t =
---  let choiceId = ChoiceId (show ev <> show t) (Role "RiskFactor")
---      value = ChoiceValue choiceId
---  in mkRiskFactor ev value
-
--- mkRiskFactor :: EventType -> Value -> RiskFactors Value
--- mkRiskFactor PP value =
---   RiskFactors
---     { o_rf_CURS : one,
---       o_rf_RRMO : one,
---       o_rf_SCMO : one,
---       pp_payoff : value,
---       xd_payoff : zero,
---       dv_payoff : zero
---     }
--- mkRiskFactor XD value =
---   RiskFactors
---     { o_rf_CURS : one,
---       o_rf_RRMO : one,
---       o_rf_SCMO : one,
---       pp_payoff : zero,
---       xd_payoff : value,
---       dv_payoff : zero
---     }
--- mkRiskFactor DV value =
---   RiskFactors
---     { o_rf_CURS : one,
---       o_rf_RRMO : one,
---       o_rf_SCMO : one,
---       pp_payoff : zero,
---       xd_payoff : zero,
---       dv_payoff : value
---     }
--- mkRiskFactor _ _ =
---   RiskFactors
---     { o_rf_CURS : one,
---       o_rf_RRMO : one,
---       o_rf_SCMO : one,
---       pp_payoff : zero,
---       xd_payoff : zero,
---       dv_payoff : zero
---     }
-
-constant :: Number -> Value
-constant n = Constant $ toMarloweFixedPoint n
+constant :: Number -> Value'
+constant n = Constant' $ toMarloweFixedPoint n
+  where
+    toMarloweFixedPoint :: Number -> BigInt
+    toMarloweFixedPoint x = marloweFixedPoint * fromInt (round x)
 
 toMarlowe :: ContractTerms Number -> ContractTermsMarlowe
 toMarlowe (ContractTerms ct) =

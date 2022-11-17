@@ -13,19 +13,26 @@ module Actus.Domain
   , RiskFactors(..)
   , setDefaultContractTermValues
   , sign
+  , marloweFixedPoint
+  , Value'(..)
+  , Observation'(..)
   ) where
+
+import Prelude
 
 import Actus.Domain.BusinessEvents (EventType(..))
 import Actus.Domain.ContractState (ContractState(..))
 import Actus.Domain.ContractTerms (BDC(..), CEGE(..), CETC(..), CR(..), CT(..), Calendar(..), CalendarType(..), ContractTerms(..), Cycle, DCC(..), DS(..), EOMC(..), FEB(..), IPCB(..), OPTP(..), OPXT(..), PPEF(..), PRF(..), PYTP(..), Period(..), SCEF(..), ScheduleConfig, Stub(..))
 import Actus.Domain.Schedule (ShiftedDay, ShiftedSchedule, mkShiftedDay)
 import Control.Alt ((<|>))
+import Data.BigInt.Argonaut (BigInt, abs, fromInt, quot, rem)
 import Data.DateTime (DateTime)
 import Data.Int (ceil)
 import Data.Maybe (Maybe(..))
-import Data.Number (abs)
-import Language.Marlowe.Core.V1.Semantics.Types (Observation(..), Value(..))
-import Prelude (class Ring, max, min, negate, one, ($), (/))
+import Data.Number as Number
+import Data.Ord (signum)
+import Data.Show.Generic (genericShow)
+import Data.Generic.Rep (class Generic)
 
 class ActusOps a <= ActusFrac a where
   _ceiling :: a -> Int
@@ -38,17 +45,107 @@ class ActusOps a where
 instance ActusOps Number where
   _min = min
   _max = max
-  _abs = abs
-
-instance ActusOps Value where
-  _min x y = Cond (ValueLT x y) x y
-  _max x y = Cond (ValueGT x y) x y
-  _abs a = _max a (NegValue a)
-    where
-    _max x y = Cond (ValueGT x y) x y
+  _abs = Number.abs
 
 instance ActusFrac Number where
   _ceiling = ceil
+
+data Value'
+  = Constant' BigInt
+  | NegValue' Value'
+  | AddValue' Value' Value'
+  | SubValue' Value' Value'
+  | MulValue' Value' Value'
+  | Cond' Observation' Value' Value'
+
+data Observation'
+  = AndObs' Observation' Observation'
+  | OrObs' Observation' Observation'
+  | NotObs' Observation'
+  | ValueGE' Value' Value'
+  | ValueGT' Value' Value'
+  | ValueLT' Value' Value'
+  | ValueLE' Value' Value'
+  | ValueEQ' Value' Value'
+  | TrueObs'
+  | FalseObs'
+
+instance Semiring Value' where
+  add x y = AddValue' x y
+  mul x y = division (MulValue' x y) (Constant' marloweFixedPoint)
+  one = Constant' marloweFixedPoint
+  zero = Constant' (fromInt 0)
+
+instance Ring Value' where
+  sub x y = SubValue' x y
+
+instance CommutativeRing Value'
+
+instance EuclideanRing Value' where
+  degree _ = 1
+  div = division -- different rounding, not using DivValue
+  mod x y = Constant' $ evalVal x `mod` evalVal y
+
+instance ActusOps Value' where
+  _min x y = Cond' (ValueLT' x y) x y
+  _max x y = Cond' (ValueGT' x y) x y
+  _abs a = _max a (NegValue' a)
+    where
+    _max x y = Cond' (ValueGT' x y) x y
+
+instance ActusFrac Value' where
+  _ceiling _ = 0 -- FIXME
+
+marloweFixedPoint :: BigInt
+marloweFixedPoint = fromInt 1000000
+
+division :: Value' -> Value' -> Value'
+division lhs rhs =
+  do
+    let
+      n = evalVal lhs
+      d = evalVal rhs
+    Constant' (division' n d)
+  where
+  division' :: BigInt -> BigInt -> BigInt
+  division' x _ | x == fromInt 0 = fromInt 0
+  division' _ y | y == fromInt 0 = fromInt 0
+  division' n d =
+    let
+      q = n `quot` d
+      r = n `rem` d
+      ar = abs r * (fromInt 2)
+      ad = abs d
+    in
+      if ar < ad then q -- reminder < 1/2
+      else if ar > ad then q + signum n * signum d -- reminder > 1/2
+      else
+        let -- reminder == 1/2
+          qIsEven = q `rem` (fromInt 2) == (fromInt 0)
+        in
+          if qIsEven then q else q + signum n * signum d
+
+evalVal :: Value' -> BigInt
+evalVal (Constant' n) = n
+evalVal (NegValue' n) = -evalVal n
+evalVal (AddValue' a b) = (evalVal a) + (evalVal b)
+evalVal (SubValue' a b) = (evalVal a) - (evalVal b)
+evalVal (MulValue' a b) = (evalVal a) * (evalVal b)
+evalVal (Cond' o a b)
+  | evalObs o = evalVal a
+  | otherwise = evalVal b
+
+evalObs :: Observation' -> Boolean
+evalObs (AndObs' a b) = evalObs a && evalObs b
+evalObs (OrObs' a b) = evalObs a || evalObs b
+evalObs (NotObs' a) = not $ evalObs a
+evalObs (ValueGE' a b) = evalVal a >= evalVal b
+evalObs (ValueGT' a b) = evalVal a > evalVal b
+evalObs (ValueLT' a b) = evalVal a < evalVal b
+evalObs (ValueLE' a b) = evalVal a <= evalVal b
+evalObs (ValueEQ' a b) = evalVal a == evalVal b
+evalObs TrueObs' = true
+evalObs FalseObs' = false
 
 -- | Risk factor observer
 data RiskFactors a = RiskFactors
@@ -76,8 +173,9 @@ data CashFlow a = CashFlow
   , cashCurrency :: String
   }
 
--- deriving stock (Show, Eq, Generic)
--- deriving anyclass (FromJSON, ToJSON)
+derive instance Generic (CashFlow a) _
+instance Show a => Show (CashFlow a) where
+  show = genericShow
 
 sign :: forall a. Ring a => CR -> a
 sign CR_RPA = one
