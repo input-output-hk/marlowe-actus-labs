@@ -4,27 +4,20 @@ import Prelude
 
 import Actus.Domain (ContractTerms)
 import Control.Monad.Error.Class (throwError)
-import Data.Argonaut (Json, JsonDecodeError(..), decodeJson, fromString, jsonParser)
-import Data.Argonaut as A
+import Data.Argonaut (Json, JsonDecodeError, decodeJson, jsonParser)
 import Data.Argonaut.Decode ((.:))
-import Data.Bifunctor (bimap)
 import Data.Decimal (Decimal)
 import Data.Either (Either(..), either)
 import Data.FoldableWithIndex (forWithIndex_)
-import Data.Traversable (for)
-import Data.TraversableWithIndex (forWithIndex)
-import Data.Tuple.Nested ((/\))
-import Effect.Aff (Error)
-import Effect.Class (liftEffect)
-import Effect.Class.Console (log)
+import Data.Traversable (traverse)
 import Effect.Exception (error)
 import Foreign.Object (Object)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff (readTextFile)
-import Node.Process (cwd)
-import Test.Spec (describe, it, pending)
-import Test.Spec.Assertions (fail, shouldEqual)
+import Test.Spec (Spec, describe, it, pending)
+import Test.Spec.Assertions (fail)
 
+spec :: Spec Unit
 spec = do
   describe "Actus.Domain.ContractTerms" do
     describe "decodeJson" do
@@ -33,8 +26,7 @@ spec = do
         json <- either (throwError <<< error) pure $ jsonParser jsonStr
 
         (fixtures :: Object Json) <- either (throwError <<< error <<< show) pure do
-          obj <- decodeJson json
-          forWithIndex obj \lamId lamJson -> do
+          decodeJson json >>= traverse \lamJson -> do
             obj <- decodeJson lamJson
             termsJson <- obj .: "terms"
             pure $ termsJson

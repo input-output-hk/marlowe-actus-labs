@@ -10,31 +10,28 @@ import Control.Bind.Indexed ((:>>=))
 import Control.Monad.Indexed.Qualified as Ix
 import Data.Argonaut (Json, JsonDecodeError(..), decodeJson, fromObject, fromString)
 import Data.Argonaut.Decode.Class (class DecodeJson)
-import Data.Argonaut.Decode.Generic (genericDecodeJson)
 import Data.Argonaut.Encode.Class (class EncodeJson)
-import Data.Argonaut.Encode.Generic (genericEncodeJson)
 import Data.Array.NonEmpty as NA
 import Data.Bounded.Generic (genericBottom, genericTop)
-import Data.DateTime (DateTime(..), Hour, Time(..), second)
+import Data.DateTime (DateTime(..), Time(..))
 import Data.DateTime as DateTime
 import Data.Decimal (Decimal)
 import Data.Decimal as Decimal
 import Data.Either (Either, note)
-import Data.Enum (class BoundedEnum, class Enum, toEnum, upFrom, upFromIncluding)
+import Data.Enum (class BoundedEnum, class Enum, toEnum, upFromIncluding)
 import Data.Enum.Generic (genericCardinality, genericFromEnum, genericPred, genericSucc, genericToEnum)
 import Data.Generic.Rep (class Generic)
 import Data.Int as Int
-import Data.Interval.Duration as Duration
 import Data.JSDate as JSDate
-import Data.Maybe (Maybe(..), fromJust)
+import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype)
 import Data.Show.Generic (genericShow)
 import Data.String (Pattern(..))
-import Data.String as String
+import Data.String (joinWith) as String
 import Data.String.Regex (match)
 import Data.String.Regex.Unsafe (unsafeRegex)
-import Data.String.Utils as String
-import Data.Time.Duration as Duration
+import Data.String.Utils (trimStart) as String
+import Data.Time.Duration (Seconds(..)) as Duration
 import Effect.Unsafe (unsafePerformEffect)
 import Type.Prelude (Proxy(..))
 

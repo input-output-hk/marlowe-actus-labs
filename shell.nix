@@ -17,17 +17,9 @@ in
       easyPS.pscid
       easyPS.purs-tidy
       easyPS.pulp
-      easyPS.zephyr
 
-      # pkgs.jq
-      # pkgs.nodePackages.bower
-      # pkgs.nodePackages.jshint
-      # pkgs.nodePackages.nodemon
-      # pkgs.nodePackages.yarn
-      # pkgs.nodePackages.webpack
-      # pkgs.nodePackages.webpack-cli
-      # pkgs.nodePackages.webpack-dev-server
       pkgs.dhall
+      pkgs.haskell-language-server
       pkgs.nodejs
       pkgs.pkg-config
       pkgs.python27

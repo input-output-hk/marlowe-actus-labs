@@ -239,7 +239,7 @@ toMarlowe (ContractTerms ct) =
     , dayCountConvention: ct.dayCountConvention
     , scheduleConfig: ct.scheduleConfig
     , statusDate: ct.statusDate
-    , marketObjectCodeRef: Nothing
+    , marketObjectCode: Nothing
     , contractPerformance: ct.contractPerformance
     , creditEventTypeCovered: ct.creditEventTypeCovered
     , coverageOfCreditEnhancement: constant <$> ct.coverageOfCreditEnhancement
@@ -256,7 +256,7 @@ toMarlowe (ContractTerms ct) =
     , cycleAnchorDateOfInterestCalculationBase: ct.cycleAnchorDateOfInterestCalculationBase
     , cycleOfInterestCalculationBase: ct.cycleOfInterestCalculationBase
     , interestCalculationBase: ct.interestCalculationBase
-    , interestCalculationBaseA: constant <$> ct.interestCalculationBaseA
+    , interestCalculationBaseAmount: constant <$> ct.interestCalculationBaseAmount
     , nominalInterestRate: constant <$> ct.nominalInterestRate
     , nominalInterestRate2: constant <$> ct.nominalInterestRate2
     , interestScalingMultiplier: constant <$> ct.interestScalingMultiplier
@@ -304,8 +304,8 @@ toMarlowe (ContractTerms ct) =
     , lifeCap: constant <$> ct.lifeCap
     , lifeFloor: constant <$> ct.lifeFloor
     , marketObjectCodeOfRateReset: ct.marketObjectCodeOfRateReset
-    , cycleOfDividend: ct.cycleOfDividend
-    , cycleAnchorDateOfDividend: ct.cycleAnchorDateOfDividend
+    , cycleOfDividendPayment: ct.cycleOfDividendPayment
+    , cycleAnchorDateOfDividendPayment: ct.cycleAnchorDateOfDividendPayment
     , nextDividendPaymentAmount: constant <$> ct.nextDividendPaymentAmount
     , enableSettlement: ct.enableSettlement
     }

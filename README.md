@@ -4,5 +4,5 @@ Web app which deploys ACTUS contracts using Marlowe on the Cardano blockchain. W
 
 ## Installation
 
-We use `Nix` for devel env setup but npm packages are not covered so you have to perform `$ npm install` manualy.
+`Nix` doesn't `JS` deps so in order to build the app you have to perform `$ npm install` manually.
 
