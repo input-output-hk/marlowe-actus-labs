@@ -29,9 +29,9 @@ instance Applicative m => IxApplicative (BuilderT m) where
 
 instance (Applicative m, Bind m) => IxBind (BuilderT m) where
   ibind (BuilderT ma) f = BuilderT $ do
-     (r2r' /\ a) <- ma
-     (r'2r'' /\ b) <- un BuilderT $ f a
-     pure (r'2r'' <<< r2r' /\ b)
+    (r2r' /\ a) <- ma
+    (r'2r'' /\ b) <- un BuilderT $ f a
+    pure (r'2r'' <<< r2r' /\ b)
 
 instance (Monad m) => IxMonad (BuilderT m)
 
@@ -42,4 +42,4 @@ instance Alt m => Alt (BuilderT m i i) where
   alt (BuilderT ma) (BuilderT ma') = BuilderT (ma <|> ma')
 
 execBuilderT :: forall a i o m. Applicative m => BuilderT m i o a -> i -> m o
-execBuilderT (BuilderT mt) i = ((#) i <<< fst) <$>  mt
+execBuilderT (BuilderT mt) i = ((#) i <<< fst) <$> mt

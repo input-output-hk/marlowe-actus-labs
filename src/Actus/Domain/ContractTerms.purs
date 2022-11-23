@@ -823,7 +823,6 @@ derive instance Eq a => Eq (ContractTerms a)
 instance Show a => Show (ContractTerms a) where
   show = genericShow
 
-
 decodeDateTime :: Json -> Either JsonDecodeError DateTime
 decodeDateTime json = do
   str <- decodeJson json
@@ -839,9 +838,8 @@ decodeDateTime json = do
         <*> toEnum 59
         <*> toEnum 59
         <*> toEnum 59
-      if time == nearlyMidnight
-        then DateTime.adjust (Duration.Seconds 1.0) dt
-        else pure dt
+      if time == nearlyMidnight then DateTime.adjust (Duration.Seconds 1.0) dt
+      else pure dt
 
 instance DecodeJson (ContractTerms Decimal) where
   decodeJson json = do

@@ -72,7 +72,8 @@ class DecodeRecord decoders r where
 instance
   ( Eval (OuterJoin' decoders r) join
   , HFoldlWithIndex (DecodeStep decoders) (DecodeRecordFn ()) (Proxy join) (DecodeRecordFn r)
-  ) => DecodeRecord decoders r where
+  ) =>
+  DecodeRecord decoders r where
   decodeRecord decoders = do
     let
       empty :: DecodeRecordFn ()
@@ -89,7 +90,7 @@ instance
   ( Newtype n { | r }
   , Eval (OuterJoin' decoders r) join
   , HFoldlWithIndex (DecodeStep decoders) (DecodeRecordFn ()) (Proxy join) (DecodeRecordFn r)
-  ) => DecodeNewtypedRecord decoders n where
+  ) =>
+  DecodeNewtypedRecord decoders n where
   decodeNewtypedRecord decoders = map wrap <$> decodeRecord decoders
-
 
