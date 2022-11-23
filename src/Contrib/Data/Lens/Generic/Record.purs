@@ -1,4 +1,4 @@
-module Contrib.Data.Lens.Record.Generic where
+module Contrib.Data.Lens.Generic.Record where
 
 import Control.Category ((<<<))
 import Data.Lens.Iso.Newtype (_Newtype)

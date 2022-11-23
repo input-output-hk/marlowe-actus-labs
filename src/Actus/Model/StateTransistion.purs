@@ -255,7 +255,7 @@ _STF_IED_LAM
     ipcb' = interestCalculationBase' ct
       where
       interestCalculationBase' (ContractTerms { interestCalculationBase: Just IPCB_NT }) = nt'
-      interestCalculationBase' (ContractTerms { interestCalculationBaseA: Just ipcba }) = sign contractRole * ipcba
+      interestCalculationBase' (ContractTerms { interestCalculationBaseAmount: Just ipcba }) = sign contractRole * ipcba
       interestCalculationBase' _ = zero
     ipac' = interestAccrued' ct
       where

@@ -3,27 +3,40 @@ module Actus.Domain.ContractTerms where
 import Prelude
 
 import Contrib.Data.Argonaut (decodeJsonEnumWith, decodeFromString, encodeJsonEnumWith)
+import Contrib.Data.Argonaut.Decode.Record.Field (askField, askFieldOptional, askObject, execRecordBuilderM, insertProp, liftEither, (:=), (:=!), (:=?), (:=?!))
 import Contrib.Data.String (decodeEnumWith, tryStripPrefix)
-import Data.Argonaut (fromString)
+import Control.Alt ((<|>))
+import Control.Bind.Indexed ((:>>=))
+import Control.Monad.Indexed.Qualified as Ix
+import Data.Argonaut (Json, JsonDecodeError(..), decodeJson, fromObject, fromString)
 import Data.Argonaut.Decode.Class (class DecodeJson)
 import Data.Argonaut.Decode.Generic (genericDecodeJson)
 import Data.Argonaut.Encode.Class (class EncodeJson)
 import Data.Argonaut.Encode.Generic (genericEncodeJson)
 import Data.Array.NonEmpty as NA
 import Data.Bounded.Generic (genericBottom, genericTop)
-import Data.DateTime (DateTime)
-import Data.Enum (class BoundedEnum, class Enum, upFrom)
+import Data.DateTime (DateTime(..), Hour, Time(..), second)
+import Data.DateTime as DateTime
+import Data.Decimal (Decimal)
+import Data.Decimal as Decimal
+import Data.Either (Either, note)
+import Data.Enum (class BoundedEnum, class Enum, toEnum, upFrom, upFromIncluding)
 import Data.Enum.Generic (genericCardinality, genericFromEnum, genericPred, genericSucc, genericToEnum)
 import Data.Generic.Rep (class Generic)
 import Data.Int as Int
-import Data.Maybe (Maybe(..))
-import Data.Maybe (Maybe)
+import Data.Interval.Duration as Duration
+import Data.JSDate as JSDate
+import Data.Maybe (Maybe(..), fromJust)
+import Data.Newtype (class Newtype)
 import Data.Show.Generic (genericShow)
 import Data.String (Pattern(..))
 import Data.String as String
 import Data.String.Regex (match)
 import Data.String.Regex.Unsafe (unsafeRegex)
-import Debug (traceM)
+import Data.String.Utils as String
+import Data.Time.Duration as Duration
+import Effect.Unsafe (unsafePerformEffect)
+import Type.Prelude (Proxy(..))
 
 -- |ContractType
 data CT
@@ -36,12 +49,27 @@ derive instance Generic CT _
 derive instance Eq CT
 derive instance Ord CT
 
+instance Show CT where
+  show = genericShow
+
+instance Enum CT where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded CT where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum CT where
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
+
 instance EncodeJson CT where
-  encodeJson a = genericEncodeJson a
+  encodeJson = encodeJsonEnumWith identity
 
 instance DecodeJson CT where
-  decodeJson a = genericDecodeJson a
-
+  decodeJson = decodeJsonEnumWith identity
 
 -- |ContractRole
 data CR
@@ -75,9 +103,9 @@ instance Bounded CR where
   bottom = genericBottom
 
 instance BoundedEnum CR where
-    cardinality = genericCardinality
-    fromEnum = genericFromEnum
-    toEnum = genericToEnum
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
 
 instance EncodeJson CR where
   encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "CR_")
@@ -116,28 +144,43 @@ instance EncodeJson DCC where
 instance DecodeJson DCC where
   decodeJson = decodeFromString decode
     where
-      decode "AA" = pure DCC_A_AISDA
-      decode "A360" = pure DCC_A_360
-      decode "A365" = pure DCC_A_365
-      decode "30E360ISDA" = pure DCC_E30_360ISDA
-      decode "30E360" = pure DCC_E30_360
-      decode "B252" = pure DCC_B_252
-      decode _ = Nothing
+    decode "AA" = pure DCC_A_AISDA
+    decode "A360" = pure DCC_A_360
+    decode "A365" = pure DCC_A_365
+    decode "30E360ISDA" = pure DCC_E30_360ISDA
+    decode "30E360" = pure DCC_E30_360
+    decode "B252" = pure DCC_B_252
+    decode _ = Nothing
 
 -- -- |EndOfMonthConvention
-data EOMC = EOMC_EOM -- ^ End of month
-          | EOMC_SD  -- ^ Same day
+data EOMC
+  = EOMC_EOM -- ^ End of month
+  | EOMC_SD -- ^ Same day
 
 derive instance Generic EOMC _
 derive instance Eq EOMC
 derive instance Ord EOMC
+instance Show EOMC where
+  show = genericShow
+
+instance Enum EOMC where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded EOMC where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum EOMC where
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
 
 instance EncodeJson EOMC where
-  encodeJson EOMC_EOM = fromString "AA"
-  encodeJson EOMC_SD = fromString "A360"
+  encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "EOMC_")
 
 instance DecodeJson EOMC where
-  decodeJson a = genericDecodeJson a
+  decodeJson = decodeJsonEnumWith (tryStripPrefix $ Pattern "EOMC_")
 
 -- -- |BusinessDayConvention
 data BDC
@@ -167,16 +210,15 @@ instance Bounded BDC where
   bottom = genericBottom
 
 instance BoundedEnum BDC where
-    cardinality = genericCardinality
-    fromEnum = genericFromEnum
-    toEnum = genericToEnum
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
 
 instance EncodeJson BDC where
   encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "BDC_")
 
 instance DecodeJson BDC where
   decodeJson = decodeJsonEnumWith (tryStripPrefix $ Pattern "BDC_")
-
 
 data Calendar
   = CLDR_MF -- ^ Monday to Friday
@@ -198,9 +240,9 @@ instance Bounded Calendar where
   bottom = genericBottom
 
 instance BoundedEnum Calendar where
-    cardinality = genericCardinality
-    fromEnum = genericFromEnum
-    toEnum = genericToEnum
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
 
 instance EncodeJson Calendar where
   encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "CLDR_")
@@ -237,16 +279,15 @@ instance Bounded PRF where
   bottom = genericBottom
 
 instance BoundedEnum PRF where
-    cardinality = genericCardinality
-    fromEnum = genericFromEnum
-    toEnum = genericToEnum
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
 
 instance EncodeJson PRF where
   encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "PRF_")
 
 instance DecodeJson PRF where
   decodeJson = decodeJsonEnumWith (tryStripPrefix $ Pattern "PRF_")
-
 
 -- |CreditEventTypeCovered
 data CETC
@@ -270,16 +311,15 @@ instance Bounded CETC where
   bottom = genericBottom
 
 instance BoundedEnum CETC where
-    cardinality = genericCardinality
-    fromEnum = genericFromEnum
-    toEnum = genericToEnum
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
 
 instance EncodeJson CETC where
   encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "CETC_")
 
 instance DecodeJson CETC where
   decodeJson = decodeJsonEnumWith (tryStripPrefix $ Pattern "CETC_")
-
 
 -- |GuaranteedExposure
 data CEGE
@@ -302,9 +342,9 @@ instance Bounded CEGE where
   bottom = genericBottom
 
 instance BoundedEnum CEGE where
-    cardinality = genericCardinality
-    fromEnum = genericFromEnum
-    toEnum = genericToEnum
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
 
 instance EncodeJson CEGE where
   encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "CEGE_")
@@ -333,9 +373,9 @@ instance Bounded FEB where
   bottom = genericBottom
 
 instance BoundedEnum FEB where
-    cardinality = genericCardinality
-    fromEnum = genericFromEnum
-    toEnum = genericToEnum
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
 
 instance EncodeJson FEB where
   encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "FEB_")
@@ -365,9 +405,9 @@ instance Bounded IPCB where
   bottom = genericBottom
 
 instance BoundedEnum IPCB where
-    cardinality = genericCardinality
-    fromEnum = genericFromEnum
-    toEnum = genericToEnum
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
 
 instance EncodeJson IPCB where
   encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "IPCB_")
@@ -402,9 +442,9 @@ instance Bounded SCEF where
   bottom = genericBottom
 
 instance BoundedEnum SCEF where
-    cardinality = genericCardinality
-    fromEnum = genericFromEnum
-    toEnum = genericToEnum
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
 
 instance EncodeJson SCEF where
   encodeJson = encodeJsonEnumWith identity
@@ -435,9 +475,9 @@ instance Bounded PYTP where
   bottom = genericBottom
 
 instance BoundedEnum PYTP where
-    cardinality = genericCardinality
-    fromEnum = genericFromEnum
-    toEnum = genericToEnum
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
 
 instance EncodeJson PYTP where
   encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "PYTP_")
@@ -467,9 +507,9 @@ instance Bounded OPTP where
   bottom = genericBottom
 
 instance BoundedEnum OPTP where
-    cardinality = genericCardinality
-    fromEnum = genericFromEnum
-    toEnum = genericToEnum
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
 
 instance EncodeJson OPTP where
   encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "OPTP_")
@@ -499,9 +539,9 @@ instance Bounded OPXT where
   bottom = genericBottom
 
 instance BoundedEnum OPXT where
-    cardinality = genericCardinality
-    fromEnum = genericFromEnum
-    toEnum = genericToEnum
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
 
 instance EncodeJson OPXT where
   encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "OPXT_")
@@ -530,9 +570,9 @@ instance Bounded DS where
   bottom = genericBottom
 
 instance BoundedEnum DS where
-    cardinality = genericCardinality
-    fromEnum = genericFromEnum
-    toEnum = genericToEnum
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
 
 instance EncodeJson DS where
   encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "DS_")
@@ -562,9 +602,9 @@ instance Bounded PPEF where
   bottom = genericBottom
 
 instance BoundedEnum PPEF where
-    cardinality = genericCardinality
-    fromEnum = genericFromEnum
-    toEnum = genericToEnum
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
 
 instance EncodeJson PPEF where
   encodeJson = encodeJsonEnumWith (tryStripPrefix $ Pattern "PPEF_")
@@ -597,9 +637,9 @@ instance Bounded Period where
   bottom = genericBottom
 
 instance BoundedEnum Period where
-    cardinality = genericCardinality
-    fromEnum = genericFromEnum
-    toEnum = genericToEnum
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
 
 periodToString :: Period -> String
 periodToString = tryStripPrefix (Pattern "P_") <<< show
@@ -621,7 +661,7 @@ instance Show Stub where
 
 stubToString :: Stub -> String
 stubToString ShortStub = "1"
-stubToString LongStub  = "0"
+stubToString LongStub = "0"
 
 stubFromString :: String -> Maybe Stub
 stubFromString = case _ of
@@ -638,19 +678,19 @@ type Cycle =
   }
 
 encodeCycle :: Cycle -> String
-encodeCycle {n, p, stub } =
+encodeCycle { n, p, stub } =
   "P" <> show n <> periodToString p <> "L" <> stubToString stub
 
 decodeCycle :: String -> Maybe Cycle
 decodeCycle str = do
   let
-    periods = String.joinWith "|" <<< map periodToString $ (upFrom bottom :: Array Period)
+    periods = String.joinWith "|" <<< map periodToString $ (upFromIncluding bottom :: Array Period)
     -- for example: "P1ML0
     pattern = "P([0-9]+)([" <> periods <> "])" <> "L" <> "([0|1])"
     regex = unsafeRegex pattern mempty
   m <- match regex str
   case NA.toArray m of
-    [_, Just n, Just p, Just s] -> do
+    [ _, Just n, Just p, Just s ] -> do
       { n: _, p: _, stub: _, includeEndDay: false }
         <$> Int.fromString n
         <*> periodFromString p
@@ -658,22 +698,21 @@ decodeCycle str = do
     _ -> Nothing
 
 -- For applicability failures
-data TermValidationError =
-    Required String
-    | NotApplicable String
+data TermValidationError
+  = Required String
+  | NotApplicable String
 
 derive instance Eq TermValidationError
 
 instance Show TermValidationError where
-    show (Required s)      = "Missing required term: " <> s
-    show (NotApplicable s) = "Term not applicable to contract: " <> s
-
-
+  show (Required s) = "Missing required term: " <> s
+  show (NotApplicable s) = "Term not applicable to contract: " <> s
 
 {-| ACTUS contract terms and attributes are defined in
     https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-terms.json
 -}
-data ContractTerms a = ContractTerms
+newtype ContractTerms :: Type -> Type
+newtype ContractTerms a = ContractTerms
   { -- General
     contractId :: String
   , contractType :: CT
@@ -685,17 +724,17 @@ data ContractTerms a = ContractTerms
   , dayCountConvention :: Maybe DCC -- ^ Day Count Convention
   , scheduleConfig :: ScheduleConfig
 
-  -- Contract Identification
+  -- -- Contract Identification
   , statusDate :: DateTime -- ^ Status Date
-  , marketObjectCodeRef :: Maybe String -- ^ Market Object Code
+  , marketObjectCode :: Maybe String -- ^ Market Object Code
 
-  -- Counterparty
+  -- -- Counterparty
   , contractPerformance :: Maybe PRF -- ^ Contract Performance
   , creditEventTypeCovered :: Maybe CETC -- ^ Credit Event Type Covered
   , coverageOfCreditEnhancement :: Maybe a -- ^ Coverage Of Credit Enhancement
   , guaranteedExposure :: Maybe CEGE -- ^ Guaranteed Exposure
 
-  -- Fees
+  -- -- Fees
   , cycleOfFee :: Maybe Cycle -- ^ Cycle Of Fee
   , cycleAnchorDateOfFee :: Maybe DateTime -- ^ Cycle Anchor Date Of Fee
   , feeAccrued :: Maybe a -- ^ Fee Accrued
@@ -710,7 +749,7 @@ data ContractTerms a = ContractTerms
   , cycleAnchorDateOfInterestCalculationBase :: Maybe DateTime -- ^ Cycle Anchor Date Of Interest Calculation Base
   , cycleOfInterestCalculationBase :: Maybe Cycle -- ^ Cycle Of Interest Calculation Base
   , interestCalculationBase :: Maybe IPCB -- ^ Interest Calculation Base
-  , interestCalculationBaseA :: Maybe a -- ^ Interest Calculation Base Amount
+  , interestCalculationBaseAmount :: Maybe a -- ^ Interest Calculation Base Amount
   , nominalInterestRate :: Maybe a -- ^ Nominal Interest Rate
   , nominalInterestRate2 :: Maybe a -- ^ Nominal Interest Rate (Second Leg in Plain Vanilla Swap)
   , interestScalingMultiplier :: Maybe a -- ^ Interest Scaling Multiplier
@@ -720,7 +759,7 @@ data ContractTerms a = ContractTerms
   , amortizationDate :: Maybe DateTime -- ^ Amortization Date
   , exerciseDate :: Maybe DateTime -- ^ Exercise Date
 
-  -- Notional Principal
+  -- -- Notional Principal
   , notionalPrincipal :: Maybe a -- ^ Notional Principal
   , premiumDiscountAtIED :: Maybe a -- ^ Premium Discount At IED
   , cycleAnchorDateOfPrincipalRedemption :: Maybe DateTime -- ^ Cycle Anchor Date Of Principal Redemption
@@ -774,102 +813,159 @@ data ContractTerms a = ContractTerms
   , marketObjectCodeOfRateReset :: Maybe String -- ^ Market Object Code Of Rate Reset
 
   -- Dividend
-  , cycleOfDividend :: Maybe Cycle -- ^ Cycle Of Dividend
-  , cycleAnchorDateOfDividend :: Maybe DateTime -- ^ Cycle Anchor Date Of Dividend
+  , cycleOfDividendPayment :: Maybe Cycle -- ^ Cycle Of Dividend
+  , cycleAnchorDateOfDividendPayment :: Maybe DateTime -- ^ Cycle Anchor Date Of Dividend
   , nextDividendPaymentAmount :: Maybe a -- ^ Next Dividend Payment Amount
 
   , enableSettlement :: Boolean -- ^ Enable settlement currency
   }
 
+derive instance Newtype (ContractTerms a) _
 derive instance Generic (ContractTerms a) _
 derive instance Eq a => Eq (ContractTerms a)
+instance Show a => Show (ContractTerms a) where
+  show = genericShow
 
--- instance DecodeJson (ContractTerms Double) where
---   parseJSON (Object v) = ContractTerms
---       <$> (v .:  "contractID" <|> v .: "contractId")
---       <*> v .:  "contractType"
---       <*> (v .: "contractStructure" <|> return [])
---       <*> (v .:  "contractRole" <|> return CR_RPA) -- SWAPS tests miss contractRole in contract terms
---       <*> v .:? "settlementCurrency"
---       <*> v .:? "initialExchangeDate"
---       <*> v .:? "dayCountConvention"
---       <*> (v .: "scheduleConfig"
---            <|> ScheduleConfig
---                <$> (v .: "calendar" <|> return (Just CLDR_NC))
---                <*> (v .: "endOfMonthConvention" <|> return (Just EOMC_SD))
---                <*> (v .: "businessDayConvention" <|> return (Just BDC_NULL))
---            )
---       <*> v .:  "statusDate"
---       <*> v .:? "marketObjectCode"
---       <*> v .:? "contractPerformance"
---       <*> v .:? "creditEventTypeCovered"
---       <*> v .!? "coverageOfCreditEnhancement"
---       <*> v .!? "guaranteedExposure"
---       <*> v .:? "cycleOfFee"
---       <*> v .:? "cycleAnchorDateOfFee"
---       <*> v .:? "feeAccrued"
---       <*> v .:? "feeBasis"
---       <*> v .!? "feeRate"
---       <*> v .:? "cycleAnchorDateOfInterestPayment"
---       <*> v .:? "cycleOfInterestPayment"
---       <*> v .!? "accruedInterest"
---       <*> v .:? "capitalizationEndDate"
---       <*> v .:? "cycleAnchorDateOfInterestCalculationBase"
---       <*> v .:? "cycleOfInterestCalculationBase"
---       <*> v .:? "interestCalculationBase"
---       <*> v .!? "interestCalculationBaseAmount"
---       <*> v .!? "nominalInterestRate"
---       <*> v .!? "nominalInterestRate2"
---       <*> v .!? "interestScalingMultiplier"
---       <*> v .:? "maturityDate"
---       <*> v .:? "amortizationDate"
---       <*> v .:? "exerciseDate"
---       <*> v .!? "notionalPrincipal"
---       <*> v .!? "premiumDiscountAtIED"
---       <*> v .:? "cycleAnchorDateOfPrincipalRedemption"
---       <*> v .:? "cycleOfPrincipalRedemption"
---       <*> v .!? "nextPrincipalRedemptionPayment"
---       <*> v .:? "purchaseDate"
---       <*> v .!? "priceAtPurchaseDate"
---       <*> v .:? "terminationDate"
---       <*> v .!? "priceAtTerminationDate"
---       <*> v .!? "quantity"
---       <*> v .!? "currency"
---       <*> v .!? "currency2"
---       <*> v .:? "scalingIndexAtStatusDate"
---       <*> v .:? "cycleAnchorDateOfScalingIndex"
---       <*> v .:? "cycleOfScalingIndex"
---       <*> v .:? "scalingEffect"
---       <*> v .!? "scalingIndexAtContractDealDate"
---       <*> v .:? "marketObjectCodeOfScalingIndex"
---       <*> v .!? "notionalScalingMultiplier"
---       <*> v .:? "cycleOfOptionality"
---       <*> v .:? "cycleAnchorDateOfOptionality"
---       <*> v .:? "optionType"
---       <*> v .!? "optionStrike1"
---       <*> v .:? "optionExerciseType"
---       <*> v .:? "settlementPeriod"
---       <*> v .:? "deliverySettlement"
---       <*> v .!? "exerciseAmount"
---       <*> v .!? "futuresPrice"
---       <*> v .:? "penaltyRate"
---       <*> v .:? "penaltyType"
---       <*> v .:? "prepaymentEffect"
---       <*> v .:? "cycleOfRateReset"
---       <*> v .:? "cycleAnchorDateOfRateReset"
---       <*> v .!? "nextResetRate"
---       <*> v .!? "rateSpread"
---       <*> v .!? "rateMultiplier"
---       <*> v .:? "periodFloor"
---       <*> v .:? "periodCap"
---       <*> v .:? "lifeCap"
---       <*> v .:? "lifeFloor"
---       <*> v .:? "marketObjectCodeOfRateReset"
---       <*> v .:? "cycleOfDividendPayment"
---       <*> v .:? "cycleAnchorDateOfDividendPayment"
---       <*> v .:? "nextDividendPaymentAmount"
---       <*> (fromMaybe False <$> (v .:? "enableSettlement"))
---       <*> v .:? "constraints"
---     where
---       (.!?) w s = w .:? s <|> (fmap read <$> w .:? s)
---   parseJSON _ = mzero
+
+decodeDateTime :: Json -> Either JsonDecodeError DateTime
+decodeDateTime json = do
+  str <- decodeJson json
+  let
+    -- The function `parse` should be referentialy transparent
+    -- if we enforced UTC time zone.
+    jsDate = unsafePerformEffect $ JSDate.parse $ str <> "Z"
+
+  note (UnexpectedValue json) $ JSDate.toDateTime jsDate >>= case _ of
+    dt@(DateTime _ time) -> do
+      nearlyMidnight <- Time
+        <$> toEnum 23
+        <*> toEnum 59
+        <*> toEnum 59
+        <*> toEnum 59
+      if time == nearlyMidnight
+        then DateTime.adjust (Duration.Seconds 1.0) dt
+        else pure dt
+
+instance DecodeJson (ContractTerms Decimal) where
+  decodeJson json = do
+    let
+      decodeDecimal = decodeFromString (String.trimStart >>> Decimal.fromString)
+    ContractTerms <$> execRecordBuilderM json Ix.do
+
+      -- General
+      contractIdValue <- askField "contractID" <|> askField "contractId"
+      contractId <- liftEither $ decodeJson contractIdValue
+      insertProp (Proxy :: Proxy "contractId") contractId
+      (Proxy :: Proxy "contractType") := decodeJson
+      (Proxy :: Proxy "contractRole") :=! decodeJson $ CR_RPA
+      (Proxy :: Proxy "settlementCurrency") :=? decodeJson
+
+      -- Calendar
+      (Proxy :: Proxy "initialExchangeDate") :=? decodeDateTime
+      (Proxy :: Proxy "dayCountConvention") :=? decodeJson
+      scheduleConfig <- Ix.do
+        obj <- askObject
+        liftEither $ execRecordBuilderM (fromObject obj) Ix.do
+          (Proxy :: Proxy "calendar") :=?! decodeJson $ CLDR_NC
+          (Proxy :: Proxy "endOfMonthConvention") :=?! decodeJson $ EOMC_SD
+          (Proxy :: Proxy "businessDayConvention") :=?! decodeJson $ BDC_NULL
+      insertProp (Proxy :: Proxy "scheduleConfig") scheduleConfig
+
+      -- Contract Identification
+      (Proxy :: Proxy "statusDate") := decodeDateTime
+      (Proxy :: Proxy "marketObjectCode") :=? decodeJson
+
+      -- Counterparty
+      (Proxy :: Proxy "contractPerformance") :=? decodeJson
+      (Proxy :: Proxy "creditEventTypeCovered") :=? decodeJson
+      (Proxy :: Proxy "coverageOfCreditEnhancement") :=? decodeDecimal
+      (Proxy :: Proxy "guaranteedExposure") :=? decodeJson
+
+      -- Fees
+      (Proxy :: Proxy "cycleOfFee") :=? decodeFromString decodeCycle
+      (Proxy :: Proxy "cycleAnchorDateOfFee") :=? decodeDateTime
+      (Proxy :: Proxy "feeAccrued") :=? decodeDecimal
+      (Proxy :: Proxy "feeBasis") :=? decodeJson
+      (Proxy :: Proxy "feeRate") :=? decodeDecimal
+
+      -- Interest
+      (Proxy :: Proxy "cycleAnchorDateOfInterestPayment") :=? decodeDateTime
+      (Proxy :: Proxy "cycleOfInterestPayment") :=? decodeFromString decodeCycle
+      (Proxy :: Proxy "accruedInterest") :=? decodeDecimal
+      (Proxy :: Proxy "capitalizationEndDate") :=? decodeDateTime
+      (Proxy :: Proxy "cycleAnchorDateOfInterestCalculationBase") :=? decodeDateTime
+      (Proxy :: Proxy "cycleOfInterestCalculationBase") :=? decodeFromString decodeCycle
+      (Proxy :: Proxy "interestCalculationBase") :=? decodeJson
+      baseAmount <- askFieldOptional "interestCalculationBaseA" :>>= case _ of
+        Just json' -> Just <$> (liftEither $ decodeDecimal json')
+        Nothing -> Ix.pure Nothing
+      insertProp (Proxy :: Proxy "interestCalculationBaseAmount") baseAmount
+      (Proxy :: Proxy "nominalInterestRate") :=? decodeDecimal
+      (Proxy :: Proxy "nominalInterestRate2") :=? decodeDecimal
+      (Proxy :: Proxy "interestScalingMultiplier") :=? decodeDecimal
+
+      -- Dates
+      (Proxy :: Proxy "maturityDate") :=? decodeDateTime
+      (Proxy :: Proxy "amortizationDate") :=? decodeDateTime
+      (Proxy :: Proxy "exerciseDate") :=? decodeDateTime
+
+      -- Notional Principal
+      (Proxy :: Proxy "notionalPrincipal") :=? decodeDecimal
+      (Proxy :: Proxy "premiumDiscountAtIED") :=? decodeDecimal
+      (Proxy :: Proxy "cycleAnchorDateOfPrincipalRedemption") :=? decodeDateTime
+      (Proxy :: Proxy "cycleOfPrincipalRedemption") :=? decodeFromString decodeCycle
+      (Proxy :: Proxy "nextPrincipalRedemptionPayment") :=? decodeDecimal
+      (Proxy :: Proxy "purchaseDate") :=? decodeDateTime
+      (Proxy :: Proxy "priceAtPurchaseDate") :=? decodeDecimal
+      (Proxy :: Proxy "terminationDate") :=? decodeDateTime
+      (Proxy :: Proxy "priceAtTerminationDate") :=? decodeDecimal
+      (Proxy :: Proxy "quantity") :=? decodeDecimal
+      (Proxy :: Proxy "currency") :=? decodeJson
+      (Proxy :: Proxy "currency2") :=? decodeJson
+
+      -- Scaling Index
+      (Proxy :: Proxy "scalingIndexAtStatusDate") :=? decodeDecimal
+      (Proxy :: Proxy "cycleAnchorDateOfScalingIndex") :=? decodeDateTime
+      (Proxy :: Proxy "cycleOfScalingIndex") :=? decodeFromString decodeCycle
+      (Proxy :: Proxy "scalingEffect") :=? decodeJson
+      (Proxy :: Proxy "scalingIndexAtContractDealDate") :=? decodeDecimal
+      (Proxy :: Proxy "marketObjectCodeOfScalingIndex") :=? decodeJson
+      (Proxy :: Proxy "notionalScalingMultiplier") :=? decodeDecimal
+
+      -- Optionality
+      (Proxy :: Proxy "cycleOfOptionality") :=? decodeFromString decodeCycle
+      (Proxy :: Proxy "cycleAnchorDateOfOptionality") :=? decodeDateTime
+      (Proxy :: Proxy "optionType") :=? decodeJson
+      (Proxy :: Proxy "optionStrike1") :=? decodeDecimal
+      (Proxy :: Proxy "optionExerciseType") :=? decodeJson
+
+      -- Settlement
+      (Proxy :: Proxy "settlementPeriod") :=? decodeFromString decodeCycle
+      (Proxy :: Proxy "deliverySettlement") :=? decodeJson
+      (Proxy :: Proxy "exerciseAmount") :=? decodeDecimal
+      (Proxy :: Proxy "futuresPrice") :=? decodeDecimal
+
+      -- Penalty
+      (Proxy :: Proxy "penaltyRate") :=? decodeDecimal
+      (Proxy :: Proxy "penaltyType") :=? decodeJson
+      (Proxy :: Proxy "prepaymentEffect") :=? decodeJson
+
+      -- Rate Reset
+      (Proxy :: Proxy "cycleOfRateReset") :=? decodeFromString decodeCycle
+      (Proxy :: Proxy "cycleAnchorDateOfRateReset") :=? decodeDateTime
+      (Proxy :: Proxy "nextResetRate") :=? decodeDecimal
+      (Proxy :: Proxy "rateSpread") :=? decodeDecimal
+      (Proxy :: Proxy "rateMultiplier") :=? decodeDecimal
+      (Proxy :: Proxy "periodFloor") :=? decodeDecimal
+      (Proxy :: Proxy "periodCap") :=? decodeDecimal
+      (Proxy :: Proxy "lifeCap") :=? decodeDecimal
+      (Proxy :: Proxy "lifeFloor") :=? decodeDecimal
+      (Proxy :: Proxy "marketObjectCodeOfRateReset") :=? decodeJson
+
+      -- Dividend
+      (Proxy :: Proxy "cycleOfDividendPayment") :=? decodeFromString decodeCycle
+      (Proxy :: Proxy "cycleAnchorDateOfDividendPayment") :=? decodeDateTime
+      (Proxy :: Proxy "nextDividendPaymentAmount") :=? decodeDecimal
+
+      (Proxy :: Proxy "enableSettlement") :=! decodeJson $ false
+

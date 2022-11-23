@@ -1,7 +1,7 @@
 module Actus.Domain.ContractState where
 
 import Actus.Domain.ContractTerms (PRF)
-import Contrib.Data.Lens.Record.Generic (Lens'', mkNewtyped1Lenses)
+import Contrib.Data.Lens.Generic.Record (Lens'', mkNewtyped1Lenses)
 import Data.DateTime (DateTime)
 import Data.Lens.Record (prop)
 import Data.Maybe (Maybe)
