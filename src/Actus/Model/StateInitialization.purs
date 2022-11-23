@@ -80,12 +80,11 @@ initializeState = asks initializeState'
           }
       ) | ied > t0 = zero
     notionalPrincipal
-      ct@
-        ( ContractTerms
-            { notionalPrincipal: Just nt
-            , contractRole
-            }
-        ) = sign contractRole * nt
+      ( ContractTerms
+          { notionalPrincipal: Just nt
+          , contractRole
+          }
+      ) = sign contractRole * nt
     notionalPrincipal _ = zero
 
     nominalInterestRate
@@ -164,20 +163,18 @@ initializeState = asks initializeState'
           }
       ) | t0 < ied = zero
     interestPaymentCalculationBase
-      ct@
-        ( ContractTerms
-            { notionalPrincipal: Just nt
-            , interestCalculationBase: Just ipcb
-            , contractRole
-            }
-        ) | ipcb == IPCB_NT = sign contractRole * nt
+      ( ContractTerms
+          { notionalPrincipal: Just nt
+          , interestCalculationBase: Just ipcb
+          , contractRole
+          }
+      ) | ipcb == IPCB_NT = sign contractRole * nt
     interestPaymentCalculationBase
-      ct@
-        ( ContractTerms
-            { interestCalculationBaseA: Just ipcba
-            , contractRole
-            }
-        ) = sign contractRole * ipcba
+      ( ContractTerms
+          { interestCalculationBaseAmount: Just ipcba
+          , contractRole
+          }
+      ) = sign contractRole * ipcba
     interestPaymentCalculationBase _ = zero
 
     feeAccrued
