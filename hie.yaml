@@ -1,0 +1,4 @@
+cradle:
+  cabal:
+    - path: "codegen/src/Main.hs"
+      component: "codegen:exe:codegen"
