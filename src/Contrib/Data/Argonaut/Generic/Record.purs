@@ -13,6 +13,7 @@ import Foreign.Object (Object)
 import Foreign.Object as Object
 import Heterogeneous.Folding (class FoldingWithIndex, class HFoldlWithIndex, hfoldlWithIndex)
 import Prim.Row (class Cons, class Lacks) as Row
+import Prim.RowList (class RowToList)
 import Record (get, insert) as Record
 import Row.Joins.Outer (NULL, OuterJoin')
 import Type.Eval (class Eval)
@@ -71,14 +72,15 @@ class DecodeRecord decoders r where
 
 instance
   ( Eval (OuterJoin' decoders r) join
-  , HFoldlWithIndex (DecodeStep decoders) (DecodeRecordFn ()) (Proxy join) (DecodeRecordFn r)
+  , RowToList join joinL
+  , HFoldlWithIndex (DecodeStep decoders) (DecodeRecordFn ()) (Proxy joinL) (DecodeRecordFn r)
   ) =>
   DecodeRecord decoders r where
   decodeRecord decoders = do
     let
       empty :: DecodeRecordFn ()
       empty _ = Right {}
-      decodeObject = hfoldlWithIndex (DecodeStep decoders) empty (Proxy :: Proxy join)
+      decodeObject = hfoldlWithIndex (DecodeStep decoders) empty (Proxy :: Proxy joinL)
     \json -> do
       obj <- decodeJson json
       decodeObject obj
@@ -89,7 +91,8 @@ class DecodeNewtypedRecord decoders n where
 instance
   ( Newtype n { | r }
   , Eval (OuterJoin' decoders r) join
-  , HFoldlWithIndex (DecodeStep decoders) (DecodeRecordFn ()) (Proxy join) (DecodeRecordFn r)
+  , RowToList join joinL
+  , HFoldlWithIndex (DecodeStep decoders) (DecodeRecordFn ()) (Proxy joinL) (DecodeRecordFn r)
   ) =>
   DecodeNewtypedRecord decoders n where
   decodeNewtypedRecord decoders = map wrap <$> decodeRecord decoders
