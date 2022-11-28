@@ -21,7 +21,7 @@ spec :: Spec Unit
 spec = do
   describe "Actus.Domain.ContractTerms" do
     describe "decodeJson" do
-      it "acuts-tests-lam.json" do
+      it "actus-tests-lam.json" do
         jsonStr <- readTextFile UTF8 "./test/Actus/Domain/actus-tests-lam.json"
         json <- either (throwError <<< error) pure $ jsonParser jsonStr
 
