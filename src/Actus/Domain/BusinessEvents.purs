@@ -2,10 +2,14 @@ module Actus.Domain.BusinessEvents where
 
 import Prelude
 
+import Contrib.Data.Argonaut (decodeJsonEnumWith, encodeJsonEnumWith)
+import Data.Argonaut.Decode.Class (class DecodeJson)
+import Data.Argonaut.Encode.Class (class EncodeJson)
 import Data.Bounded.Generic (genericTop, genericBottom)
 import Data.Enum (class Enum, class BoundedEnum)
 import Data.Enum.Generic (genericCardinality, genericPred, genericSucc, genericFromEnum, genericToEnum)
 import Data.Generic.Rep (class Generic)
+import Data.Show.Generic (genericShow)
 
 -- | ACTUS event types, https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-event.json
 data EventType
@@ -40,31 +44,7 @@ derive instance Eq EventType
 derive instance Ord EventType
 
 instance Show EventType where
-  show IED = "IED"
-  show FP = "FP"
-  show PR = "PR"
-  show PD = "PD"
-  show PY = "PY"
-  show PP = "PP"
-  show IP = "IP"
-  show IPFX = "IPFX"
-  show IPFL = "IPFL"
-  show IPCI = "IPCI"
-  show CE = "CE"
-  show RRF = "RRF"
-  show RR = "FF"
-  show PRF = "PRF"
-  show DV = "DV"
-  show PRD = "PRD"
-  show MR = "MR"
-  show TD = "TD"
-  show SC = "SC"
-  show IPCB = "IPCB"
-  show MD = "MD"
-  show XD = "XD"
-  show STD = "STD"
-  show PI = "PI"
-  show AD = "AD"
+  show = genericShow
 
 instance Enum EventType where
   succ = genericSucc
@@ -78,3 +58,9 @@ instance BoundedEnum EventType where
   cardinality = genericCardinality
   toEnum = genericToEnum
   fromEnum = genericFromEnum
+
+instance EncodeJson EventType where
+  encodeJson = encodeJsonEnumWith identity
+
+instance DecodeJson EventType where
+  decodeJson = decodeJsonEnumWith identity

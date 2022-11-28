@@ -5,8 +5,9 @@ module Actus.Utility.YearFraction
 import Prelude
 
 import Actus.Domain.ContractTerms (DCC(..))
-import Data.Date (Date, diff)
-import Data.DateTime (DateTime, date)
+import Data.Date (Date, diff, year)
+import Data.DateTime (DateTime, date, day, month)
+import Data.Enum (fromEnum)
 import Data.Int (ceil)
 import Data.Maybe (Maybe)
 import Data.Refined (fromInt)
@@ -23,22 +24,24 @@ yearFraction' :: forall a. EuclideanRing a => DCC -> Date -> Date -> Maybe Date 
 --   = let
 --       d1Year = year startDay
 --       d2Year = year endDay
---       d1YearFraction = (if isLeapYear d1Year then fromInt 366 else fromInt 365)
+--       d1YearFraction = fromInt $ if isLeapYear d1Year then 366 else 365
 --     in
 --       if d1Year == d2Year
---         then (diff endDay startDay) / d1YearFraction
+--         then
+--           let Days d = diff endDay startDay
+--            in (fromInt $ ceil d) / d1YearFraction
 --         else
 --           let
---             d2YearFraction = (if isLeapYear d2Year then fromInt 366 else fromInt 365)
---             d1YearLastDay      = canonicalDate (d1Year + 1) January (toEnum 1)
---             d2YearLastDay      = canonicalDate d2Year January (toEnum 1)
+--             d2YearFraction = if isLeapYear d2Year then fromInt 366 else fromInt 365
+--             d1YearLastDay      = canonicalDate (fromMaybe (year startDay) $ toEnum $ (fromEnum d1Year) + 1) January (fromJust $ toEnum 1)
+--             d2YearLastDay      = canonicalDate d2Year January (fromMaybe (day endDay) $ toEnum 1)
 --             firstFractionDays  = diff d1YearLastDay startDay
---             secondFractionDays = diff endDay d2YearLastDay
+--             secondFractionDays = let Days s = diff endDay d2YearLastDay in s
 --           in
 --             (firstFractionDays / d1YearFraction)
---               + (secondFractionDays / d2YearFraction) + d2Year - d1Year - 1
+--               + (secondFractionDays / d2YearFraction) + (fromInt $ fromEnum d2Year) - (fromInt $ fromEnum d1Year) - one
 --   | otherwise
---   = 0.0
+--   = zero
 
 yearFraction' DCC_A_360 startDay endDay _
   | startDay <= endDay = let Days daysDiff = diff endDay startDay in (fromInt $ ceil daysDiff) / fromInt 360
@@ -65,19 +68,20 @@ yearFraction' DCC_A_365 startDay endDay _
 --   | otherwise
 --   = 0.0
 
--- yearFraction' DCC_E30_360 startDay endDay _
---   | startDay <= endDay
---   = let d1ChangedDay             = if day startDay == 31 then 30 else day startDay
---         d2ChangedDay             = if day endDay == 31 then 30 else day endDay
---     in  ( 360.0
---         * ((year endDay) - (year startDay))
---         + 30.0
---         * ((month endDay) - (month startDay))
---         + (d2ChangedDay - d1ChangedDay)
---         )
---           / 360.0
---   | otherwise
---   = 0.0
+yearFraction' DCC_E30_360 startDay endDay _
+  | startDay <= endDay =
+      let
+        d1ChangedDay = if fromEnum (day startDay) == 31 then 30 else fromEnum (day startDay)
+        d2ChangedDay = if fromEnum (day endDay) == 31 then 30 else fromEnum (day endDay)
+      in
+        ( fromInt $
+            (360)
+              * ((fromEnum $ year endDay) - (fromEnum $ year startDay))
+              + (30)
+                  * ((fromEnum $ month endDay) - (fromEnum $ month startDay))
+              + (d2ChangedDay - d1ChangedDay)
+        ) / (fromInt 360)
+  | otherwise = zero
 
 yearFraction' dcc _ _ _ = error $ "Unsupported day count convention: " <> show dcc
 

@@ -18,6 +18,7 @@ import Data.Date as Date
 import Data.DateTime (DateTime(..))
 import Data.DateTime as DateTime
 import Data.Enum (fromEnum, toEnum)
+import Data.Int (quot)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Refined (fromInt)
 import Data.Time.Duration (Days(..))
@@ -116,17 +117,14 @@ getPreceedingBusinessDay (DateTime d t) CLDR_MF =
 getPreceedingBusinessDay dt _ = dt
 
 shiftDate :: DateTime -> Int -> Period -> DateTime
-shiftDate (DateTime d t) n p =
-  DateTime
-    ( case p of
-        P_D -> addDays n d
-        P_W -> addDays (n * 7) d
-        P_M -> addGregorianMonthsClip n d
-        P_Q -> addGregorianMonthsClip (n * 3) d
-        P_H -> addGregorianMonthsClip (n * 6) d
-        P_Y -> addGregorianYearsClip n d
-    )
-    t
+shiftDate dt n p =
+  case p of
+    P_D -> addDays' n dt
+    P_W -> addDays' (n * 7) dt
+    P_M -> addGregorianMonthsClip n dt
+    P_Q -> addGregorianMonthsClip (n * 3) dt
+    P_H -> addGregorianMonthsClip (n * 6) dt
+    P_Y -> addGregorianYearsClip n dt
 
 {- End of Month Convention -}
 applyEOMC :: DateTime -> Cycle -> EOMC -> DateTime -> DateTime
@@ -152,12 +150,16 @@ addDays n d = fromMaybe d $ Date.adjust (Days $ fromInt n) d
 addDays' :: Int -> DateTime -> DateTime
 addDays' n d = fromMaybe d $ DateTime.adjust (Days $ fromInt n) d
 
-addGregorianMonthsClip :: Int -> Date -> Date
-addGregorianMonthsClip n d =
+addGregorianMonthsClip :: Int -> DateTime -> DateTime
+addGregorianMonthsClip n (DateTime d t) =
   let
     m = month d
+    m' = ((n - 1 + (fromEnum m)) `mod` 12) + 1
+    y = year d
+    y' = (fromEnum y) + ((n - 1 + (fromEnum m)) `quot` 12)
+    x = canonicalDate (fromMaybe y $ toEnum y') (fromMaybe m (toEnum m')) (day d)
   in
-    canonicalDate (year d) (fromMaybe m $ toEnum $ (n - 1 + (fromEnum m) `mod` 12) + 1) (day d)
+    DateTime x t
 
-addGregorianYearsClip :: Int -> Date -> Date
+addGregorianYearsClip :: Int -> DateTime -> DateTime
 addGregorianYearsClip n = addGregorianMonthsClip (n * 12)
