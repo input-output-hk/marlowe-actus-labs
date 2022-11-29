@@ -63,15 +63,15 @@ runTest tc =
   riskFactors i ev date =
     case getValue i tc ev date of
       Just v -> case ev of
-        RR -> defaultRiskFactors -- {o_rf_RRMO : v}
-        SC -> defaultRiskFactors -- {o_rf_SCMO : v}
-        DV -> defaultRiskFactors -- {dv_payoff : v}
-        XD -> defaultRiskFactors -- {xd_payoff : v}
-        _ -> defaultRiskFactors -- {o_rf_CURS : v}
+        RR -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf {o_rf_RRMO = v}
+        SC -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf {o_rf_SCMO = v}
+        DV -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf {dv_payoff = v}
+        XD -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf {xd_payoff = v}
+        _  -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf {o_rf_CURS = v}
       Nothing -> defaultRiskFactors
 
 getValue :: String -> TestCase -> EventType -> DateTime -> Maybe Decimal
-getValue i { terms, dataObserved } ev date =
+getValue _ { terms, dataObserved } ev date =
   do
     let (ContractTerms ct) = terms
     key <- observedKey terms ev
@@ -135,11 +135,11 @@ instance DecodeJson ValueObserved where
 instance DecodeJson DataObserved where
   decodeJson json = do
     obj <- decodeJson json
-    ts <- obj .: "identifier"
-    val <- obj .: "data"
+    ident <- obj .: "identifier"
+    dat <- obj .: "data"
     pure $ DataObserved
-      { identifier: ts
-      , values: val
+      { identifier: ident
+      , values: dat
       }
 
 data EventObserved = EventObserved
@@ -175,16 +175,13 @@ instance DecodeJson TestResult where
     let
       decodeDecimal = decodeFromString (String.trimStart >>> Decimal.fromString)
     obj <- decodeJson json
-
     evd <- obj .: "eventDate" >>= decodeDateTime
     evt <- obj .: "eventType"
     pay <- obj .: "payoff" >>= decodeDecimal
     cur <- obj .: "currency"
-
     pure $ TestResult
       { eventDate: evd
       , eventType: evt
       , payoff: pay
       , currency: cur
       }
--- TestResult <$> (obj .: "eventType") <*> (obj .: "payoff" >>= decodeDecimal) <*> (obj .: "currency")
