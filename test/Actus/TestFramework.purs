@@ -7,46 +7,33 @@ import Actus.Domain (CashFlow(..), ContractState, ContractTerms, Cycle, EventTyp
 import Actus.Domain.ContractTerms (decodeDateTime)
 import Actus.Utility ((<+>))
 import Contrib.Data.Argonaut (decodeFromString)
-import Control.Monad.Error.Class (class MonadThrow, throwError)
-import Data.Argonaut (Json, JsonDecodeError, decodeJson, jsonParser)
+import Control.Monad.Error.Class (class MonadThrow)
+import Data.Argonaut (JsonDecodeError, decodeJson)
 import Data.Argonaut.Decode ((.:))
 import Data.Argonaut.Decode.Class (class DecodeJson)
 import Data.DateTime (DateTime)
 import Data.Decimal (Decimal, fromNumber, toSignificantDigits)
 import Data.Decimal as Decimal
-import Data.Either (Either(..), either)
-import Data.FoldableWithIndex (forWithIndex_)
+import Data.Either (Either(..))
+import Data.Foldable (for_)
 import Data.List (List(..), (:))
 import Data.Maybe (Maybe(..))
 import Data.String.Utils (trimStart) as String
-import Data.Traversable (traverse)
-import Effect.Exception (Error, error)
+import Data.Tuple.Nested (type (/\), (/\))
+import Effect.Exception (Error)
 import Foreign.Object (Object)
-import Node.Encoding (Encoding(..))
-import Node.FS.Aff (readTextFile)
 import Test.Spec (Spec, describe, it, pending)
 import Test.Spec.Assertions (fail)
 
-spec :: Spec Unit
-spec = do
+spec :: Object (String /\ Either JsonDecodeError TestCase) -> Spec Unit
+spec fixture = do
   describe "Actus.TestFramework" do
     describe "execute" do
-      it "actus-tests-pam.json" do
-        jsonStr <- readTextFile UTF8 "./test/Actus/Domain/actus-tests-pam.json"
-        json <- either (throwError <<< error) pure $ jsonParser jsonStr
-
-        (fixtures :: Object Json) <- either (throwError <<< error <<< show) pure do
-          decodeJson json >>= traverse \pamJson -> do
-            obj <- decodeJson pamJson
-            pure $ obj
-
-        forWithIndex_ fixtures \testId testCase -> do
-          let
-            (tc :: Either JsonDecodeError TestCase) = decodeJson testCase
+      for_ fixture \(testId /\ tc) -> do
+        it ("testId: " <> testId) do
           case tc of
             Left err -> fail (testId <> ": " <> show err)
             Right x -> runTest x
-
       pending "feature complete"
 
 runTest :: forall a. MonadThrow Error a => TestCase -> a Unit
