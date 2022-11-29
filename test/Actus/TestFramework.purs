@@ -4,11 +4,11 @@ import Prelude
 
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain (CashFlow(..), ContractState, ContractTerms(..), Cycle, EventType(..), PRF, RiskFactors(..), setDefaultContractTermValues)
-import Actus.Domain.ContractTerms (decodeDateTime)
+import Actus.Domain.ContractTerms (decodeDateTime, decodeDecimal)
 import Actus.Utility (applyBDCWithCfg, (<+>))
 import Contrib.Data.Argonaut (decodeFromString)
 import Control.Monad.Error.Class (class MonadThrow)
-import Data.Argonaut (JsonDecodeError, decodeJson)
+import Data.Argonaut (JsonDecodeError, decodeJson, (.:?))
 import Data.Argonaut.Decode ((.:))
 import Data.Argonaut.Decode.Class (class DecodeJson)
 import Data.DateTime (DateTime)
@@ -120,10 +120,16 @@ data ValueObserved = ValueObserved
   , value :: Decimal
   }
 
+data EventObserved = EventObserved
+  { time :: DateTime
+  , eventType :: EventType
+  , value :: Decimal
+  , contractId :: Maybe String
+  , states :: Maybe PRF
+  }
+
 instance DecodeJson ValueObserved where
   decodeJson json = do
-    let
-      decodeDecimal = decodeFromString (String.trimStart >>> Decimal.fromString)
     obj <- decodeJson json
     ts <- obj .: "timestamp" >>= decodeDateTime
     val <- obj .: "value" >>= decodeDecimal
@@ -142,20 +148,28 @@ instance DecodeJson DataObserved where
       , values: dat
       }
 
-data EventObserved = EventObserved
-  { time :: DateTime
-  , eventType :: EventType
-  , value :: Decimal
-  , contractId :: Maybe String
-  , states :: Maybe PRF
-  }
+instance DecodeJson EventObserved where
+  decodeJson json = do
+    obj <- decodeJson json
+    ts <- obj .: "time" >>= decodeDateTime
+    evt <- obj .: "eventType"
+    val <- obj .: "value" >>= decodeDecimal
+    cid <- obj .:? "contractId"
+    sts <- obj .:? "states"
+    pure $ EventObserved
+      { time: ts
+      , eventType: evt
+      , value: val
+      , contractId: cid
+      , states: sts
+      }
 
 type TestCase =
   { identifier :: String
   , terms :: TestContractTerms
   -- , to :: Maybe DateTime
   , dataObserved :: Map String DataObserved
-  -- , eventsObserved :: List EventObserved
+  , eventsObserved :: List EventObserved
   , results :: List TestResult
   }
 
@@ -172,8 +186,6 @@ newtype TestResult = TestResult
 
 instance DecodeJson TestResult where
   decodeJson json = do
-    let
-      decodeDecimal = decodeFromString (String.trimStart >>> Decimal.fromString)
     obj <- decodeJson json
     evd <- obj .: "eventDate" >>= decodeDateTime
     evt <- obj .: "eventType"

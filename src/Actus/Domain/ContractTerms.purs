@@ -823,6 +823,9 @@ derive instance Eq a => Eq (ContractTerms a)
 instance Show a => Show (ContractTerms a) where
   show = genericShow
 
+decodeDecimal :: Json -> Either JsonDecodeError Decimal
+decodeDecimal = decodeFromString (String.trimStart >>> Decimal.fromString)
+
 decodeDateTime :: Json -> Either JsonDecodeError DateTime
 decodeDateTime json = do
   str <- decodeJson json
@@ -843,8 +846,6 @@ decodeDateTime json = do
 
 instance DecodeJson (ContractTerms Decimal) where
   decodeJson json = do
-    let
-      decodeDecimal = decodeFromString (String.trimStart >>> Decimal.fromString)
     ContractTerms <$> execRecordBuilderM json Ix.do
 
       -- General
