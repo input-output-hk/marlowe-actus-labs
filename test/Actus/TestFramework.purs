@@ -3,9 +3,9 @@ module Actus.TestFramework where
 import Prelude
 
 import Actus.Core (genProjectedCashflows)
-import Actus.Domain (CashFlow(..), ContractState, ContractTerms, Cycle, EventType, PRF, RiskFactors(..))
+import Actus.Domain (CashFlow(..), ContractState, ContractTerms(..), Cycle, EventType(..), PRF, RiskFactors(..), setDefaultContractTermValues)
 import Actus.Domain.ContractTerms (decodeDateTime)
-import Actus.Utility ((<+>))
+import Actus.Utility (applyBDCWithCfg, (<+>))
 import Contrib.Data.Argonaut (decodeFromString)
 import Control.Monad.Error.Class (class MonadThrow)
 import Data.Argonaut (JsonDecodeError, decodeJson)
@@ -16,7 +16,8 @@ import Data.Decimal (Decimal, fromNumber, toSignificantDigits)
 import Data.Decimal as Decimal
 import Data.Either (Either(..))
 import Data.Foldable (for_)
-import Data.List (List(..), (:))
+import Data.List (List(..), find, (:))
+import Data.Map (Map, lookup)
 import Data.Maybe (Maybe(..))
 import Data.String.Utils (trimStart) as String
 import Data.Tuple.Nested (type (/\), (/\))
@@ -39,12 +40,10 @@ spec fixture = do
 runTest :: forall a. MonadThrow Error a => TestCase -> a Unit
 runTest tc =
   let
-    cashFlows = genProjectedCashflows riskFactors tc.terms
+    cashFlows = genProjectedCashflows riskFactors (setDefaultContractTermValues tc.terms)
   in
     assertTestResults cashFlows tc.results
   where
-  riskFactors _ _ _ = defaultRiskFactors
-
   assertTestResults :: forall b. MonadThrow Error b => List TestCashFlow -> List TestResult -> b Unit
   assertTestResults Nil Nil = pure unit
   assertTestResults (cf : cfs) (r : rs) = assertTestResult cf r *> assertTestResults cfs rs
@@ -59,7 +58,38 @@ runTest tc =
     assertEqual :: forall b n. Show b => Eq b => MonadThrow Error n => b -> b -> n Unit
     assertEqual a b
       | a == b = pure unit
-      | otherwise = fail ("mismatch: " <> show tc.identifier <> " " <> show cf <> "\n" <> show a <> " vs. " <> show b)
+      | otherwise = fail ("mismatch: " <> show tc.identifier <> " " <> show cf <> "\n" <> show a <> " vs. " <> show b <> "\n" <> show tc.terms)
+
+  riskFactors i ev date =
+    case getValue i tc ev date of
+      Just v -> case ev of
+        RR -> defaultRiskFactors -- {o_rf_RRMO : v}
+        SC -> defaultRiskFactors -- {o_rf_SCMO : v}
+        DV -> defaultRiskFactors -- {dv_payoff : v}
+        XD -> defaultRiskFactors -- {xd_payoff : v}
+        _ -> defaultRiskFactors -- {o_rf_CURS : v}
+      Nothing -> defaultRiskFactors
+
+getValue :: String -> TestCase -> EventType -> DateTime -> Maybe Decimal
+getValue i { terms, dataObserved } ev date =
+  do
+    let (ContractTerms ct) = terms
+    key <- observedKey terms ev
+    DataObserved { values } <- lookup key dataObserved
+    ValueObserved { value } <-
+      find
+        ( \(ValueObserved { timestamp }) ->
+            let
+              { calculationDay } = applyBDCWithCfg ct.scheduleConfig timestamp
+            in
+              calculationDay == date
+        )
+        values
+    pure value
+  where
+  observedKey (ContractTerms ct) RR = ct.marketObjectCodeOfRateReset
+  observedKey (ContractTerms ct) SC = ct.marketObjectCodeOfScalingIndex
+  observedKey (ContractTerms ct) _ = ct.settlementCurrency
 
 -- |Unscheduled events from test cases
 applySettlementPeriod :: Maybe Cycle -> DateTime -> DateTime
@@ -90,6 +120,28 @@ data ValueObserved = ValueObserved
   , value :: Decimal
   }
 
+instance DecodeJson ValueObserved where
+  decodeJson json = do
+    let
+      decodeDecimal = decodeFromString (String.trimStart >>> Decimal.fromString)
+    obj <- decodeJson json
+    ts <- obj .: "timestamp" >>= decodeDateTime
+    val <- obj .: "value" >>= decodeDecimal
+    pure $ ValueObserved
+      { timestamp: ts
+      , value: val
+      }
+
+instance DecodeJson DataObserved where
+  decodeJson json = do
+    obj <- decodeJson json
+    ts <- obj .: "identifier"
+    val <- obj .: "data"
+    pure $ DataObserved
+      { identifier: ts
+      , values: val
+      }
+
 data EventObserved = EventObserved
   { time :: DateTime
   , eventType :: EventType
@@ -101,11 +153,10 @@ data EventObserved = EventObserved
 type TestCase =
   { identifier :: String
   , terms :: TestContractTerms
-  ,
-    -- to             :: Maybe DateTime,
-    -- dataObserved   :: Map String DataObserved,
-    -- eventsObserved :: List EventObserved,
-    results :: List TestResult
+  -- , to :: Maybe DateTime
+  , dataObserved :: Map String DataObserved
+  -- , eventsObserved :: List EventObserved
+  , results :: List TestResult
   }
 
 newtype TestResult = TestResult
@@ -136,5 +187,4 @@ instance DecodeJson TestResult where
       , payoff: pay
       , currency: cur
       }
---    TestResult <$> (obj .: "eventType") <*> (obj .: "payoff" >>= decodeDecimal) <*> (obj .: "currency")
-
+-- TestResult <$> (obj .: "eventType") <*> (obj .: "payoff" >>= decodeDecimal) <*> (obj .: "currency")
