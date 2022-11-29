@@ -29,22 +29,22 @@ import Test.Spec.Assertions (fail)
 
 spec :: Spec Unit
 spec = do
-  describe "Actus.Domain.ContractTerms" do
-    describe "decodeJson" do
-      it "actus-tests-lam.json" do
+  describe "Actus.TestFramework" do
+    describe "execute" do
+      it "actus-tests-pam.json" do
         jsonStr <- readTextFile UTF8 "./test/Actus/Domain/actus-tests-pam.json"
         json <- either (throwError <<< error) pure $ jsonParser jsonStr
 
         (fixtures :: Object Json) <- either (throwError <<< error <<< show) pure do
-          decodeJson json >>= traverse \lamJson -> do
-            obj <- decodeJson lamJson
+          decodeJson json >>= traverse \pamJson -> do
+            obj <- decodeJson pamJson
             pure $ obj
 
-        forWithIndex_ fixtures \lamId testCase -> do
+        forWithIndex_ fixtures \testId testCase -> do
           let
             (tc :: Either JsonDecodeError TestCase) = decodeJson testCase
           case tc of
-            Left err -> fail (lamId <> ": " <> show err)
+            Left err -> fail (testId <> ": " <> show err)
             Right x -> runTest x
 
       pending "feature complete"
@@ -64,15 +64,15 @@ runTest tc =
   assertTestResults _ _ = fail "Sizes differ"
 
   assertTestResult :: forall m. MonadThrow Error m => CashFlow Decimal -> TestResult -> m Unit
-  assertTestResult (CashFlow { cashEvent, amount, cashPaymentDay }) (TestResult { eventType, payoff, eventDate }) = do
+  assertTestResult (cf@(CashFlow { cashEvent, amount, cashPaymentDay })) (TestResult { eventType, payoff, eventDate }) = do
     assertEqual cashEvent eventType
     assertEqual cashPaymentDay eventDate
     assertEqual (toSignificantDigits 8 amount) (toSignificantDigits 8 payoff)
-
-  assertEqual :: forall b m. Show b => Eq b => MonadThrow Error m => b -> b -> m Unit
-  assertEqual a b
-    | a == b = pure unit
-    | otherwise = fail ("mismatch: " <> show tc.identifier <> " " <> show a <> " vs. " <> show b)
+    where
+    assertEqual :: forall b n. Show b => Eq b => MonadThrow Error n => b -> b -> n Unit
+    assertEqual a b
+      | a == b = pure unit
+      | otherwise = fail ("mismatch: " <> show tc.identifier <> " " <> show cf <> "\n" <> show a <> " vs. " <> show b)
 
 -- |Unscheduled events from test cases
 applySettlementPeriod :: Maybe Cycle -> DateTime -> DateTime
