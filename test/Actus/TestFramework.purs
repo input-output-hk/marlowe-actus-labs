@@ -63,11 +63,11 @@ runTest tc =
   riskFactors i ev date =
     case getValue i tc ev date of
       Just v -> case ev of
-        RR -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf {o_rf_RRMO = v}
-        SC -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf {o_rf_SCMO = v}
-        DV -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf {dv_payoff = v}
-        XD -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf {xd_payoff = v}
-        _  -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf {o_rf_CURS = v}
+        RR -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf { o_rf_RRMO = v }
+        SC -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf { o_rf_SCMO = v }
+        DV -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf { dv_payoff = v }
+        XD -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf { xd_payoff = v }
+        _ -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf { o_rf_CURS = v }
       Nothing -> defaultRiskFactors
 
 getValue :: String -> TestCase -> EventType -> DateTime -> Maybe Decimal
