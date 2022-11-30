@@ -3,10 +3,10 @@ module Marlowe.Runtime.Web where
 import Prelude
 
 import Contrib.Data.Argonaut (JsonParser, JsonParserResult, decodeFromString)
-import Contrib.Data.Argonaut.Generic.Record (decodeNewtypedRecord)
-import Data.Argonaut (class DecodeJson, Json, JsonDecodeError(..), decodeJson)
+import Contrib.Data.Argonaut.Generic.Record (DecodeJsonFieldFn, decodeNewtypedRecord)
+import Data.Argonaut (class DecodeJson, Json, JsonDecodeError(..), caseJsonNull, decodeJson)
 import Data.Argonaut.Decode.Generic (genericDecodeJson)
-import Data.Either (note)
+import Data.Either (Either(..), note)
 import Data.Generic.Rep (class Generic)
 import Data.Int as Int
 import Data.Map (Map)
@@ -18,6 +18,8 @@ import Data.Traversable (for)
 import Data.Tuple.Nested (type (/\), (/\))
 import Foreign.Object (Object)
 import Foreign.Object as Object
+import Language.Marlowe.Core.V1.Semantics.Types as V1
+import Record as Record
 
 newtype TxId = TxId String
 
@@ -118,20 +120,67 @@ derive instance Generic ContractHeader _
 derive instance Newtype ContractHeader _
 derive instance Eq ContractHeader
 
+decodeMetadata :: JsonParser Metadata
+decodeMetadata json = do
+  (obj :: Object (Object Json)) <- decodeJson json
+
+  (arr :: Array (Int /\ Object Json)) <- for (Object.toUnfoldable obj) \(idx /\ value) -> do
+    idx' <- do
+      let
+        err = TypeMismatch $ "Expecting an integer metadata label but got: " <> show idx
+      note err $ Int.fromString idx
+    pure (idx' /\ value)
+  pure $ Map.fromFoldable arr
+
+metadataFieldDecoder :: { metadata :: DecodeJsonFieldFn Metadata }
+metadataFieldDecoder = { metadata: map decodeMetadata :: Maybe Json -> Maybe (JsonParserResult Metadata) }
+
 instance DecodeJson ContractHeader where
-  decodeJson = do
-    let
-      decodeMetadata :: JsonParser Metadata
-      decodeMetadata json = do
-        (obj :: Object (Object Json)) <- decodeJson json
+  decodeJson = decodeNewtypedRecord metadataFieldDecoder
 
-        (arr :: Array (Int /\ Object Json)) <- for (Object.toUnfoldable obj) \(idx /\ value) -> do
-          idx' <- do
-            let
-              err = TypeMismatch $ "Expecting an integer metadata label but got: " <> show idx
-            note err $ Int.fromString idx
-          pure (idx' /\ value)
+-- FIXME: The belowe two types are just stubs for now - we can probably use them using serialization lib bindings or transaction-lib:
+-- * https://github.com/Emurgo/cardano-serialization-lib
+-- * https://github.com/Plutonomicon/cardano-transaction-lib
+newtype TextEnvelope (a :: Type) = TextEnvelope String
+derive instance Generic (TextEnvelope a) _
+derive instance Newtype (TextEnvelope a) _
+derive instance Eq (TextEnvelope a)
 
-        pure $ Map.fromFoldable arr
-    decodeNewtypedRecord { metadata: map decodeMetadata :: Maybe Json -> Maybe (JsonParserResult Metadata) }
+-- We don't loook under the hood so it is a bit "unsafe"
+unsafeDecodeTextEnvelope :: forall a. JsonParser (TextEnvelope a)
+unsafeDecodeTextEnvelope = map TextEnvelope <$> decodeJson
 
+newtype TxBody = TxBody String
+derive instance Generic TxBody _
+derive instance Newtype TxBody _
+derive instance Eq TxBody
+
+newtype ContractState = ContractState
+  { contractId :: TxOutRef
+  , roleTokenMintingPolicyId :: PolicyId
+  , version :: MarloweVersion
+  , metadata :: Metadata
+  , status :: TxStatus
+  , block :: Maybe BlockHeader
+  , initialContract :: V1.Contract
+  , currentContract :: Maybe V1.Contract
+  , state :: Maybe V1.State
+  , utxo :: Maybe TxOutRef
+  , txBody :: Maybe (TextEnvelope TxBody)
+  }
+derive instance Generic ContractState _
+derive instance Newtype ContractState _
+derive instance Eq ContractState
+
+instance DecodeJson ContractState where
+  decodeJson = decodeNewtypedRecord decoders
+    where
+    decodeMaybeTextEnvelope :: DecodeJsonFieldFn (Maybe (TextEnvelope TxBody))
+    decodeMaybeTextEnvelope = case _ of
+      Nothing -> Just $ Right Nothing
+      Just json -> Just $ caseJsonNull (Just <$> unsafeDecodeTextEnvelope json) (const $ pure Nothing) json
+
+    decoders =
+      metadataFieldDecoder
+      `Record.merge`
+        { txBody: decodeMaybeTextEnvelope }
