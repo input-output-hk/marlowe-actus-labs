@@ -6,20 +6,19 @@ import Actus.Core (genProjectedCashflows)
 import Actus.Domain (CashFlow(..), ContractState, ContractTerms(..), Cycle, EventType(..), PRF, RiskFactors(..), setDefaultContractTermValues)
 import Actus.Domain.ContractTerms (decodeDateTime, decodeDecimal)
 import Actus.Utility (applyBDCWithCfg, (<+>))
-import Contrib.Data.Argonaut (decodeFromString)
+import Contrib.Data.Argonaut.Generic.Record (decodeRecord)
 import Control.Monad.Error.Class (class MonadThrow)
-import Data.Argonaut (JsonDecodeError, decodeJson, (.:?))
+import Data.Argonaut (Json, JsonDecodeError, decodeJson, (.:?))
 import Data.Argonaut.Decode ((.:))
 import Data.Argonaut.Decode.Class (class DecodeJson)
 import Data.DateTime (DateTime)
 import Data.Decimal (Decimal, fromNumber, toSignificantDigits)
-import Data.Decimal as Decimal
 import Data.Either (Either(..))
 import Data.Foldable (for_)
 import Data.List (List(..), find, (:))
 import Data.Map (Map, lookup)
+import Data.Map as Map
 import Data.Maybe (Maybe(..))
-import Data.String.Utils (trimStart) as String
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Exception (Error)
 import Foreign.Object (Object)
@@ -112,7 +111,7 @@ type TestContractTerms = ContractTerms Decimal
 
 data DataObserved = DataObserved
   { identifier :: String
-  , values :: List ValueObserved
+  , values :: Array ValueObserved
   }
 
 data ValueObserved = ValueObserved
@@ -141,11 +140,11 @@ instance DecodeJson ValueObserved where
 instance DecodeJson DataObserved where
   decodeJson json = do
     obj <- decodeJson json
-    ident <- obj .: "identifier"
-    dat <- obj .: "data"
+    identifier <- obj .: "identifier"
+    values <- obj .: "data"
     pure $ DataObserved
-      { identifier: ident
-      , values: dat
+      { identifier
+      , values
       }
 
 instance DecodeJson EventObserved where
@@ -173,6 +172,16 @@ type TestCase =
   , results :: List TestResult
   }
 
+decodeTestCase :: Json -> Either JsonDecodeError TestCase
+decodeTestCase = decodeRecord decoders
+  where
+  decoders = { dataObserved: map dataObservedInternal :: Maybe _ -> Maybe _ }
+
+  dataObservedInternal :: Json -> Either JsonDecodeError (Map String DataObserved)
+  dataObservedInternal json = do
+    (obj :: Object _) <- decodeJson json
+    pure $ Map.fromFoldableWithIndex obj
+
 newtype TestResult = TestResult
   { eventDate :: DateTime
   , eventType :: EventType
@@ -187,13 +196,9 @@ newtype TestResult = TestResult
 instance DecodeJson TestResult where
   decodeJson json = do
     obj <- decodeJson json
-    evd <- obj .: "eventDate" >>= decodeDateTime
-    evt <- obj .: "eventType"
-    pay <- obj .: "payoff" >>= decodeDecimal
-    cur <- obj .: "currency"
-    pure $ TestResult
-      { eventDate: evd
-      , eventType: evt
-      , payoff: pay
-      , currency: cur
-      }
+    TestResult <$> ado
+      eventDate <- obj .: "eventDate" >>= decodeDateTime
+      eventType <- obj .: "eventType"
+      payoff <- obj .: "payoff" >>= decodeDecimal
+      currency <- obj .: "currency"
+      in { eventDate, eventType, payoff, currency }

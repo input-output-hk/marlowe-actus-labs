@@ -6,7 +6,8 @@ import Prelude
 
 import Actus.Domain.ContractTerms (DCC(..))
 import Data.Date (Date, Month(..), diff, isLeapYear, lastDayOfMonth, year)
-import Data.DateTime (DateTime(..), canonicalDate, date, day, hour, minute, month, second)
+import Data.DateTime (DateTime(..), canonicalDate, date, day, month)
+import Data.DateTime as DateTime
 import Data.Enum (fromEnum, toEnum)
 import Data.Int (ceil)
 import Data.Maybe (Maybe(..), fromMaybe)
@@ -15,6 +16,7 @@ import Data.Time (Time(..))
 import Data.Time.Duration (Days(..))
 import Effect.Exception (throw)
 import Effect.Unsafe (unsafePerformEffect)
+import Data.Time.Duration (Seconds(..)) as Duration
 
 yearFraction :: forall a. EuclideanRing a => DCC -> DateTime -> DateTime -> Maybe DateTime -> a
 yearFraction dcc x y o = yearFraction' dcc (date x) (date $ clipToMidnight y) (date <$> o)
@@ -99,6 +101,11 @@ isLastDayOfMonth d = lastDayOfMonth (year d) (month d) == (day d)
 
 -- |Advance to midnight, if one second before midnight - see note in ACTUS specification (2.8. Date/Time)
 clipToMidnight :: DateTime -> DateTime
-clipToMidnight (DateTime d t) | Just (hour t) == toEnum 23 && Just (minute t) == toEnum 59 && Just (second t) == toEnum 59 = let t' = Time <$> toEnum 24 <*> toEnum 0 <*> toEnum 0 <*> toEnum 0 in DateTime d (fromMaybe t t')
-clipToMidnight dt = dt
-
+clipToMidnight dt@(DateTime _ time) = fromMaybe dt $ do
+  nearlyMidnight <- Time
+    <$> toEnum 23
+    <*> toEnum 59
+    <*> toEnum 59
+    <*> toEnum 0
+  if time == nearlyMidnight then DateTime.adjust (Duration.Seconds 1.0) dt
+  else pure dt
