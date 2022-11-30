@@ -13,8 +13,10 @@ import Control.Alt ((<|>))
 import Control.Apply (lift2, lift4)
 import Data.DateTime (DateTime)
 import Data.List (List(..), delete, filter, find, head, nub, singleton, snoc, sortBy, (:))
-import Data.Maybe (Maybe(..), fromMaybe, isJust, isNothing)
+import Data.Maybe (Maybe(..), fromJust, fromMaybe, isJust, isNothing)
 import Data.Ord.Down (Down(..))
+import Data.Tuple.Nested ((/\))
+import Partial.Unsafe (unsafePartial)
 
 -- |Generate the schedule for a given event type
 schedule
@@ -102,28 +104,28 @@ maturity
   Maybe DateTime
 maturity (ContractTerms { contractType: PAM, maturityDate }) = maturityDate
 maturity (ContractTerms { contractType: LAM, maturityDate: md@(Just _) }) = md
--- maturity
---   (ContractTerms
---     { contractType : LAM,
---       maturityDate : Nothing,
---       cycleAnchorDateOfPrincipalRedemption : Just pranx,
---       cycleOfInterestPayment : Just ipcl,
---       cycleOfPrincipalRedemption : Just prcl,
---       nextPrincipalRedemptionPayment : Just prnxt,
---       notionalPrincipal : Just nt,
---       statusDate,
---       scheduleConfig
---     }) =
---     let (lastEvent /\ remainingPeriods)
---           | pranx < statusDate =
---             let previousEvents = generateRecurrentSchedule pranx prcl statusDate scheduleConfig
---                 f1 = (\ShiftedDay {..} -> calculationDay > statusDate <-> ipcl)
---                 f2 = (\ShiftedDay {..} -> calculationDay == statusDate)
---                 ShiftedDay {calculationDay = lastEventCalcDay} = head . filter f2 . filter f1 $ previousEvents
---              in (lastEventCalcDay, nt / prnxt)
---           | otherwise = (pranx, nt / prnxt - 1)
---         m = lastEvent <+> (prcl {n = n prcl * _ceiling remainingPeriods})
---      in endOfMonthConvention scheduleConfig >>= \d -> return $ applyEOMC lastEvent prcl d m
+maturity
+  (ContractTerms
+    { contractType : LAM,
+      maturityDate : Nothing,
+      cycleAnchorDateOfPrincipalRedemption : Just pranx,
+      cycleOfInterestPayment : Just ipcl,
+      cycleOfPrincipalRedemption : Just prcl,
+      nextPrincipalRedemptionPayment : Just prnxt,
+      notionalPrincipal : Just nt,
+      statusDate,
+      scheduleConfig: sc@{ endOfMonthConvention }
+    }) =
+    let (lastEvent /\ remainingPeriods) =
+            if pranx < statusDate then
+                 let previousEvents = generateRecurrentSchedule pranx prcl statusDate sc
+                     f1 = (\{calculationDay} -> calculationDay > statusDate <-> ipcl)
+                     f2 = (\{calculationDay} -> calculationDay == statusDate)
+                     {calculationDay : lastEventCalcDay} = unsafePartial fromJust <<< head <<< filter f2 <<< filter f1 $ previousEvents
+                  in (lastEventCalcDay /\ nt / prnxt)
+            else (pranx /\ (nt / prnxt - one))
+        m = lastEvent <+> (prcl {n = prcl.n * _ceiling remainingPeriods})
+     in endOfMonthConvention >>= \d -> pure $ applyEOMC lastEvent prcl d m
 maturity (ContractTerms { contractType: NAM, maturityDate: md@(Just _) }) = md
 maturity
   ( ContractTerms
@@ -148,7 +150,7 @@ maturity
           let
             previousEvents = generateRecurrentSchedule pranx prcl statusDate sc
             f = (\{ calculationDay } -> calculationDay == statusDate)
-            { calculationDay: lastEventCalcDay } = fromMaybe { calculationDay: ied, paymentDay: ied } $ head <<< filter f $ previousEvents
+            { calculationDay: lastEventCalcDay } = unsafePartial fromJust $ head <<< filter f $ previousEvents
           in
             lastEventCalcDay
 
