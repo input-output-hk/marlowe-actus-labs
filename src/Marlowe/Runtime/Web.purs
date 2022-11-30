@@ -20,6 +20,7 @@ import Foreign.Object (Object)
 import Foreign.Object as Object
 
 newtype TxId = TxId String
+
 derive instance Generic TxId _
 derive instance Newtype TxId _
 derive instance Eq TxId
@@ -31,27 +32,29 @@ newtype TxOutRef = TxOutRef
   { txId :: TxId
   , txIx :: Int
   }
+
 derive instance Generic TxOutRef _
 derive instance Eq TxOutRef
 derive instance Newtype TxOutRef _
 instance DecodeJson TxOutRef where
   decodeJson = decodeFromString $ String.split (String.Pattern "#") >>> case _ of
-    [txId, txIxStr] -> do
-       txIx <- Int.fromString txIxStr
-       pure $ TxOutRef { txId: TxId txId, txIx }
+    [ txId, txIxStr ] -> do
+      txIx <- Int.fromString txIxStr
+      pure $ TxOutRef { txId: TxId txId, txIx }
     _ -> Nothing
 
 txOutRefFromString :: String -> Maybe TxOutRef
 txOutRefFromString = String.split (String.Pattern "#") >>> case _ of
-  [txId, txIxStr] -> do
-     txIx <- Int.fromString txIxStr
-     pure $ TxOutRef { txId: TxId txId, txIx }
+  [ txId, txIxStr ] -> do
+    txIx <- Int.fromString txIxStr
+    pure $ TxOutRef { txId: TxId txId, txIx }
   _ -> Nothing
 
 txOutRefToString :: TxOutRef -> String
 txOutRefToString (TxOutRef { txId: TxId txId, txIx }) = txId <> "#" <> show txIx
 
 newtype PolicyId = PolicyId String
+
 derive instance Generic PolicyId _
 derive instance Newtype PolicyId _
 derive instance Eq PolicyId
@@ -60,6 +63,7 @@ instance DecodeJson PolicyId where
   decodeJson = map PolicyId <$> decodeJson
 
 data MarloweVersion = V1
+
 derive instance Generic MarloweVersion _
 derive instance Eq MarloweVersion
 derive instance Ord MarloweVersion
@@ -72,6 +76,7 @@ data TxStatus
   = Unsigned
   | Submitted
   | Confirmed
+
 derive instance Eq TxStatus
 derive instance Ord TxStatus
 
@@ -84,12 +89,12 @@ instance DecodeJson TxStatus where
     "confirmed" -> Just Confirmed
     _ -> Nothing
 
-
 newtype BlockHeader = BlockHeader
   { slotNo :: Int
   , blockNo :: Int
   , blockHeaderHash :: String
   }
+
 derive instance Generic BlockHeader _
 derive instance Newtype BlockHeader _
 derive instance Eq BlockHeader
@@ -108,6 +113,7 @@ newtype ContractHeader = ContractHeader
   , status :: TxStatus
   , block :: Maybe BlockHeader
   }
+
 derive instance Generic ContractHeader _
 derive instance Newtype ContractHeader _
 derive instance Eq ContractHeader
@@ -122,11 +128,10 @@ instance DecodeJson ContractHeader where
         (arr :: Array (Int /\ Object Json)) <- for (Object.toUnfoldable obj) \(idx /\ value) -> do
           idx' <- do
             let
-                err = TypeMismatch $ "Expecting an integer metadata label but got: " <> show idx
+              err = TypeMismatch $ "Expecting an integer metadata label but got: " <> show idx
             note err $ Int.fromString idx
           pure (idx' /\ value)
 
         pure $ Map.fromFoldable arr
     decodeNewtypedRecord { metadata: map decodeMetadata :: Maybe Json -> Maybe (JsonParserResult Metadata) }
-
 

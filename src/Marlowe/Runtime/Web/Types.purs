@@ -11,12 +11,13 @@ import Data.Newtype (class Newtype)
 import Type.Row.Homogeneous (class Homogeneous)
 
 newtype ResourceLink = ResourceLink String
+
 derive instance Generic ResourceLink _
 derive instance Newtype ResourceLink _
 derive instance Eq ResourceLink
 derive instance Ord ResourceLink
 instance DecodeJson ResourceLink where
-  decodeJson json= ResourceLink <$> decodeJson json
+  decodeJson json = ResourceLink <$> decodeJson json
 
 type ResourceWithLinksRow resource linksRow =
   ( links :: { | linksRow }
