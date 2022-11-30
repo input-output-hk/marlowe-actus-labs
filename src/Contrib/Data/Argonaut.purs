@@ -8,7 +8,10 @@ import Data.Either (Either(..), note)
 import Data.Enum (class BoundedEnum)
 import Data.Maybe (Maybe)
 
-decodeFromString :: forall a. (String -> Maybe a) -> Json -> Either JsonDecodeError a
+type JsonParserResult a = Either JsonDecodeError a
+type JsonParser a = Json -> JsonParserResult a
+
+decodeFromString :: forall a. (String -> Maybe a) -> JsonParser a
 decodeFromString decode json = do
   let
     decode' str = do
@@ -20,7 +23,7 @@ decodeFromString decode json = do
     decode'
     json
 
-decodeJsonEnumWith :: forall a. Show a => BoundedEnum a => (String -> String) -> Json -> Either JsonDecodeError a
+decodeJsonEnumWith :: forall a. Show a => BoundedEnum a => (String -> String) -> JsonParser a
 decodeJsonEnumWith adaptConstructorName = do
   decodeFromString (S.decodeEnumWith adaptConstructorName)
 

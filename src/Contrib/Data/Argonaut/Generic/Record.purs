@@ -67,6 +67,34 @@ else instance
         Left $ AtKey key MissingValue
 
 -- | The belowe type classes are aliases which hide the gory type level details (row join, folding etc.)
+--
+-- An nearly complete example could look like this:
+--  ```
+--  type Result =
+--    { int :: Int
+--    , string :: String
+--    , decimal :: Decimal
+--    }
+--
+--  main :: Effect Unit
+--  main = do
+--    let
+--      json :: Json
+--      json = A.fromObject $ Object.fromHomogeneous
+--        { int: A.fromNumber 8.0
+--        , string: A.fromString "test"
+--        , decimal: A.fromString "0.8"
+--        }
+--
+--      decodeDecimal :: Json -> Either JsonDecodeError Decimal
+--      decodeDecimal = decodeFromString (String.trimStart >>> Decimal.fromString)
+--
+--      -- Field decoders follow internal argonaut strategy and work over `Maybe`
+--      decoders = { decimal: map decodeDecimal :: Maybe _ -> Maybe _ }
+--
+--    traceM $ ((decodeRecord decoders json) :: Either JsonDecodeError Result)
+--  ```
+--
 class DecodeRecord decoders r where
   decodeRecord :: { | decoders } -> Json -> Either JsonDecodeError { | r }
 
@@ -85,6 +113,22 @@ instance
       obj <- decodeJson json
       decodeObject obj
 
+-- This helper works over a `newtype` with `Record` value inside - the above example should be
+-- nearly the same but we could have:
+--  ```
+--  newtype Result = Result
+--    { int :: Int
+--    , string :: String
+--    , decimal :: Decimal
+--    }
+--
+-- ...
+--
+-- main = do
+--  ...
+--  traceM $ ((decodeNewtypedRecord decoders json) :: Either JsonDecodeError Result)
+-- ```
+--
 class DecodeNewtypedRecord decoders n where
   decodeNewtypedRecord :: { | decoders } -> Json -> Either JsonDecodeError n
 

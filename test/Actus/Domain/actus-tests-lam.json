@@ -12,7 +12,7 @@
             "cycleAnchorDateOfPrincipalRedemption": "2013-02-01T00:00:00",
             "nextPrincipalRedemptionPayment": " 500",
             "dayCountConvention": "A365",
-            "nominalInterestRate": " 0.08",
+            "nominalInterestRate": "0.08",
             "currency": "USD",
             "cycleOfPrincipalRedemption": "P1ML0",
             "cycleAnchorDateOfRateReset": "2013-04-01T00:00:00",
@@ -60,7 +60,7 @@
                 "payoff": -5000,
                 "currency": "USD",
                 "notionalPrincipal": 5000,
-                "nominalInterestRate": 0.08,
+                "nominalInterestRate": "0.08",
                 "accruedInterest": 0
             },
             {

@@ -1,0 +1,106 @@
+{
+  "results": [
+    {
+      "links": {
+        "contract": "contracts/3c2766b745491150d0c616a1fd4d1b2faee8d1902d0a73f997fe2c5185c77422%231"
+      },
+      "resource": {
+        "block": {
+          "blockHeaderHash": "c3b1ee973e63c2a7c0ff5bd0411998d98b339d1e7085e6e7f709c15869e8da2c",
+          "blockNo": 53161,
+          "slotNo": 1168479
+        },
+        "contractId": "3c2766b745491150d0c616a1fd4d1b2faee8d1902d0a73f997fe2c5185c77422#1",
+        "metadata": {},
+        "roleTokenMintingPolicyId": "7137b60f84faaff1d1c02001a2483379270450edb6bae4715081525d",
+        "status": "confirmed",
+        "version": "v1"
+      }
+    },
+    {
+      "links": {
+        "contract": "contracts/87595492e5d9731e9b340e2cd32d81e97defa3573705a6b2d1fd34a6fe23446c%231"
+      },
+      "resource": {
+        "block": {
+          "blockHeaderHash": "2f129376c294a5f9e6f564b5951c6a557cd059814a8db8278b2edd14d2520661",
+          "blockNo": 53137,
+          "slotNo": 1168101
+        },
+        "contractId": "87595492e5d9731e9b340e2cd32d81e97defa3573705a6b2d1fd34a6fe23446c#1",
+        "metadata": {},
+        "roleTokenMintingPolicyId": "7137b60f84faaff1d1c02001a2483379270450edb6bae4715081525d",
+        "status": "confirmed",
+        "version": "v1"
+      }
+    },
+    {
+      "links": {
+        "contract": "contracts/b0c07f0b9c91bc28019c7e9b7295eccf0259ea292f357b3fdb7ed5d3ded93631%231"
+      },
+      "resource": {
+        "block": {
+          "blockHeaderHash": "7c025437deceb91f58e34f7e5fb8f7f8b23f88ad53618794105aeeb24ffb674c",
+          "blockNo": 41851,
+          "slotNo": 906519
+        },
+        "contractId": "b0c07f0b9c91bc28019c7e9b7295eccf0259ea292f357b3fdb7ed5d3ded93631#1",
+        "metadata": {},
+        "roleTokenMintingPolicyId": "7137b60f84faaff1d1c02001a2483379270450edb6bae4715081525d",
+        "status": "confirmed",
+        "version": "v1"
+      }
+    },
+    {
+      "links": {
+        "contract": "contracts/65af8242569f32114dc0d3cb0353d80eacb1ed7d3761a18205e49f8335497df5%231"
+      },
+      "resource": {
+        "block": {
+          "blockHeaderHash": "02abd1a6d7876f5e6b275ce668afd46d101636d1b8dfc1db498615ffdec1f1a0",
+          "blockNo": 41829,
+          "slotNo": 905712
+        },
+        "contractId": "65af8242569f32114dc0d3cb0353d80eacb1ed7d3761a18205e49f8335497df5#1",
+        "metadata": {},
+        "roleTokenMintingPolicyId": "7137b60f84faaff1d1c02001a2483379270450edb6bae4715081525d",
+        "status": "confirmed",
+        "version": "v1"
+      }
+    },
+    {
+      "links": {
+        "contract": "contracts/a96c4638ea1cf81b7adfb92e4c40874e2391e966eabbaa692641f592b447a139%231"
+      },
+      "resource": {
+        "block": {
+          "blockHeaderHash": "d4f761a5bdd61ba052b6b778c1f938f230dcfcc38fd3eb2bc8cf14cc01a4cc20",
+          "blockNo": 39837,
+          "slotNo": 848672
+        },
+        "contractId": "a96c4638ea1cf81b7adfb92e4c40874e2391e966eabbaa692641f592b447a139#1",
+        "metadata": {},
+        "roleTokenMintingPolicyId": "7137b60f84faaff1d1c02001a2483379270450edb6bae4715081525d",
+        "status": "confirmed",
+        "version": "v1"
+      }
+    },
+    {
+      "links": {
+        "contract": "contracts/e48723f7ed5d14d34ca549deea4a1b261bdf95ffb33a957ac4293c8f5ed0a34d%231"
+      },
+      "resource": {
+        "block": {
+          "blockHeaderHash": "9ba0b61027d99476199c020e7659b81024fee75fe11af257bc2ad7029171f9bf",
+          "blockNo": 39646,
+          "slotNo": 843066
+        },
+        "contractId": "e48723f7ed5d14d34ca549deea4a1b261bdf95ffb33a957ac4293c8f5ed0a34d#1",
+        "metadata": {},
+        "roleTokenMintingPolicyId": "7137b60f84faaff1d1c02001a2483379270450edb6bae4715081525d",
+        "status": "confirmed",
+        "version": "v1"
+      }
+    }
+  ]
+}
