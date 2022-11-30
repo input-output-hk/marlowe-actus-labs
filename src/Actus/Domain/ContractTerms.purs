@@ -881,10 +881,7 @@ instance DecodeJson (ContractTerms Decimal) where
       (Proxy :: Proxy "cycleAnchorDateOfInterestCalculationBase") :=? decodeDateTime
       (Proxy :: Proxy "cycleOfInterestCalculationBase") :=? decodeFromString decodeCycle
       (Proxy :: Proxy "interestCalculationBase") :=? decodeJson
-      baseAmount <- askFieldOptional "interestCalculationBaseA" :>>= case _ of
-        Just json' -> Just <$> (liftEither $ decodeDecimal json')
-        Nothing -> Ix.pure Nothing
-      insertProp (Proxy :: Proxy "interestCalculationBaseAmount") baseAmount
+      (Proxy :: Proxy "interestCalculationBaseAmount") :=? decodeDecimal
       (Proxy :: Proxy "nominalInterestRate") :=? decodeDecimal
       (Proxy :: Proxy "nominalInterestRate2") :=? decodeDecimal
       (Proxy :: Proxy "interestScalingMultiplier") :=? decodeDecimal

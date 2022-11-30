@@ -11,7 +11,6 @@ import Control.Monad.Error.Class (class MonadThrow)
 import Data.Argonaut (Json, JsonDecodeError(..), decodeJson, (.:?))
 import Data.Argonaut.Decode ((.:))
 import Data.Argonaut.Decode.Class (class DecodeJson)
-import Data.Array (notElem)
 import Data.DateTime (DateTime)
 import Data.Decimal (Decimal, fromNumber, toSignificantDigits)
 import Data.Either (Either(..), note)
@@ -36,8 +35,7 @@ spec fixture = do
         it ("testId: " <> testId) do
           case tc of
             Left err -> fail (testId <> ": " <> show err)
-            -- FIXME: LAM: interestCalculationBaseAmount
-            Right x -> if testId `notElem` [ "lam16", "lam17", "lam18", "nam15" ] then runTest x else pure unit
+            Right x -> runTest x
       pending "feature complete"
 
 runTest :: forall a. MonadThrow Error a => TestCase -> a Unit

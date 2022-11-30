@@ -34,9 +34,9 @@ main = launchAff_ $ do
       ContractTerms.spec
       Web.spec
       TestFramework.spec testsPAM
-  -- TestFramework.spec testsLAM
-  -- TestFramework.spec testsNAM
-  -- TestFramework.spec testsANN
+      TestFramework.spec testsLAM
+      TestFramework.spec testsNAM
+      -- TestFramework.spec testsANN
 
   where
   readFile file = do
