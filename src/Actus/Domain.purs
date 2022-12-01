@@ -31,7 +31,7 @@ import Data.Decimal (Decimal, ceil, fromNumber, toNumber)
 import Data.Decimal as Decimal
 import Data.Generic.Rep (class Generic)
 import Data.Int as Int
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..))
 import Data.Ord (signum)
 import Data.Show.Generic (genericShow)
 
@@ -49,7 +49,7 @@ instance ActusOps Decimal where
   _abs = Decimal.abs
 
 instance ActusFrac Decimal where
-  _ceiling = fromMaybe 0 <<< Int.fromNumber <<< toNumber <<< ceil
+  _ceiling = Int.ceil <<< toNumber <<< ceil
 
 data Value'
   = Constant' BigInt
