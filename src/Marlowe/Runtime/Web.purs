@@ -4,10 +4,10 @@ import Prelude
 
 import Contrib.Data.Argonaut (JsonParser, JsonParserResult, decodeFromString)
 import Contrib.Data.Argonaut.Generic.Record (DecodeJsonFieldFn, decodeNewtypedRecord)
-import Data.Argonaut (class DecodeJson, Json, JsonDecodeError(..), caseJsonNull, decodeJson)
+import Data.Argonaut (class DecodeJson, Json, JsonDecodeError(..), decodeJson)
 import Data.Argonaut.Decode.Decoders (decodeMaybe)
 import Data.DateTime (DateTime)
-import Data.Either (Either(..), note)
+import Data.Either (Either, note)
 import Data.Generic.Rep (class Generic)
 import Data.Int as Int
 import Data.JSDate as JSDate
@@ -245,4 +245,3 @@ instance DecodeJson Tx where
       , invalidHereafter: map decodeUTCDateTime :: Maybe _ -> Maybe _
       , txBody: map (decodeMaybe decodeTxBodyTextEnvelope) :: Maybe _ -> Maybe _
       }
-
