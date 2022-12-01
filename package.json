@@ -3,5 +3,15 @@
     "big-integer": "^1.6.51",
     "decimal.js": "^10.4.2",
     "json-bigint": "^1.0.0"
+  },
+  "devDependencies": {
+    "webpack-cli": "^4.10.0"
+  },
+  "engines": {
+    "node": "18.x"
+  },
+  "scripts": {
+    "postinstall": "if ! command -v purs &> /dev/null; then npm install --no-save spago@0.20.9 purescript@0.15.6; fi",
+    "start": "node src/dev-server.js"
   }
 }

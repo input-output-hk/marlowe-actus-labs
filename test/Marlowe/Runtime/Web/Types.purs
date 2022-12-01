@@ -1,4 +1,4 @@
-module Test.Marlowe.Web.ContractHeader where
+module Test.Marlowe.Web.Types where
 
 import Prelude
 
@@ -9,8 +9,7 @@ import Data.Either (Either(..), either)
 import Data.Foldable (for_)
 import Effect.Exception (error)
 import Foreign.Object as Object
-import Marlowe.Runtime.Web (ContractHeader, ContractState, Tx, TxHeader)
-import Marlowe.Runtime.Web.Types (ResourceLink, ResourceWithLinks, decodeResourceWithLink)
+import Marlowe.Runtime.Web.Types (ContractHeader, ContractState, Tx, TxHeader, ResourceLink, ResourceWithLinks, decodeResourceWithLink)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff (readTextFile)
 import Test.Spec (Spec, describe, it)
@@ -18,9 +17,9 @@ import Test.Spec.Assertions (fail)
 
 spec :: Spec Unit
 spec = do
-  describe "ContractHeader" do
+  describe "Types" do
     describe "decodeJson" do
-      it "contract-headers.json" do
+      it "ContractHeader" do
         jsonStr <- readTextFile UTF8 "./test/Marlowe/Runtime/Web/contract-headers.json"
         json <- either (throwError <<< error) pure $ jsonParser jsonStr
 
@@ -39,7 +38,7 @@ spec = do
               fail $ stringify errJson
             Right _ -> pure unit
 
-      it "contract-state.json" do
+      it "ContractState" do
         jsonStr <- readTextFile UTF8 "./test/Marlowe/Runtime/Web/contract-state.json"
         json <- either (throwError <<< error) pure $ jsonParser jsonStr
 
@@ -53,7 +52,7 @@ spec = do
             fail $ stringify errJson
           Right _ -> pure unit
 
-      it "tx-headers.json" do
+      it "TxHeader" do
         jsonStr <- readTextFile UTF8 "./test/Marlowe/Runtime/Web/tx-headers.json"
         json <- either (throwError <<< error) pure $ jsonParser jsonStr
         (txHeadersJsonArr :: Array Json) <- either (throwError <<< error <<< show) pure do
@@ -71,7 +70,7 @@ spec = do
               fail $ stringify errJson
             Right _ -> pure unit
 
-      it "tx.json" do
+      it "Tx" do
         jsonStr <- readTextFile UTF8 "./test/Marlowe/Runtime/Web/tx.json"
         json <- either (throwError <<< error) pure $ jsonParser jsonStr
 
