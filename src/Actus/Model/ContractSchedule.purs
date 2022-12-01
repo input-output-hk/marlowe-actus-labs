@@ -105,27 +105,32 @@ maturity
 maturity (ContractTerms { contractType: PAM, maturityDate }) = maturityDate
 maturity (ContractTerms { contractType: LAM, maturityDate: md@(Just _) }) = md
 maturity
-  (ContractTerms
-    { contractType : LAM,
-      maturityDate : Nothing,
-      cycleAnchorDateOfPrincipalRedemption : Just pranx,
-      cycleOfInterestPayment : Just ipcl,
-      cycleOfPrincipalRedemption : Just prcl,
-      nextPrincipalRedemptionPayment : Just prnxt,
-      notionalPrincipal : Just nt,
-      statusDate,
-      scheduleConfig: sc@{ endOfMonthConvention }
-    }) =
-    let (lastEvent /\ remainingPeriods) =
-            if pranx < statusDate then
-                 let previousEvents = generateRecurrentSchedule pranx prcl statusDate sc
-                     f1 = (\{calculationDay} -> calculationDay > statusDate <-> ipcl)
-                     f2 = (\{calculationDay} -> calculationDay == statusDate)
-                     {calculationDay : lastEventCalcDay} = unsafePartial fromJust <<< head <<< filter f2 <<< filter f1 $ previousEvents
-                  in (lastEventCalcDay /\ nt / prnxt)
-            else (pranx /\ (nt / prnxt - one))
-        m = lastEvent <+> (prcl {n = prcl.n * _ceiling remainingPeriods})
-     in endOfMonthConvention >>= \d -> pure $ applyEOMC lastEvent prcl d m
+  ( ContractTerms
+      { contractType: LAM
+      , maturityDate: Nothing
+      , cycleAnchorDateOfPrincipalRedemption: Just pranx
+      , cycleOfInterestPayment: Just ipcl
+      , cycleOfPrincipalRedemption: Just prcl
+      , nextPrincipalRedemptionPayment: Just prnxt
+      , notionalPrincipal: Just nt
+      , statusDate
+      , scheduleConfig: sc@{ endOfMonthConvention }
+      }
+  ) =
+  let
+    (lastEvent /\ remainingPeriods) =
+      if pranx < statusDate then
+        let
+          previousEvents = generateRecurrentSchedule pranx prcl statusDate sc
+          f1 = (\{ calculationDay } -> calculationDay > statusDate <-> ipcl)
+          f2 = (\{ calculationDay } -> calculationDay == statusDate)
+          { calculationDay: lastEventCalcDay } = unsafePartial fromJust <<< head <<< filter f2 <<< filter f1 $ previousEvents
+        in
+          (lastEventCalcDay /\ nt / prnxt)
+      else (pranx /\ (nt / prnxt - one))
+    m = lastEvent <+> (prcl { n = prcl.n * _ceiling remainingPeriods })
+  in
+    endOfMonthConvention >>= \d -> pure $ applyEOMC lastEvent prcl d m
 maturity (ContractTerms { contractType: NAM, maturityDate: md@(Just _) }) = md
 maturity
   ( ContractTerms

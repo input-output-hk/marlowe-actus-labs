@@ -36,7 +36,7 @@ main = launchAff_ $ do
       TestFramework.spec testsPAM
       TestFramework.spec testsLAM
       TestFramework.spec testsNAM
-      -- TestFramework.spec testsANN
+      TestFramework.spec testsANN
 
   where
   readFile file = do

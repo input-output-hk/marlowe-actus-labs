@@ -151,7 +151,7 @@ addDays n d | n < 0 = addDays (n + 1) (unsafePartial fromJust $ pred d)
 addDays _ d = d
 
 addDays' :: Int -> DateTime -> DateTime
-addDays' n d = unsafePartial fromJust $ DateTime.adjust (Days $ fromInt n) d
+addDays' n (DateTime d t) = DateTime (addDays n d) t
 
 unsafeToEnum :: forall d. BoundedEnum d => Int -> d
 unsafeToEnum = unsafePartial fromJust <<< toEnum

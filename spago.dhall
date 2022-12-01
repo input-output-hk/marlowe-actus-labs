@@ -27,9 +27,9 @@
   , "newtype"
   , "node-buffer"
   , "node-fs-aff"
-  , "numbers"
   , "ordered-collections"
   , "orders"
+  , "partial"
   , "prelude"
   , "profunctor"
   , "profunctor-lenses"
@@ -43,6 +43,7 @@
   , "tuples"
   , "typelevel-eval"
   , "typelevel-prelude"
+  , "unfoldable"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]
