@@ -13,10 +13,9 @@ import Control.Alt ((<|>))
 import Control.Apply (lift2, lift4)
 import Data.DateTime (DateTime)
 import Data.List (List(..), delete, filter, find, head, nub, singleton, snoc, sortBy, (:))
-import Data.Maybe (Maybe(..), fromJust, fromMaybe, isJust, isNothing)
+import Data.Maybe (Maybe(..), fromMaybe, isJust, isNothing)
 import Data.Ord.Down (Down(..))
 import Data.Tuple.Nested ((/\))
-import Partial.Unsafe (unsafePartial)
 
 -- |Generate the schedule for a given event type
 schedule
@@ -124,13 +123,15 @@ maturity
           previousEvents = generateRecurrentSchedule pranx prcl statusDate sc
           f1 = (\{ calculationDay } -> calculationDay > statusDate <-> ipcl)
           f2 = (\{ calculationDay } -> calculationDay == statusDate)
-          { calculationDay: lastEventCalcDay } = unsafePartial fromJust <<< head <<< filter f2 <<< filter f1 $ previousEvents
+          lastEventCalcDay = map _.calculationDay <<< head <<< filter f2 <<< filter f1 $ previousEvents
         in
           (lastEventCalcDay /\ nt / prnxt)
-      else (pranx /\ (nt / prnxt - one))
-    m = lastEvent <+> (prcl { n = prcl.n * _ceiling remainingPeriods })
+      else (Just pranx /\ (nt / prnxt - one))
   in
-    endOfMonthConvention >>= \d -> pure $ applyEOMC lastEvent prcl d m
+    do
+      endOfMonthConvention' <- endOfMonthConvention
+      lastEvent' <- lastEvent
+      pure $ applyEOMC lastEvent' prcl endOfMonthConvention' $ lastEvent' <+> (prcl { n = prcl.n * _ceiling remainingPeriods })
 maturity (ContractTerms { contractType: NAM, maturityDate: md@(Just _) }) = md
 maturity
   ( ContractTerms
@@ -149,22 +150,22 @@ maturity
   ) =
   let
     lastEvent
-      | pranx >= statusDate = pranx
-      | ied <+> prcl >= statusDate = ied <+> prcl
+      | pranx >= statusDate = Just pranx
+      | ied <+> prcl >= statusDate = Just $ ied <+> prcl
       | otherwise =
           let
             previousEvents = generateRecurrentSchedule pranx prcl statusDate sc
             f = (\{ calculationDay } -> calculationDay == statusDate)
-            { calculationDay: lastEventCalcDay } = unsafePartial fromJust $ head <<< filter f $ previousEvents
           in
-            lastEventCalcDay
-
-    yLastEventPlusPRCL = yearFraction dcc lastEvent (lastEvent <+> prcl) Nothing
-    redemptionPerCycle = prnxt - (yLastEventPlusPRCL * ipnr * nt)
-    remainingPeriods = _ceiling $ (nt / redemptionPerCycle) - one
-    m = lastEvent <+> prcl { n = prcl.n * remainingPeriods }
+            map _.calculationDay <<< head <<< filter f $ previousEvents
   in
-    endOfMonthConvention >>= \d -> pure $ applyEOMC lastEvent prcl d m
+    do
+      endOfMonthConvention' <- endOfMonthConvention
+      lastEvent' <- lastEvent
+      let yLastEventPlusPRCL = yearFraction dcc lastEvent' (lastEvent' <+> prcl) Nothing
+      let redemptionPerCycle = prnxt - (yLastEventPlusPRCL * ipnr * nt)
+      let remainingPeriods = _ceiling $ (nt / redemptionPerCycle) - one
+      pure $ applyEOMC lastEvent' prcl endOfMonthConvention' (lastEvent' <+> prcl { n = prcl.n * remainingPeriods })
 maturity
   ( ContractTerms
       { contractType: ANN
