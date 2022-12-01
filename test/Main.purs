@@ -17,6 +17,7 @@ import Foreign.Object (Object)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff (readTextFile)
 import Test.Actus.Domain.ContractTerms as ContractTerms
+import Test.Marlowe.Runtime.Web as Web
 import Test.Spec as Spec
 import Test.Spec.Reporter.Console (consoleReporter)
 import Test.Spec.Runner (runSpec)
