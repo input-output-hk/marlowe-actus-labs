@@ -24,15 +24,15 @@ fetchResource :: forall a. DecodeJson a => ServerURL -> ResourceLink a -> Aff a
 fetchResource (ServerURL serverUrl) (ResourceLink path) = do
   let
     url = serverUrl <> path
+
     bringBackJson :: Foreign -> Json
     bringBackJson = unsafeCoerce
 
-  res <- fetch url { headers: { "Accept": "application/json" }}
+  res <- fetch url { headers: { "Accept": "application/json" } }
   json <- bringBackJson <$> res.json
 
   either
     (throwError <<< error <<< printJsonDecodeError)
     pure
     (decodeJson json)
-
 

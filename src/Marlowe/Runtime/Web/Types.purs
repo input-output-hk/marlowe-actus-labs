@@ -29,7 +29,6 @@ import Foreign.Object as Object
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Record as Record
 
-
 newtype ResourceLink :: Type -> Type
 newtype ResourceLink resource = ResourceLink String
 
