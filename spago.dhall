@@ -15,7 +15,10 @@
   , "either"
   , "enums"
   , "exceptions"
+  , "fetch"
+  , "fetch-argonaut"
   , "foldable-traversable"
+  , "foreign"
   , "foreign-object"
   , "heterogeneous"
   , "indexed-monad"
@@ -27,6 +30,7 @@
   , "newtype"
   , "node-buffer"
   , "node-fs-aff"
+  , "node-process"
   , "numbers"
   , "ordered-collections"
   , "orders"
@@ -43,6 +47,7 @@
   , "tuples"
   , "typelevel-eval"
   , "typelevel-prelude"
+  , "unsafe-coerce"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]

@@ -19,7 +19,8 @@
         devShell = pkgs.mkShell {
           buildInputs = [
 
-            easyPS."purs-0_15_2"
+            # Please update spago and purescript in `package.json` `scripts` section
+            easyPS."purs-0_15_6"
             easyPS.purescript-language-server
             easyPS.pscid
             easyPS.purs-tidy
@@ -46,6 +47,7 @@
         ];
         shellHook = ''
           npm install
+          NODE_OPTIONS=--experimental-fetch spago run
           export PATH=$PATH:./node_modules/.bin/:./bin
           export PS1="\n\[\033[1;32m\][nix develop:\w]\$\[\033[0m\] ";
         '';
