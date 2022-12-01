@@ -10,7 +10,7 @@ module Actus.Utility.ScheduleGenerator
 
 import Prelude
 
-import Actus.Domain (Cycle(..), ScheduleConfig, ShiftedSchedule, Stub(..), mkShiftedDay)
+import Actus.Domain (Cycle, ScheduleConfig, ShiftedSchedule, Stub(..), mkShiftedDay)
 import Actus.Utility.DateShift (applyBDC, applyEOMC, shiftDate)
 import Data.DateTime (DateTime)
 import Data.Foldable (maximum, minimum)

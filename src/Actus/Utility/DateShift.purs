@@ -15,11 +15,8 @@ import Prelude
 import Actus.Domain (BDC(..), Calendar(..), Cycle, EOMC(..), Period(..), ScheduleConfig, ShiftedDay)
 import Data.Date (Date, Weekday(..), Year, canonicalDate, day, lastDayOfMonth, month, weekday, year)
 import Data.DateTime (DateTime(..))
-import Data.DateTime as DateTime
 import Data.Enum (class BoundedEnum, fromEnum, succ, pred, toEnum)
 import Data.Maybe (Maybe(..), fromJust)
-import Data.Refined (fromInt)
-import Data.Time.Duration (Days(..))
 import Data.Tuple.Nested (type (/\), (/\))
 import Partial.Unsafe (unsafePartial)
 

@@ -3,10 +3,9 @@ module Actus.Domain.ContractTerms where
 import Prelude
 
 import Contrib.Data.Argonaut (decodeJsonEnumWith, decodeFromString, encodeJsonEnumWith)
-import Contrib.Data.Argonaut.Decode.Record.Field (askField, askFieldOptional, askObject, execRecordBuilderM, insertProp, liftEither, (:=), (:=!), (:=?), (:=?!))
+import Contrib.Data.Argonaut.Decode.Record.Field (askField, askObject, execRecordBuilderM, insertProp, liftEither, (:=), (:=!), (:=?), (:=?!))
 import Contrib.Data.String (decodeEnumWith, tryStripPrefix)
 import Control.Alt ((<|>))
-import Control.Bind.Indexed ((:>>=))
 import Control.Monad.Indexed.Qualified as Ix
 import Data.Argonaut (Json, JsonDecodeError(..), decodeJson, fromObject, fromString)
 import Data.Argonaut.Decode.Class (class DecodeJson)
