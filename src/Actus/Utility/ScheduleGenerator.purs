@@ -8,13 +8,14 @@ module Actus.Utility.ScheduleGenerator
   , minus_sched
   ) where
 
-import Actus.Domain (Cycle(..), ScheduleConfig, ShiftedSchedule, Stub(..), mkShiftedDay)
+import Prelude
+
+import Actus.Domain (Cycle, ScheduleConfig, ShiftedSchedule, Stub(..), mkShiftedDay)
 import Actus.Utility.DateShift (applyBDC, applyEOMC, shiftDate)
 import Data.DateTime (DateTime)
 import Data.Foldable (maximum, minimum)
 import Data.List (List(..), delete, dropEnd, filter, init, last, length, snoc)
 import Data.Maybe (Maybe(..), fromMaybe)
-import Prelude
 
 maximumMaybe :: forall a. Ord a => List a -> Maybe a
 maximumMaybe Nil = Nothing

@@ -13,14 +13,12 @@ module Actus.Utility.DateShift
 import Prelude
 
 import Actus.Domain (BDC(..), Calendar(..), Cycle, EOMC(..), Period(..), ScheduleConfig, ShiftedDay)
-import Data.Date (Date, Weekday(..), canonicalDate, day, lastDayOfMonth, month, weekday, year)
-import Data.Date as Date
+import Data.Date (Date, Weekday(..), Year, canonicalDate, day, lastDayOfMonth, month, weekday, year)
 import Data.DateTime (DateTime(..))
-import Data.DateTime as DateTime
-import Data.Enum (fromEnum, toEnum)
-import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Refined (fromInt)
-import Data.Time.Duration (Days(..))
+import Data.Enum (class BoundedEnum, fromEnum, succ, pred, toEnum)
+import Data.Maybe (Maybe(..), fromJust)
+import Data.Tuple.Nested (type (/\), (/\))
+import Partial.Unsafe (unsafePartial)
 
 {- Business Day Convention -}
 
@@ -76,19 +74,20 @@ applyBDC BDC_CSMP cal date =
   }
 
 shiftModifiedFollowing :: DateTime -> Calendar -> DateTime
-shiftModifiedFollowing dt@(DateTime d t) cal =
+shiftModifiedFollowing dt@(DateTime d _) cal =
   let
     m = month d
-    st@(DateTime d' t') = getFollowingBusinessDay dt cal
+    st@(DateTime d' _) = getFollowingBusinessDay dt cal
     shiftedMonth = month d'
   in
-    if m == shiftedMonth then st else getPreceedingBusinessDay dt cal
+    if m == shiftedMonth then st
+    else getPreceedingBusinessDay dt cal
 
 shiftModifiedPreceeding :: DateTime -> Calendar -> DateTime
-shiftModifiedPreceeding dt@(DateTime d t) cal =
+shiftModifiedPreceeding dt@(DateTime d _) cal =
   let
     m = month d
-    st@(DateTime d' t') = getPreceedingBusinessDay dt cal
+    st@(DateTime d' _) = getPreceedingBusinessDay dt cal
     shiftedMonth = month d'
   in
     if m == shiftedMonth then st else getFollowingBusinessDay dt cal
@@ -116,17 +115,14 @@ getPreceedingBusinessDay (DateTime d t) CLDR_MF =
 getPreceedingBusinessDay dt _ = dt
 
 shiftDate :: DateTime -> Int -> Period -> DateTime
-shiftDate (DateTime d t) n p =
-  DateTime
-    ( case p of
-        P_D -> addDays n d
-        P_W -> addDays (n * 7) d
-        P_M -> addGregorianMonthsClip n d
-        P_Q -> addGregorianMonthsClip (n * 3) d
-        P_H -> addGregorianMonthsClip (n * 6) d
-        P_Y -> addGregorianYearsClip n d
-    )
-    t
+shiftDate dt n p =
+  case p of
+    P_D -> addDays' n dt
+    P_W -> addDays' (n * 7) dt
+    P_M -> addGregorianMonthsClip n dt
+    P_Q -> addGregorianMonthsClip (n * 3) dt
+    P_H -> addGregorianMonthsClip (n * 6) dt
+    P_Y -> addGregorianYearsClip n dt
 
 {- End of Month Convention -}
 applyEOMC :: DateTime -> Cycle -> EOMC -> DateTime -> DateTime
@@ -147,17 +143,38 @@ isLastDayOfMonth :: Date -> Boolean
 isLastDayOfMonth d = lastDayOfMonth (year d) (month d) == (day d)
 
 addDays :: Int -> Date -> Date
-addDays n d = fromMaybe d $ Date.adjust (Days $ fromInt n) d
+addDays n d | n > 0 = addDays (n - 1) (unsafePartial fromJust $ succ d)
+addDays n d | n < 0 = addDays (n + 1) (unsafePartial fromJust $ pred d)
+addDays _ d = d
 
 addDays' :: Int -> DateTime -> DateTime
-addDays' n d = fromMaybe d $ DateTime.adjust (Days $ fromInt n) d
+addDays' n (DateTime d t) = DateTime (addDays n d) t
 
-addGregorianMonthsClip :: Int -> Date -> Date
-addGregorianMonthsClip n d =
+unsafeToEnum :: forall d. BoundedEnum d => Int -> d
+unsafeToEnum = unsafePartial fromJust <<< toEnum
+
+rolloverMonths :: Year /\ Int -> Int /\ Int
+rolloverMonths (y /\ m) = (fromEnum y + (div (m - 1) 12)) /\ ((mod (m - 1) 12) + 1)
+
+addGregorianMonths :: Int -> Date -> Int /\ Int /\ Int
+addGregorianMonths n d = y' /\ m' /\ fromEnum (day d)
+  where
+  (y' /\ m') = rolloverMonths (year d /\ (fromEnum (month d) + n))
+
+addGregorianMonthsClip :: Int -> DateTime -> DateTime
+addGregorianMonthsClip n (DateTime d t) =
   let
-    m = month d
+    y' = unsafeToEnum y
+    m' = unsafeToEnum m
+    d' = unsafeToEnum a
+    ld = lastDayOfMonth y' m'
+    da =
+      if ld < d' then canonicalDate y' m' ld
+      else canonicalDate y' m' d'
   in
-    canonicalDate (year d) (fromMaybe m $ toEnum $ (n - 1 + (fromEnum m) `mod` 12) + 1) (day d)
+    DateTime da t
+  where
+  (y /\ m /\ a) = addGregorianMonths n d
 
-addGregorianYearsClip :: Int -> Date -> Date
+addGregorianYearsClip :: Int -> DateTime -> DateTime
 addGregorianYearsClip n = addGregorianMonthsClip (n * 12)

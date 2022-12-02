@@ -2,8 +2,10 @@ module Actus.Utility.ANN.Annuity
   ( annuity
   ) where
 
-import Data.List (List(..), foldl, (:))
 import Prelude
+
+import Data.List (List(..), foldl, (:))
+import Data.Unfoldable as Unfoldable
 
 -- |annuity amount function (A), as described in section 3.8 in the
 -- ACTUS reference v1.1
@@ -18,5 +20,6 @@ annuity r ti = numerator / denominator
   _product = foldl (*) one
   _sum = foldl (+) zero
 
-  tails Nil = Nil
+  tails :: forall b. List b -> List (List b)
+  tails Nil = Unfoldable.singleton Nil
   tails as'@(Cons _ as) = as' : tails as

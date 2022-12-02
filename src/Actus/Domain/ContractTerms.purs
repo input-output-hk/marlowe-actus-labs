@@ -3,22 +3,20 @@ module Actus.Domain.ContractTerms where
 import Prelude
 
 import Contrib.Data.Argonaut (decodeJsonEnumWith, decodeFromString, encodeJsonEnumWith)
-import Contrib.Data.Argonaut.Decode.Record.Field (askField, askFieldOptional, askObject, execRecordBuilderM, insertProp, liftEither, (:=), (:=!), (:=?), (:=?!))
+import Contrib.Data.Argonaut.Decode.Record.Field (askField, askObject, execRecordBuilderM, insertProp, liftEither, (:=), (:=!), (:=?), (:=?!))
 import Contrib.Data.String (decodeEnumWith, tryStripPrefix)
 import Control.Alt ((<|>))
-import Control.Bind.Indexed ((:>>=))
 import Control.Monad.Indexed.Qualified as Ix
 import Data.Argonaut (Json, JsonDecodeError(..), decodeJson, fromObject, fromString)
 import Data.Argonaut.Decode.Class (class DecodeJson)
 import Data.Argonaut.Encode.Class (class EncodeJson)
 import Data.Array.NonEmpty as NA
 import Data.Bounded.Generic (genericBottom, genericTop)
-import Data.DateTime (DateTime(..), Time(..))
-import Data.DateTime as DateTime
+import Data.DateTime (DateTime)
 import Data.Decimal (Decimal)
 import Data.Decimal as Decimal
 import Data.Either (Either, note)
-import Data.Enum (class BoundedEnum, class Enum, toEnum, upFromIncluding)
+import Data.Enum (class BoundedEnum, class Enum, upFromIncluding)
 import Data.Enum.Generic (genericCardinality, genericFromEnum, genericPred, genericSucc, genericToEnum)
 import Data.Generic.Rep (class Generic)
 import Data.Int as Int
@@ -31,7 +29,6 @@ import Data.String (joinWith) as String
 import Data.String.Regex (match)
 import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.String.Utils (trimStart) as String
-import Data.Time.Duration (Seconds(..)) as Duration
 import Effect.Unsafe (unsafePerformEffect)
 import Type.Prelude (Proxy(..))
 
@@ -823,6 +820,9 @@ derive instance Eq a => Eq (ContractTerms a)
 instance Show a => Show (ContractTerms a) where
   show = genericShow
 
+decodeDecimal :: Json -> Either JsonDecodeError Decimal
+decodeDecimal = decodeFromString (String.trimStart >>> Decimal.fromString)
+
 decodeDateTime :: Json -> Either JsonDecodeError DateTime
 decodeDateTime json = do
   str <- decodeJson json
@@ -830,21 +830,10 @@ decodeDateTime json = do
     -- The function `parse` should be referentialy transparent
     -- if we enforced UTC time zone.
     jsDate = unsafePerformEffect $ JSDate.parse $ str <> "Z"
-
-  note (UnexpectedValue json) $ JSDate.toDateTime jsDate >>= case _ of
-    dt@(DateTime _ time) -> do
-      nearlyMidnight <- Time
-        <$> toEnum 23
-        <*> toEnum 59
-        <*> toEnum 59
-        <*> toEnum 59
-      if time == nearlyMidnight then DateTime.adjust (Duration.Seconds 1.0) dt
-      else pure dt
+  note (UnexpectedValue json) $ JSDate.toDateTime jsDate
 
 instance DecodeJson (ContractTerms Decimal) where
   decodeJson json = do
-    let
-      decodeDecimal = decodeFromString (String.trimStart >>> Decimal.fromString)
     ContractTerms <$> execRecordBuilderM json Ix.do
 
       -- General
@@ -891,10 +880,7 @@ instance DecodeJson (ContractTerms Decimal) where
       (Proxy :: Proxy "cycleAnchorDateOfInterestCalculationBase") :=? decodeDateTime
       (Proxy :: Proxy "cycleOfInterestCalculationBase") :=? decodeFromString decodeCycle
       (Proxy :: Proxy "interestCalculationBase") :=? decodeJson
-      baseAmount <- askFieldOptional "interestCalculationBaseA" :>>= case _ of
-        Just json' -> Just <$> (liftEither $ decodeDecimal json')
-        Nothing -> Ix.pure Nothing
-      insertProp (Proxy :: Proxy "interestCalculationBaseAmount") baseAmount
+      (Proxy :: Proxy "interestCalculationBaseAmount") :=? decodeDecimal
       (Proxy :: Proxy "nominalInterestRate") :=? decodeDecimal
       (Proxy :: Proxy "nominalInterestRate2") :=? decodeDecimal
       (Proxy :: Proxy "interestScalingMultiplier") :=? decodeDecimal
@@ -963,4 +949,3 @@ instance DecodeJson (ContractTerms Decimal) where
       (Proxy :: Proxy "nextDividendPaymentAmount") :=? decodeDecimal
 
       (Proxy :: Proxy "enableSettlement") :=! decodeJson $ false
-

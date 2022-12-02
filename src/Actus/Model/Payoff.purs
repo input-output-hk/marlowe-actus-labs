@@ -41,7 +41,7 @@ payoff (ev /\ t) st = asks $ do \ctx -> let terms@(ContractTerms ct :: ContractT
   ----------------------------
   -- Initial Exchange (IED) --
   ----------------------------
-  pof :: forall a. Semiring a => EuclideanRing a => ActusOps a => EventType -> RiskFactors a -> ContractTerms a -> ContractState a -> a
+  pof :: Semiring a => EuclideanRing a => ActusOps a => EventType -> RiskFactors a -> ContractTerms a -> ContractState a -> a
   -- POF_IED_*
   pof
     IED
@@ -136,10 +136,7 @@ payoff (ev /\ t) st = asks $ do \ctx -> let terms@(ContractTerms ct :: ContractT
         { o_rf_CURS
         }
     )
-    ( ContractTerms
-        { contractType
-        }
-    )
+    _
     ( ContractState
         { nt
         , nsc

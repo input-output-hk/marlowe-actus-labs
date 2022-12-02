@@ -27,12 +27,13 @@ import Actus.Domain.Schedule (ShiftedDay, ShiftedSchedule, mkShiftedDay)
 import Control.Alt ((<|>))
 import Data.BigInt.Argonaut (BigInt, abs, fromInt, quot, rem)
 import Data.DateTime (DateTime)
-import Data.Int (ceil)
+import Data.Decimal (Decimal, ceil, fromNumber, toNumber)
+import Data.Decimal as Decimal
+import Data.Generic.Rep (class Generic)
+import Data.Int as Int
 import Data.Maybe (Maybe(..))
-import Data.Number as Number
 import Data.Ord (signum)
 import Data.Show.Generic (genericShow)
-import Data.Generic.Rep (class Generic)
 
 class ActusOps a <= ActusFrac a where
   _ceiling :: a -> Int
@@ -42,13 +43,13 @@ class ActusOps a where
   _max :: a -> a -> a
   _abs :: a -> a
 
-instance ActusOps Number where
+instance ActusOps Decimal where
   _min = min
   _max = max
-  _abs = Number.abs
+  _abs = Decimal.abs
 
-instance ActusFrac Number where
-  _ceiling = ceil
+instance ActusFrac Decimal where
+  _ceiling = Int.ceil <<< toNumber <<< ceil
 
 data Value'
   = Constant' BigInt
@@ -157,9 +158,6 @@ data RiskFactors a = RiskFactors
   , dv_payoff :: a
   }
 
--- deriving stock (Show, Generic)
--- deriving anyclass (FromJSON, ToJSON)
-
 -- | Cash flows
 data CashFlow a = CashFlow
   { tick :: Int
@@ -192,9 +190,9 @@ sign CR_PFL = negate one
 sign CR_RF = one
 sign CR_PF = negate one
 
--- == Default instance (Number)
+-- == Default instance (Decimal)
 
-setDefaultContractTermValues :: ContractTerms Number -> ContractTerms Number
+setDefaultContractTermValues :: ContractTerms Decimal -> ContractTerms Decimal
 setDefaultContractTermValues (ContractTerms ct) = ContractTerms $
   ct
     { scheduleConfig =
@@ -204,28 +202,28 @@ setDefaultContractTermValues (ContractTerms ct) = ContractTerms $
         }
     , contractPerformance = applyDefault PRF_PF ct.contractPerformance
     , interestCalculationBase = applyDefault IPCB_NT ct.interestCalculationBase
-    , premiumDiscountAtIED = applyDefault 0.0 ct.premiumDiscountAtIED
+    , premiumDiscountAtIED = applyDefault (fromNumber 0.0) ct.premiumDiscountAtIED
     , scalingEffect = applyDefault SE_OOO ct.scalingEffect
-    , penaltyRate = applyDefault 0.0 ct.penaltyRate
+    , penaltyRate = applyDefault (fromNumber 0.0) ct.penaltyRate
     , penaltyType = applyDefault PYTP_O ct.penaltyType
     , prepaymentEffect = applyDefault PPEF_N ct.prepaymentEffect
-    , rateSpread = applyDefault 0.0 ct.rateSpread
-    , rateMultiplier = applyDefault 1.0 ct.rateMultiplier
-    , feeAccrued = applyDefault 0.0 ct.feeAccrued
-    , feeRate = applyDefault 0.0 ct.feeRate
-    , accruedInterest = applyDefault 0.0 ct.accruedInterest
-    , nominalInterestRate = applyDefault 0.0 ct.nominalInterestRate
-    , priceAtPurchaseDate = applyDefault 0.0 ct.priceAtPurchaseDate
-    , priceAtTerminationDate = applyDefault 0.0 ct.priceAtTerminationDate
-    , scalingIndexAtContractDealDate = applyDefault 0.0 ct.scalingIndexAtContractDealDate
+    , rateSpread = applyDefault (fromNumber 0.0) ct.rateSpread
+    , rateMultiplier = applyDefault (fromNumber 1.0) ct.rateMultiplier
+    , feeAccrued = applyDefault (fromNumber 0.0) ct.feeAccrued
+    , feeRate = applyDefault (fromNumber 0.0) ct.feeRate
+    , accruedInterest = applyDefault (fromNumber 0.0) ct.accruedInterest
+    , nominalInterestRate = applyDefault (fromNumber 0.0) ct.nominalInterestRate
+    , priceAtPurchaseDate = applyDefault (fromNumber 0.0) ct.priceAtPurchaseDate
+    , priceAtTerminationDate = applyDefault (fromNumber 0.0) ct.priceAtTerminationDate
+    , scalingIndexAtContractDealDate = applyDefault (fromNumber 0.0) ct.scalingIndexAtContractDealDate
     , periodFloor = applyDefault (-infinity) ct.periodFloor
     , periodCap = applyDefault infinity ct.periodCap
     , lifeCap = applyDefault infinity ct.lifeCap
     , lifeFloor = applyDefault (-infinity) ct.lifeFloor
     }
   where
-  infinity :: Number
-  infinity = 1.0 / 0.0 :: Number
+  infinity :: Decimal
+  infinity = fromNumber $ 1.0 / 0.0
 
   applyDefault :: forall a. a -> Maybe a -> Maybe a
   applyDefault v o = o <|> Just v

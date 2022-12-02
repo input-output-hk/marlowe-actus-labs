@@ -5,27 +5,25 @@ module Actus.Core
 
 import Prelude
 
-import Actus.Domain (class ActusFrac, class ActusOps, CR(..), CT(..), CashFlow(..), ContractState(..), ContractTerms(..), DS(..), EventType(..), RiskFactors(..), ShiftedDay(..), ShiftedDay)
+import Actus.Domain (class ActusFrac, class ActusOps, CT(..), CashFlow(..), ContractState(..), ContractTerms(..), DS(..), EventType(..), RiskFactors, ShiftedDay)
 import Actus.Model.ContractSchedule (maturity, schedule)
 import Actus.Model.Payoff (CtxPOF, payoff)
 import Actus.Model.StateInitialization (initializeState)
 import Actus.Model.StateTransition (CtxSTF, stateTransition)
 import Control.Alt ((<|>))
-import Control.Monad (map)
 import Control.Monad.Reader (Reader, ask, runReader, withReader)
 import Data.Bounded.Generic (class GenericBottom, class GenericTop, genericBottom, genericTop)
 import Data.DateTime (DateTime)
-import Data.Enum (enumFromTo, fromEnum, toEnum)
+import Data.Enum (fromEnum)
 import Data.Enum.Generic (class GenericBoundedEnum, genericFromEnum, genericToEnum)
-import Data.Eq ((==))
 import Data.Generic.Rep (class Generic)
-import Data.List (List(..), concat, concatMap, dropWhile, filter, filterM, foldl, groupBy, mapMaybe, nub, zip, (..), (:), unzip)
+import Data.List (List(..), concat, concatMap, dropWhile, filter, filterM, groupBy, mapMaybe, unzip, zip, (..), (:))
 import Data.List as List
 import Data.List.NonEmpty (NonEmptyList, toList)
 import Data.List.NonEmpty as NonEmptyList
 import Data.Maybe (Maybe(..), fromMaybe, isNothing)
 import Data.Semigroup.Foldable (foldl1)
-import Data.Traversable (mapAccumL, traverse)
+import Data.Traversable (traverse)
 import Data.Tuple (snd)
 import Data.Tuple.Nested (type (/\), (/\))
 

@@ -34,6 +34,7 @@
   , "numbers"
   , "ordered-collections"
   , "orders"
+  , "partial"
   , "prelude"
   , "profunctor"
   , "profunctor-lenses"
@@ -47,6 +48,7 @@
   , "tuples"
   , "typelevel-eval"
   , "typelevel-prelude"
+  , "unfoldable"
   , "unsafe-coerce"
   ]
 , packages = ./packages.dhall
