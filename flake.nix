@@ -47,7 +47,7 @@
         ];
         shellHook = ''
           npm install
-          NODE_OPTIONS=--experimental-fetch spago run
+          NODE_OPTIONS=--experimental-fetch spago build
           export PATH=$PATH:./node_modules/.bin/:./bin
           export PS1="\n\[\033[1;32m\][nix develop:\w]\$\[\033[0m\] ";
         '';
