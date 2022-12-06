@@ -10,3 +10,4 @@
 /.spago
 /dist-newstyle/
 .vscode
+public/app.js
