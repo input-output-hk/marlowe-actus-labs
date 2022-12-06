@@ -50,6 +50,11 @@
   , "typelevel-prelude"
   , "unfoldable"
   , "unsafe-coerce"
+  , "react-basic"
+  , "react-basic-dom"
+  , "react-basic-hooks"
+  , "web-html"
+  , "web-dom"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]

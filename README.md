@@ -20,8 +20,8 @@ Devel env `shell.nix` doesn't cover `Js` deps so in order to build the app you h
 
 ## Staging server
 
-We deploy staging servers using `nixpacks` (it derives the build steps from `package.json` - `scripts.start`, `engines`). To test the deployment setup you can run:
+Start the server with
 
 ```
-$ nixpacks build ./path/to/app --name my-app
+npm start
 ```
