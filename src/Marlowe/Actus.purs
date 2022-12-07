@@ -131,7 +131,7 @@ genContract
      Party /\ Party
   ->
   -- | Risk factors per event and time
-  (String -> EventType -> DateTime -> RiskFactorsMarlowe)
+  (EventType -> DateTime -> RiskFactorsMarlowe)
   ->
   -- | ACTUS contract terms
   ContractTermsMarlowe

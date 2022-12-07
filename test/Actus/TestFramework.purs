@@ -62,8 +62,8 @@ runTest tc =
       | a == b = pure unit
       | otherwise = fail ("mismatch: " <> show tc.identifier <> " " <> show cf <> "\n" <> show a <> " vs. " <> show b <> "\n" <> show tc.terms)
 
-  riskFactors i ev date =
-    case getValue i tc ev date of
+  riskFactors ev date =
+    case getValue tc ev date of
       Just v -> case ev of
         RR -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf { o_rf_RRMO = v }
         SC -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf { o_rf_SCMO = v }
@@ -72,8 +72,8 @@ runTest tc =
         _ -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf { o_rf_CURS = v }
       Nothing -> defaultRiskFactors
 
-getValue :: String -> TestCase -> EventType -> DateTime -> Maybe Decimal
-getValue _ { terms, dataObserved } ev date =
+getValue :: TestCase -> EventType -> DateTime -> Maybe Decimal
+getValue { terms, dataObserved } ev date =
   do
     let (ContractTerms ct) = terms
     key <- observedKey terms ev

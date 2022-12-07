@@ -37,7 +37,7 @@ type CtxSTF a =
     maturity :: Maybe DateTime
   ,
     -- | Riskfactors per event and time
-    riskFactors :: String -> EventType -> DateTime -> RiskFactors a
+    riskFactors :: EventType -> DateTime -> RiskFactors a
   }
 
 -- |A state transition updates the contract state based on the type of event and the time.
@@ -60,7 +60,7 @@ stateTransition
   Reader (CtxSTF a) (ContractState a)
 stateTransition ev t sn = asks stateTransition'
   where
-  stateTransition' ctx = let (ContractTerms ct') = ctx.contractTerms in stf ev (ctx.riskFactors ct'.contractId ev t) ctx.contractTerms sn
+  stateTransition' ctx = stf ev (ctx.riskFactors ev t) ctx.contractTerms sn
     where
     stf AD _ ct st = _STF_AD_ALL ct st t
     stf IED _ ct@(ContractTerms { contractType: PAM }) st = _STF_IED_PAM ct st t

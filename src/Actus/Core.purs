@@ -38,7 +38,7 @@ genProjectedCashflows
   => ActusFrac a
   =>
   -- | Risk factors as a function of event type and time
-  (String -> EventType -> DateTime -> RiskFactors a)
+  (EventType -> DateTime -> RiskFactors a)
   ->
   -- | Contract terms
   ContractTerms a
@@ -82,7 +82,7 @@ buildCtx
   => ActusFrac a
   =>
   -- | Risk factors as a function of event type and time
-  (String -> EventType -> DateTime -> RiskFactors a)
+  (EventType -> DateTime -> RiskFactors a)
   ->
   -- | Contract terms
   ContractTerms a
