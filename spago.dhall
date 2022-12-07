@@ -55,6 +55,8 @@
   , "react-basic-hooks"
   , "web-html"
   , "web-dom"
+  , "typelevel"
+  , "aff-promise"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]
