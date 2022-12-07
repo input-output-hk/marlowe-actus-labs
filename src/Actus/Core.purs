@@ -65,11 +65,11 @@ genProjectedCashflows parties rf ct =
   groupCashflows cf = groupBy f cf
     where
     f (CashFlow a) (CashFlow b) =
-      a.cashEvent == b.cashEvent
-        && a.cashPaymentDay == b.cashPaymentDay
-        && a.cashParty == b.cashParty
-        && a.cashCounterParty == b.cashCounterParty
-        && a.cashCurrency == b.cashCurrency
+      a.event == b.event
+        && a.paymentDay == b.paymentDay
+        && a.party == b.party
+        && a.counterparty == b.counterparty
+        && a.currency == b.currency
 
   netCashflows cf = map (foldl1 plus) $ groupCashflows cf
     where
@@ -126,16 +126,16 @@ genCashflow
   ->
   -- | Projected cash flow
   CashFlow a b
-genCashflow (p1 /\ p2) (ContractTerms { currency }) ((ev /\ { paymentDay, calculationDay }) /\ ContractState { nt } /\ am) =
+genCashflow (party /\ counterparty) (ContractTerms { currency }) ((event /\ { paymentDay, calculationDay }) /\ ContractState { nt } /\ amount) =
   CashFlow
-    { cashParty: p1
-    , cashCounterParty: p2
-    , cashPaymentDay: paymentDay
-    , cashCalculationDay: calculationDay
-    , cashEvent: ev
-    , amount: am
+    { party
+    , counterparty
+    , paymentDay
+    , calculationDay
+    , event
+    , amount
     , notional: nt
-    , cashCurrency: fromMaybe "unknown" currency
+    , currency: fromMaybe "unknown" currency
     }
 
 -- |Generate projected cash flows

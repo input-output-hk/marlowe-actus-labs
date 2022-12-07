@@ -42,7 +42,7 @@ runTest :: forall a. MonadThrow Error a => TestCase -> a Unit
 runTest tc =
   let
     cashFlows = genProjectedCashflows ("party" /\ "counterparty") riskFactors (setDefaultContractTermValues tc.terms)
-    cashFlowsTo = filter (\(CashFlow { cashPaymentDay }) -> isNothing tc.to || Just cashPaymentDay <= tc.to) cashFlows
+    cashFlowsTo = filter (\(CashFlow { paymentDay }) -> isNothing tc.to || Just paymentDay <= tc.to) cashFlows
   in
     assertTestResults cashFlowsTo tc.results
   where
@@ -52,9 +52,9 @@ runTest tc =
   assertTestResults _ _ = fail "Sizes differ"
 
   assertTestResult :: forall m. MonadThrow Error m => CashFlow Decimal String -> TestResult -> m Unit
-  assertTestResult (cf@(CashFlow { cashEvent, amount, cashPaymentDay })) (TestResult { eventType, payoff, eventDate }) = do
-    assertEqual cashEvent eventType
-    assertEqual cashPaymentDay eventDate
+  assertTestResult (cf@(CashFlow { event, amount, paymentDay })) (TestResult { eventType, payoff, eventDate }) = do
+    assertEqual event eventType
+    assertEqual paymentDay eventDate
     assertEqual (toSignificantDigits 8 amount) (toSignificantDigits 8 payoff)
     where
     assertEqual :: forall b n. Show b => Eq b => MonadThrow Error n => b -> b -> n Unit
@@ -200,10 +200,6 @@ newtype TestResult = TestResult
   , eventType :: EventType
   , payoff :: Decimal
   , currency :: String
-  -- notionalPrincipal   :: Decimal
-  -- exerciseAmount      :: Maybe Decimal,
-  -- nominalInterestRate :: Maybe Decimal,
-  -- accruedInterest     :: Maybe Decimal
   }
 
 instance DecodeJson TestResult where

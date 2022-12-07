@@ -182,14 +182,14 @@ data RiskFactors a = RiskFactors
 
 -- | Cash flows
 data CashFlow a b = CashFlow
-  { cashParty :: b
-  , cashCounterParty :: b
-  , cashPaymentDay :: DateTime
-  , cashCalculationDay :: DateTime
-  , cashEvent :: EventType
+  { party :: b
+  , counterparty :: b
+  , paymentDay :: DateTime
+  , calculationDay :: DateTime
+  , event :: EventType
   , amount :: a
   , notional :: a
-  , cashCurrency :: String
+  , currency :: String
   }
 
 derive instance Generic (CashFlow a b) _

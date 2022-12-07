@@ -100,24 +100,24 @@ toMarloweObservation FalseObs' = FalseObs
 toMarloweCashflow :: CashFlow Value' Party -> CashFlow Value Party
 toMarloweCashflow
   ( CashFlow
-      { cashParty
-      , cashCounterParty
-      , cashPaymentDay
-      , cashCalculationDay
-      , cashEvent
+      { party
+      , counterparty
+      , paymentDay
+      , calculationDay
+      , event
       , amount
       , notional
-      , cashCurrency
+      , currency
       }
   ) = CashFlow
-  { cashParty
-  , cashCounterParty
-  , cashPaymentDay
-  , cashCalculationDay
-  , cashEvent
+  { party
+  , counterparty
+  , paymentDay
+  , calculationDay
+  , event
   , amount: toMarloweValue amount
   , notional: toMarloweValue notional
-  , cashCurrency
+  , currency
   }
 
 -- | 'genContract' validatates the applicabilty of the contract terms in order
@@ -143,35 +143,35 @@ genContract (party /\ counterparty) rf ct =
     foldl gen Close $ reverse (map toMarloweCashflow cfs)
   where
   gen :: Contract -> CashFlow Value Party -> Contract
-  gen cont cf@(CashFlow { cashPaymentDay })
+  gen cont cf@(CashFlow { paymentDay })
     | hasRiskFactor cf =
         When
           [ Case
               (Choice (cashFlowToChoiceId cf) [ Bound (fromInt 0) (fromInt 1000000000) ])
               (stub cont cf)
           ]
-          (fromDateTime cashPaymentDay)
+          (fromDateTime paymentDay)
           Close
   gen cont cf = stub cont cf
 
-  stub cont (CashFlow { amount, cashPaymentDay, cashParty, cashCounterParty }) =
+  stub cont (CashFlow { amount, paymentDay, party, counterparty }) =
     reduceContract $
       If
         ((Constant $ fromInt 0) `ValueLT` amount)
         ( invoice
-            cashCounterParty
-            cashParty
+            counterparty
+            party
             amount
-            (fromDateTime cashPaymentDay)
+            (fromDateTime paymentDay)
             cont
         )
         ( If
             (amount `ValueLT` (Constant $ fromInt 0))
             ( invoice
-                cashParty
-                cashCounterParty
+                party
+                counterparty
                 (NegValue amount)
-                (fromDateTime cashPaymentDay)
+                (fromDateTime paymentDay)
                 cont
             )
             cont
@@ -194,9 +194,9 @@ genContract (party /\ counterparty) rf ct =
       Close
 
 cashFlowToChoiceId :: forall a b. CashFlow a b -> ChoiceId
-cashFlowToChoiceId (CashFlow { cashEvent, cashPaymentDay }) =
+cashFlowToChoiceId (CashFlow { event, paymentDay }) =
   let
-    l = show cashEvent <> show cashPaymentDay
+    l = show event <> show paymentDay
   in
     ChoiceId l (Role "RiskFactor")
 
