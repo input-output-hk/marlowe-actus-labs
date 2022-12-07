@@ -24,9 +24,9 @@ import Data.Decimal as Decimal
 import Data.Foldable (foldl)
 import Data.List (reverse)
 import Data.Maybe (Maybe(..))
-import Data.Tuple.Nested (type (/\), (/\))
+import Data.Tuple.Nested (type (/\))
 import Language.Marlowe.Core.V1.Semantics as MarloweSemantics
-import Language.Marlowe.Core.V1.Semantics.Types (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), TimeInterval(..), Value(..), adaToken)
+import Language.Marlowe.Core.V1.Semantics.Types (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), TimeInterval(..), Value(..), Token(..))
 import Language.Marlowe.Core.V1.Semantics.Types as MarloweCore
 import Marlowe.Time (unixEpoch)
 
@@ -136,9 +136,9 @@ genContract
   ->
   -- | Marlowe contract
   Contract
-genContract (party /\ counterparty) rf ct =
+genContract parties rf ct =
   let
-    cfs = genProjectedCashflows (party /\ counterparty) rf ct
+    cfs = genProjectedCashflows parties rf ct
   in
     foldl gen Close $ reverse (map toMarloweCashflow cfs)
   where
@@ -154,13 +154,14 @@ genContract (party /\ counterparty) rf ct =
           Close
   gen cont cf = stub cont cf
 
-  stub cont (CashFlow { amount, paymentDay, party, counterparty }) =
+  stub cont (CashFlow { amount, paymentDay, party, counterparty, currency }) =
     reduceContract $
       If
         ((Constant $ fromInt 0) `ValueLT` amount)
         ( invoice
             counterparty
             party
+            (Token "" currency)
             amount
             (fromDateTime paymentDay)
             cont
@@ -170,6 +171,7 @@ genContract (party /\ counterparty) rf ct =
             ( invoice
                 party
                 counterparty
+                (Token "" currency)
                 (NegValue amount)
                 (fromDateTime paymentDay)
                 cont
@@ -177,15 +179,15 @@ genContract (party /\ counterparty) rf ct =
             cont
         )
 
-  invoice :: Party -> Party -> Value -> Instant -> Contract -> Contract
-  invoice a b amount timeout continue =
+  invoice :: Party -> Party -> Token -> Value -> Instant -> Contract -> Contract
+  invoice a b token amount timeout continue =
     When
       [ Case
-          (Deposit a a adaToken amount)
+          (Deposit a a token amount)
           ( Pay
               a
               (Party b)
-              adaToken
+              token
               amount
               continue
           )
