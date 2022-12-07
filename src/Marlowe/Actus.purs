@@ -5,7 +5,7 @@ module Marlowe.Actus
   , ContractTermsMarlowe
   , RiskFactorsMarlowe
   , genContract
-  -- == Conversion from Number to Marlowe representation
+  -- == Conversion from Decimal to Marlowe representation
   -- re-export
   -- utility
   , toMarlowe
@@ -16,10 +16,12 @@ import Prelude
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain (CashFlow(..), ContractState, ContractTerms(..), EventType, Observation'(..), RiskFactors, Value'(..), marloweFixedPoint)
 import Data.BigInt.Argonaut (BigInt, fromInt)
+import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (DateTime)
 import Data.DateTime.Instant (Instant, fromDateTime)
+import Data.Decimal (Decimal)
+import Data.Decimal as Decimal
 import Data.Foldable (foldl)
-import Data.Int (round)
 import Data.List (reverse)
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\), (/\))
@@ -222,13 +224,7 @@ hasRiskFactor cf@(CashFlow { amount }) = hasRiskFactor' amount
   hasRiskFactor' TimeIntervalEnd = false
   hasRiskFactor' (Cond _ a b) = hasRiskFactor' a || hasRiskFactor' b
 
-constant :: Number -> Value'
-constant n = Constant' $ toMarloweFixedPoint n
-  where
-  toMarloweFixedPoint :: Number -> BigInt
-  toMarloweFixedPoint x = marloweFixedPoint * fromInt (round x)
-
-toMarlowe :: ContractTerms Number -> ContractTermsMarlowe
+toMarlowe :: ContractTerms Decimal -> ContractTermsMarlowe
 toMarlowe (ContractTerms ct) =
   ContractTerms
     { contractId: ct.contractId
@@ -242,70 +238,76 @@ toMarlowe (ContractTerms ct) =
     , marketObjectCode: Nothing
     , contractPerformance: ct.contractPerformance
     , creditEventTypeCovered: ct.creditEventTypeCovered
-    , coverageOfCreditEnhancement: constant <$> ct.coverageOfCreditEnhancement
+    , coverageOfCreditEnhancement: constant =<< ct.coverageOfCreditEnhancement
     , guaranteedExposure: ct.guaranteedExposure
     , cycleOfFee: ct.cycleOfFee
     , cycleAnchorDateOfFee: ct.cycleAnchorDateOfFee
-    , feeAccrued: constant <$> ct.feeAccrued
+    , feeAccrued: constant =<< ct.feeAccrued
     , feeBasis: ct.feeBasis
-    , feeRate: constant <$> ct.feeRate
+    , feeRate: constant =<< ct.feeRate
     , cycleAnchorDateOfInterestPayment: ct.cycleAnchorDateOfInterestPayment
     , cycleOfInterestPayment: ct.cycleOfInterestPayment
-    , accruedInterest: constant <$> ct.accruedInterest
+    , accruedInterest: constant =<< ct.accruedInterest
     , capitalizationEndDate: ct.capitalizationEndDate
     , cycleAnchorDateOfInterestCalculationBase: ct.cycleAnchorDateOfInterestCalculationBase
     , cycleOfInterestCalculationBase: ct.cycleOfInterestCalculationBase
     , interestCalculationBase: ct.interestCalculationBase
-    , interestCalculationBaseAmount: constant <$> ct.interestCalculationBaseAmount
-    , nominalInterestRate: constant <$> ct.nominalInterestRate
-    , nominalInterestRate2: constant <$> ct.nominalInterestRate2
-    , interestScalingMultiplier: constant <$> ct.interestScalingMultiplier
-    , notionalPrincipal: constant <$> ct.notionalPrincipal
-    , premiumDiscountAtIED: constant <$> ct.premiumDiscountAtIED
+    , interestCalculationBaseAmount: constant =<< ct.interestCalculationBaseAmount
+    , nominalInterestRate: constant =<< ct.nominalInterestRate
+    , nominalInterestRate2: constant =<< ct.nominalInterestRate2
+    , interestScalingMultiplier: constant =<< ct.interestScalingMultiplier
+    , notionalPrincipal: constant =<< ct.notionalPrincipal
+    , premiumDiscountAtIED: constant =<< ct.premiumDiscountAtIED
     , maturityDate: ct.maturityDate
     , amortizationDate: ct.amortizationDate
     , exerciseDate: ct.exerciseDate
     , cycleAnchorDateOfPrincipalRedemption: ct.cycleAnchorDateOfPrincipalRedemption
     , cycleOfPrincipalRedemption: ct.cycleOfPrincipalRedemption
-    , nextPrincipalRedemptionPayment: constant <$> ct.nextPrincipalRedemptionPayment
+    , nextPrincipalRedemptionPayment: constant =<< ct.nextPrincipalRedemptionPayment
     , purchaseDate: ct.purchaseDate
-    , priceAtPurchaseDate: constant <$> ct.priceAtPurchaseDate
+    , priceAtPurchaseDate: constant =<< ct.priceAtPurchaseDate
     , terminationDate: ct.terminationDate
-    , priceAtTerminationDate: constant <$> ct.priceAtTerminationDate
-    , quantity: constant <$> ct.quantity
+    , priceAtTerminationDate: constant =<< ct.priceAtTerminationDate
+    , quantity: constant =<< ct.quantity
     , currency: ct.currency
     , currency2: ct.currency2
-    , scalingIndexAtStatusDate: constant <$> ct.scalingIndexAtStatusDate
+    , scalingIndexAtStatusDate: constant =<< ct.scalingIndexAtStatusDate
     , cycleAnchorDateOfScalingIndex: ct.cycleAnchorDateOfScalingIndex
     , cycleOfScalingIndex: ct.cycleOfScalingIndex
     , scalingEffect: ct.scalingEffect
-    , scalingIndexAtContractDealDate: constant <$> ct.scalingIndexAtContractDealDate
+    , scalingIndexAtContractDealDate: constant =<< ct.scalingIndexAtContractDealDate
     , marketObjectCodeOfScalingIndex: ct.marketObjectCodeOfScalingIndex
-    , notionalScalingMultiplier: constant <$> ct.notionalScalingMultiplier
+    , notionalScalingMultiplier: constant =<< ct.notionalScalingMultiplier
     , cycleOfOptionality: ct.cycleOfOptionality
     , cycleAnchorDateOfOptionality: ct.cycleAnchorDateOfOptionality
     , optionType: ct.optionType
-    , optionStrike1: constant <$> ct.optionStrike1
+    , optionStrike1: constant =<< ct.optionStrike1
     , optionExerciseType: ct.optionExerciseType
     , settlementPeriod: ct.settlementPeriod
     , deliverySettlement: ct.deliverySettlement
-    , exerciseAmount: constant <$> ct.exerciseAmount
-    , futuresPrice: constant <$> ct.futuresPrice
-    , penaltyRate: constant <$> ct.penaltyRate
+    , exerciseAmount: constant =<< ct.exerciseAmount
+    , futuresPrice: constant =<< ct.futuresPrice
+    , penaltyRate: constant =<< ct.penaltyRate
     , penaltyType: ct.penaltyType
     , prepaymentEffect: ct.prepaymentEffect
     , cycleOfRateReset: ct.cycleOfRateReset
     , cycleAnchorDateOfRateReset: ct.cycleAnchorDateOfRateReset
-    , nextResetRate: constant <$> ct.nextResetRate
-    , rateSpread: constant <$> ct.rateSpread
-    , rateMultiplier: constant <$> ct.rateMultiplier
-    , periodFloor: constant <$> ct.periodFloor
-    , periodCap: constant <$> ct.periodCap
-    , lifeCap: constant <$> ct.lifeCap
-    , lifeFloor: constant <$> ct.lifeFloor
+    , nextResetRate: constant =<< ct.nextResetRate
+    , rateSpread: constant =<< ct.rateSpread
+    , rateMultiplier: constant =<< ct.rateMultiplier
+    , periodFloor: constant =<< ct.periodFloor
+    , periodCap: constant =<< ct.periodCap
+    , lifeCap: constant =<< ct.lifeCap
+    , lifeFloor: constant =<< ct.lifeFloor
     , marketObjectCodeOfRateReset: ct.marketObjectCodeOfRateReset
     , cycleOfDividendPayment: ct.cycleOfDividendPayment
     , cycleAnchorDateOfDividendPayment: ct.cycleAnchorDateOfDividendPayment
-    , nextDividendPaymentAmount: constant <$> ct.nextDividendPaymentAmount
+    , nextDividendPaymentAmount: constant =<< ct.nextDividendPaymentAmount
     , enableSettlement: ct.enableSettlement
     }
+  where
+  constant :: Decimal -> Maybe Value'
+  constant n = Constant' <$> toMarloweFixedPoint n
+
+  toMarloweFixedPoint :: Decimal -> Maybe BigInt
+  toMarloweFixedPoint = BigInt.fromString <<< Decimal.toString <<< Decimal.floor <<< ((Decimal.fromInt marloweFixedPoint) * _)
