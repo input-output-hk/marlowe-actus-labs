@@ -125,8 +125,8 @@ genCashflow
   CashFlow a
 genCashflow (p1 /\ p2) (ContractTerms { currency }) ((ev /\ { paymentDay, calculationDay }) /\ ContractState { nt } /\ am) =
   CashFlow
-    { cashParty: show p1
-    , cashCounterParty: show p2
+    { cashParty: p1
+    , cashCounterParty: p2
     , cashPaymentDay: paymentDay
     , cashCalculationDay: calculationDay
     , cashEvent: ev
