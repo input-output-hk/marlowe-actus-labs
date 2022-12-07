@@ -32,13 +32,15 @@ import Data.Tuple.Nested (type (/\), (/\))
 -- an empty list, if building the initial state given the contract terms
 -- fails or in case there are no cash flows.
 genProjectedCashflows
-  :: forall a
+  :: forall a b
    . ActusOps a
   => EuclideanRing a
   => ActusFrac a
+  => Show b
+  => Eq b
   =>
   -- | Party and Counter-party for the contract
-  String /\ String
+  b /\ b
   ->
   -- | Risk factors as a function of event type and time
   (EventType -> DateTime -> RiskFactors a)
@@ -47,7 +49,7 @@ genProjectedCashflows
   ContractTerms a
   ->
   -- | List of projected cash flows
-  List (CashFlow a)
+  List (CashFlow a b)
 genProjectedCashflows parties rf ct =
   let
     ctx = buildCtx rf ct
@@ -55,11 +57,11 @@ genProjectedCashflows parties rf ct =
   in
     netting ct $ genCashflow parties ct <$> cfs
   where
-  netting :: ContractTerms a -> List (CashFlow a) -> List (CashFlow a)
+  netting :: ContractTerms a -> List (CashFlow a b) -> List (CashFlow a b)
   netting (ContractTerms { deliverySettlement: Just DS_S }) = netCashflows
   netting _ = \x -> x
 
-  groupCashflows :: List (CashFlow a) -> List (NonEmptyList (CashFlow a))
+  groupCashflows :: List (CashFlow a b) -> List (NonEmptyList (CashFlow a b))
   groupCashflows cf = groupBy f cf
     where
     f (CashFlow a) (CashFlow b) =
@@ -71,7 +73,7 @@ genProjectedCashflows parties rf ct =
 
   netCashflows cf = map (foldl1 plus) $ groupCashflows cf
     where
-    plus :: CashFlow a -> CashFlow a -> CashFlow a
+    plus :: CashFlow a b -> CashFlow a b -> CashFlow a b
     plus (CashFlow a) (CashFlow b) = CashFlow $
       a
         { amount = a.amount + b.amount
@@ -107,13 +109,14 @@ buildCtx rf ct =
 
 -- |Generate cash flows
 genCashflow
-  :: forall a
+  :: forall a b
    . ActusOps a
   => EuclideanRing a
   => ActusFrac a
+  => Show b
   =>
   -- | Party and Counter-party for the contract
-  String /\ String
+  b /\ b
   ->
   -- | Contract terms
   ContractTerms a
@@ -122,7 +125,7 @@ genCashflow
   Event /\ ContractState a /\ a
   ->
   -- | Projected cash flow
-  CashFlow a
+  CashFlow a b
 genCashflow (p1 /\ p2) (ContractTerms { currency }) ((ev /\ { paymentDay, calculationDay }) /\ ContractState { nt } /\ am) =
   CashFlow
     { cashParty: p1

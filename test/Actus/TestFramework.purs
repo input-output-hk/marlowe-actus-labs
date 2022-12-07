@@ -51,7 +51,7 @@ runTest tc =
   assertTestResults (cf : cfs) (r : rs) = assertTestResult cf r *> assertTestResults cfs rs
   assertTestResults _ _ = fail "Sizes differ"
 
-  assertTestResult :: forall m. MonadThrow Error m => CashFlow Decimal -> TestResult -> m Unit
+  assertTestResult :: forall m. MonadThrow Error m => CashFlow Decimal String -> TestResult -> m Unit
   assertTestResult (cf@(CashFlow { cashEvent, amount, cashPaymentDay })) (TestResult { eventType, payoff, eventDate }) = do
     assertEqual cashEvent eventType
     assertEqual cashPaymentDay eventDate
@@ -104,7 +104,7 @@ defaultRiskFactors = RiskFactors
   , pp_payoff: fromNumber 0.0
   }
 
-type TestCashFlow = CashFlow Decimal
+type TestCashFlow = CashFlow Decimal String
 type TestContractState = ContractState Decimal
 type TestContractTerms = ContractTerms Decimal
 

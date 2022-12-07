@@ -181,9 +181,9 @@ data RiskFactors a = RiskFactors
   }
 
 -- | Cash flows
-data CashFlow a = CashFlow
-  { cashParty :: String
-  , cashCounterParty :: String
+data CashFlow a b = CashFlow
+  { cashParty :: b
+  , cashCounterParty :: b
   , cashPaymentDay :: DateTime
   , cashCalculationDay :: DateTime
   , cashEvent :: EventType
@@ -192,8 +192,8 @@ data CashFlow a = CashFlow
   , cashCurrency :: String
   }
 
-derive instance Generic (CashFlow a) _
-instance Show a => Show (CashFlow a) where
+derive instance Generic (CashFlow a b) _
+instance (Show a, Show b) => Show (CashFlow a b) where
   show = genericShow
 
 sign :: forall a. Ring a => CR -> a

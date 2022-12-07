@@ -97,7 +97,7 @@ toMarloweObservation (ValueEQ' a b) = ValueEQ (toMarloweValue a) (toMarloweValue
 toMarloweObservation TrueObs' = TrueObs
 toMarloweObservation FalseObs' = FalseObs
 
-toMarloweCashflow :: CashFlow Value' -> CashFlow Value
+toMarloweCashflow :: CashFlow Value' Party -> CashFlow Value Party
 toMarloweCashflow
   ( CashFlow
       { cashParty
@@ -138,11 +138,11 @@ genContract
   Contract
 genContract (party /\ counterparty) rf ct =
   let
-    cfs = genProjectedCashflows (show party /\ show counterparty) rf ct
+    cfs = genProjectedCashflows (party /\ counterparty) rf ct
   in
     foldl gen Close $ reverse (map toMarloweCashflow cfs)
   where
-  gen :: Contract -> CashFlow Value -> Contract
+  gen :: Contract -> CashFlow Value Party -> Contract
   gen cont cf@(CashFlow { cashPaymentDay })
     | hasRiskFactor cf =
         When
@@ -154,13 +154,13 @@ genContract (party /\ counterparty) rf ct =
           Close
   gen cont cf = stub cont cf
 
-  stub cont (CashFlow { amount, cashPaymentDay }) =
+  stub cont (CashFlow { amount, cashPaymentDay, cashParty, cashCounterParty }) =
     reduceContract $
       If
         ((Constant $ fromInt 0) `ValueLT` amount)
         ( invoice
-            counterparty
-            party
+            cashCounterParty
+            cashParty
             amount
             (fromDateTime cashPaymentDay)
             cont
@@ -168,8 +168,8 @@ genContract (party /\ counterparty) rf ct =
         ( If
             (amount `ValueLT` (Constant $ fromInt 0))
             ( invoice
-                party
-                counterparty
+                cashParty
+                cashCounterParty
                 (NegValue amount)
                 (fromDateTime cashPaymentDay)
                 cont
@@ -193,14 +193,14 @@ genContract (party /\ counterparty) rf ct =
       timeout
       Close
 
-cashFlowToChoiceId :: forall a. CashFlow a -> ChoiceId
+cashFlowToChoiceId :: forall a b. CashFlow a b -> ChoiceId
 cashFlowToChoiceId (CashFlow { cashEvent, cashPaymentDay }) =
   let
     l = show cashEvent <> show cashPaymentDay
   in
     ChoiceId l (Role "RiskFactor")
 
-hasRiskFactor :: CashFlow Value -> Boolean
+hasRiskFactor :: CashFlow Value Party -> Boolean
 hasRiskFactor cf@(CashFlow { amount }) = hasRiskFactor' amount
   where
   hasRiskFactor' :: Value -> Boolean
