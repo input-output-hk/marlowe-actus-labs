@@ -20,6 +20,7 @@ import Foreign.Object as Object
 import Marlowe.Runtime.Web.Types (ServerURL(..))
 import Node.Process (getEnv)
 import Test.Actus.Domain.ContractTerms as ContractTerms
+import Test.Marlowe.Actus as MarloweActus
 import Test.Marlowe.Runtime.Web (_MARLOWE_WEB_SERVER_URL)
 import Test.Marlowe.Runtime.Web as Web
 import Test.Spec as Spec
@@ -39,11 +40,12 @@ main = do
     runSpec [ consoleReporter ] $ do
       Spec.parallel do
         ContractTerms.spec
-        Web.spec serverUrlStr
         TestFramework.spec testsPAM
         TestFramework.spec testsLAM
         TestFramework.spec testsNAM
         TestFramework.spec testsANN
+        MarloweActus.spec
+        Web.spec serverUrlStr
 
   where
   readFile file = do

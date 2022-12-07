@@ -41,7 +41,7 @@ spec fixture = do
 runTest :: forall a. MonadThrow Error a => TestCase -> a Unit
 runTest tc =
   let
-    cashFlows = genProjectedCashflows riskFactors (setDefaultContractTermValues tc.terms)
+    cashFlows = genProjectedCashflows ("party" /\ "counterparty") riskFactors (setDefaultContractTermValues tc.terms)
     cashFlowsTo = filter (\(CashFlow { cashPaymentDay }) -> isNothing tc.to || Just cashPaymentDay <= tc.to) cashFlows
   in
     assertTestResults cashFlowsTo tc.results
@@ -67,8 +67,6 @@ runTest tc =
       Just v -> case ev of
         RR -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf { o_rf_RRMO = v }
         SC -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf { o_rf_SCMO = v }
-        DV -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf { dv_payoff = v }
-        XD -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf { xd_payoff = v }
         _ -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf { o_rf_CURS = v }
       Nothing -> defaultRiskFactors
 
@@ -104,8 +102,6 @@ defaultRiskFactors = RiskFactors
   , o_rf_RRMO: fromNumber 1.0
   , o_rf_SCMO: fromNumber 1.0
   , pp_payoff: fromNumber 0.0
-  , xd_payoff: fromNumber 0.0
-  , dv_payoff: fromNumber 0.0
   }
 
 type TestCashFlow = CashFlow Decimal

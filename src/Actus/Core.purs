@@ -37,6 +37,9 @@ genProjectedCashflows
   => EuclideanRing a
   => ActusFrac a
   =>
+  -- | Party and Counter-party for the contract
+  String /\ String
+  ->
   -- | Risk factors as a function of event type and time
   (EventType -> DateTime -> RiskFactors a)
   ->
@@ -45,15 +48,16 @@ genProjectedCashflows
   ->
   -- | List of projected cash flows
   List (CashFlow a)
-genProjectedCashflows rf ct =
+genProjectedCashflows parties rf ct =
   let
     ctx = buildCtx rf ct
+    cfs = runReader genProjectedPayoffs ctx
   in
-    check ct $ genCashflow ct <$> runReader genProjectedPayoffs ctx
+    netting ct $ genCashflow parties ct <$> cfs
   where
-  check :: ContractTerms a -> List (CashFlow a) -> List (CashFlow a)
-  check (ContractTerms { deliverySettlement: Just DS_S }) = netCashflows
-  check _ = \x -> x
+  netting :: ContractTerms a -> List (CashFlow a) -> List (CashFlow a)
+  netting (ContractTerms { deliverySettlement: Just DS_S }) = netCashflows
+  netting _ = \x -> x
 
   groupCashflows :: List (CashFlow a) -> List (NonEmptyList (CashFlow a))
   groupCashflows cf = groupBy f cf
@@ -108,6 +112,9 @@ genCashflow
   => EuclideanRing a
   => ActusFrac a
   =>
+  -- | Party and Counter-party for the contract
+  String /\ String
+  ->
   -- | Contract terms
   ContractTerms a
   ->
@@ -116,11 +123,10 @@ genCashflow
   ->
   -- | Projected cash flow
   CashFlow a
-genCashflow (ContractTerms { currency }) ((ev /\ { paymentDay, calculationDay }) /\ ContractState { nt } /\ am) =
+genCashflow (p1 /\ p2) (ContractTerms { currency }) ((ev /\ { paymentDay, calculationDay }) /\ ContractState { nt } /\ am) =
   CashFlow
-    { tick: 0
-    , cashParty: "party"
-    , cashCounterParty: "counterparty"
+    { cashParty: show p1
+    , cashCounterParty: show p2
     , cashPaymentDay: paymentDay
     , cashCalculationDay: calculationDay
     , cashEvent: ev

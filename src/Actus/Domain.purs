@@ -98,6 +98,29 @@ instance ActusOps Value' where
 instance ActusFrac Value' where
   _ceiling _ = 0 -- FIXME
 
+derive instance Generic Value' _
+derive instance Generic Observation' _
+
+instance Show Value' where
+  show (Constant' i) = "Constant " <> show i
+  show (NegValue' v) = "-" <> show v
+  show (AddValue' a b) = show a <> "+" <> show b
+  show (SubValue' a b) = show a <> "-" <> show b
+  show (MulValue' a b) = show a <> "*" <> show b
+  show (Cond' o a b) = show "if ( " <> show o <> ") then " <> show a <> " else " <> show b
+
+instance Show Observation' where
+  show (AndObs' a b) = "AndObs (" <> show a <> "," <> show b <> ")"
+  show (OrObs' a b) = "OrObs (" <> show a <> "," <> show b <> ")"
+  show (NotObs' a) = "NotObs " <> show a
+  show (ValueGE' a b) = "ValueGE (" <> show a <> "," <> show b <> ")"
+  show (ValueGT' a b) = "ValueGT (" <> show a <> "," <> show b <> ")"
+  show (ValueLT' a b) = "ValueLT (" <> show a <> "," <> show b <> ")"
+  show (ValueLE' a b) = "ValueLE (" <> show a <> "," <> show b <> ")"
+  show (ValueEQ' a b) = "ValueEQ (" <> show a <> "," <> show b <> ")"
+  show TrueObs' = "TrueObs"
+  show FalseObs' = "FalseObs"
+
 marloweFixedPoint :: Int
 marloweFixedPoint = 1000000
 
@@ -155,14 +178,11 @@ data RiskFactors a = RiskFactors
   , o_rf_RRMO :: a
   , o_rf_SCMO :: a
   , pp_payoff :: a
-  , xd_payoff :: a
-  , dv_payoff :: a
   }
 
 -- | Cash flows
 data CashFlow a = CashFlow
-  { tick :: Int
-  , cashParty :: String
+  { cashParty :: String
   , cashCounterParty :: String
   , cashPaymentDay :: DateTime
   , cashCalculationDay :: DateTime

@@ -100,8 +100,7 @@ toMarloweObservation FalseObs' = FalseObs
 toMarloweCashflow :: CashFlow Value' -> CashFlow Value
 toMarloweCashflow
   ( CashFlow
-      { tick
-      , cashParty
+      { cashParty
       , cashCounterParty
       , cashPaymentDay
       , cashCalculationDay
@@ -111,15 +110,14 @@ toMarloweCashflow
       , cashCurrency
       }
   ) = CashFlow
-  { tick: tick
-  , cashParty: cashParty
-  , cashCounterParty: cashCounterParty
-  , cashPaymentDay: cashPaymentDay
-  , cashCalculationDay: cashCalculationDay
-  , cashEvent: cashEvent
+  { cashParty
+  , cashCounterParty
+  , cashPaymentDay
+  , cashCalculationDay
+  , cashEvent
   , amount: toMarloweValue amount
   , notional: toMarloweValue notional
-  , cashCurrency: cashCurrency
+  , cashCurrency
   }
 
 -- | 'genContract' validatates the applicabilty of the contract terms in order
@@ -138,9 +136,9 @@ genContract
   ->
   -- | Marlowe contract
   Contract
-genContract (party /\ couterparty) rf ct =
+genContract (party /\ counterparty) rf ct =
   let
-    cfs = genProjectedCashflows rf ct
+    cfs = genProjectedCashflows (show party /\ show counterparty) rf ct
   in
     foldl gen Close $ reverse (map toMarloweCashflow cfs)
   where
@@ -157,31 +155,27 @@ genContract (party /\ couterparty) rf ct =
   gen cont cf = stub cont cf
 
   stub cont (CashFlow { amount, cashPaymentDay }) =
-    let
-      t = fromDateTime cashPaymentDay
-      c = reduceContract cont
-    in
-      reduceContract $
-        If
-          ((Constant $ fromInt 0) `ValueLT` amount)
-          ( invoice
-              couterparty
-              party
-              amount
-              t
-              c
-          )
-          ( If
-              (amount `ValueLT` (Constant $ fromInt 0))
-              ( invoice
-                  party
-                  couterparty
-                  (NegValue amount)
-                  t
-                  c
-              )
-              c
-          )
+    reduceContract $
+      If
+        ((Constant $ fromInt 0) `ValueLT` amount)
+        ( invoice
+            counterparty
+            party
+            amount
+            (fromDateTime cashPaymentDay)
+            cont
+        )
+        ( If
+            (amount `ValueLT` (Constant $ fromInt 0))
+            ( invoice
+                party
+                counterparty
+                (NegValue amount)
+                (fromDateTime cashPaymentDay)
+                cont
+            )
+            cont
+        )
 
   invoice :: Party -> Party -> Value -> Instant -> Contract -> Contract
   invoice a b amount timeout continue =
