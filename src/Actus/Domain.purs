@@ -129,7 +129,8 @@ division lhs rhs =
   let
     n = evalVal lhs
     d = evalVal rhs
-  in Constant' $ division' n d
+  in
+    Constant' $ division' n d
   where
   division' :: BigInt -> BigInt -> BigInt
   division' x _ | x == BigInt.fromInt 0 = BigInt.fromInt 0
