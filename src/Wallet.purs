@@ -34,7 +34,7 @@ newtype Name = Name String
 
 data Api = Api
   { apiVersion :: ApiVersion
-  , enable :: Aff Unit
+  , enable :: Aff Foreign
   , icon :: Icon
   , isEnabled :: Aff Boolean
   , name :: Name
@@ -65,7 +65,7 @@ readApi :: forall m. Monad m => Foreign -> ExceptT (NonEmptyList ForeignError) m
 readApi x = do
   void $ Foreign.unsafeReadTagged "Object" x
   apiVersion :: ApiVersion <- readApiVersion =<< Foreign.Index.readProp "apiVersion" x
-  enable :: Aff Unit <- readEnable =<< Foreign.Index.readProp "enable" x
+  enable :: Aff Foreign <- readEnable =<< Foreign.Index.readProp "enable" x
   icon :: Icon <- readIcon =<< Foreign.Index.readProp "icon" x
   isEnabled :: Aff Boolean <- readIsEnabled =<< Foreign.Index.readProp "isEnabled" x
   name :: Name <- readName =<< Foreign.Index.readProp "name" x
@@ -80,9 +80,9 @@ readApi x = do
   readName :: Foreign -> ExceptT (NonEmptyList ForeignError) m Name
   readName = map Name <<< Foreign.readString
 
-  readEnable :: Foreign -> ExceptT (NonEmptyList ForeignError) m (Aff Unit)
+  readEnable :: Foreign -> ExceptT (NonEmptyList ForeignError) m (Aff Foreign)
   readEnable x' = do
-    f :: Effect (Promise Unit) <- Foreign.unsafeReadTagged "Function" x'
+    f :: Effect (Promise Foreign) <- Foreign.unsafeReadTagged "Function" x'
     arity :: Int <- Foreign.readInt =<< Foreign.Index.readProp "length" x'
     unless (arity == 0) $ Foreign.fail $ ForeignError "Expected procedure of arity 0"
     pure $ toAffE f
