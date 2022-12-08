@@ -41,8 +41,8 @@ spec fixture = do
 runTest :: forall a. MonadThrow Error a => TestCase -> a Unit
 runTest tc =
   let
-    cashFlows = genProjectedCashflows riskFactors (setDefaultContractTermValues tc.terms)
-    cashFlowsTo = filter (\(CashFlow { cashPaymentDay }) -> isNothing tc.to || Just cashPaymentDay <= tc.to) cashFlows
+    cashFlows = genProjectedCashflows ("party" /\ "counterparty") riskFactors (setDefaultContractTermValues tc.terms)
+    cashFlowsTo = filter (\(CashFlow { paymentDay }) -> isNothing tc.to || Just paymentDay <= tc.to) cashFlows
   in
     assertTestResults cashFlowsTo tc.results
   where
@@ -51,10 +51,10 @@ runTest tc =
   assertTestResults (cf : cfs) (r : rs) = assertTestResult cf r *> assertTestResults cfs rs
   assertTestResults _ _ = fail "Sizes differ"
 
-  assertTestResult :: forall m. MonadThrow Error m => CashFlow Decimal -> TestResult -> m Unit
-  assertTestResult (cf@(CashFlow { cashEvent, amount, cashPaymentDay })) (TestResult { eventType, payoff, eventDate }) = do
-    assertEqual cashEvent eventType
-    assertEqual cashPaymentDay eventDate
+  assertTestResult :: forall m. MonadThrow Error m => CashFlow Decimal String -> TestResult -> m Unit
+  assertTestResult (cf@(CashFlow { event, amount, paymentDay })) (TestResult { eventType, payoff, eventDate }) = do
+    assertEqual event eventType
+    assertEqual paymentDay eventDate
     assertEqual (toSignificantDigits 8 amount) (toSignificantDigits 8 payoff)
     where
     assertEqual :: forall b n. Show b => Eq b => MonadThrow Error n => b -> b -> n Unit
@@ -62,18 +62,16 @@ runTest tc =
       | a == b = pure unit
       | otherwise = fail ("mismatch: " <> show tc.identifier <> " " <> show cf <> "\n" <> show a <> " vs. " <> show b <> "\n" <> show tc.terms)
 
-  riskFactors i ev date =
-    case getValue i tc ev date of
+  riskFactors ev date =
+    case getValue tc ev date of
       Just v -> case ev of
         RR -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf { o_rf_RRMO = v }
         SC -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf { o_rf_SCMO = v }
-        DV -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf { dv_payoff = v }
-        XD -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf { xd_payoff = v }
         _ -> let RiskFactors rf = defaultRiskFactors in RiskFactors $ rf { o_rf_CURS = v }
       Nothing -> defaultRiskFactors
 
-getValue :: String -> TestCase -> EventType -> DateTime -> Maybe Decimal
-getValue _ { terms, dataObserved } ev date =
+getValue :: TestCase -> EventType -> DateTime -> Maybe Decimal
+getValue { terms, dataObserved } ev date =
   do
     let (ContractTerms ct) = terms
     key <- observedKey terms ev
@@ -104,11 +102,9 @@ defaultRiskFactors = RiskFactors
   , o_rf_RRMO: fromNumber 1.0
   , o_rf_SCMO: fromNumber 1.0
   , pp_payoff: fromNumber 0.0
-  , xd_payoff: fromNumber 0.0
-  , dv_payoff: fromNumber 0.0
   }
 
-type TestCashFlow = CashFlow Decimal
+type TestCashFlow = CashFlow Decimal String
 type TestContractState = ContractState Decimal
 type TestContractTerms = ContractTerms Decimal
 
@@ -204,10 +200,6 @@ newtype TestResult = TestResult
   , eventType :: EventType
   , payoff :: Decimal
   , currency :: String
-  -- notionalPrincipal   :: Decimal
-  -- exerciseAmount      :: Maybe Decimal,
-  -- nominalInterestRate :: Maybe Decimal,
-  -- accruedInterest     :: Maybe Decimal
   }
 
 instance DecodeJson TestResult where

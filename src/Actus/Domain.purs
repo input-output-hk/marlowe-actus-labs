@@ -25,7 +25,8 @@ import Actus.Domain.ContractState (ContractState(..))
 import Actus.Domain.ContractTerms (BDC(..), CEGE(..), CETC(..), CR(..), CT(..), Calendar(..), ContractTerms(..), Cycle, DCC(..), DS(..), EOMC(..), FEB(..), IPCB(..), OPTP(..), OPXT(..), PPEF(..), PRF(..), PYTP(..), Period(..), SCEF(..), ScheduleConfig, Stub(..))
 import Actus.Domain.Schedule (ShiftedDay, ShiftedSchedule, mkShiftedDay)
 import Control.Alt ((<|>))
-import Data.BigInt.Argonaut (BigInt, abs, fromInt, quot, rem)
+import Data.BigInt.Argonaut (BigInt, abs, quot, rem)
+import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (DateTime)
 import Data.Decimal (Decimal, ceil, fromNumber, toNumber)
 import Data.Decimal as Decimal
@@ -73,9 +74,9 @@ data Observation'
 
 instance Semiring Value' where
   add x y = AddValue' x y
-  mul x y = division (MulValue' x y) (Constant' marloweFixedPoint)
-  one = Constant' marloweFixedPoint
-  zero = Constant' (fromInt 0)
+  mul x y = division (MulValue' x y) (Constant' $ BigInt.fromInt marloweFixedPoint)
+  one = Constant' $ BigInt.fromInt marloweFixedPoint
+  zero = Constant' (BigInt.fromInt 0)
 
 instance Ring Value' where
   sub x y = SubValue' x y
@@ -84,8 +85,8 @@ instance CommutativeRing Value'
 
 instance EuclideanRing Value' where
   degree _ = 1
-  div = division -- different rounding, not using DivValue
-  mod x y = Constant' $ evalVal x `mod` evalVal y
+  div x y = division (MulValue' (Constant' $ BigInt.fromInt marloweFixedPoint) x) y -- different rounding, not using DivValue
+  mod x y = Constant' $ (BigInt.fromInt marloweFixedPoint) * (evalVal x `mod` evalVal y)
 
 instance ActusOps Value' where
   _min x y = Cond' (ValueLT' x y) x y
@@ -97,32 +98,55 @@ instance ActusOps Value' where
 instance ActusFrac Value' where
   _ceiling _ = 0 -- FIXME
 
-marloweFixedPoint :: BigInt
-marloweFixedPoint = fromInt 1000000
+derive instance Generic Value' _
+derive instance Generic Observation' _
+
+instance Show Value' where
+  show (Constant' i) = "Constant " <> show i
+  show (NegValue' v) = "-" <> show v
+  show (AddValue' a b) = show a <> "+" <> show b
+  show (SubValue' a b) = show a <> "-" <> show b
+  show (MulValue' a b) = show a <> "*" <> show b
+  show (Cond' o a b) = show "if ( " <> show o <> ") then " <> show a <> " else " <> show b
+
+instance Show Observation' where
+  show (AndObs' a b) = "AndObs (" <> show a <> "," <> show b <> ")"
+  show (OrObs' a b) = "OrObs (" <> show a <> "," <> show b <> ")"
+  show (NotObs' a) = "NotObs " <> show a
+  show (ValueGE' a b) = "ValueGE (" <> show a <> "," <> show b <> ")"
+  show (ValueGT' a b) = "ValueGT (" <> show a <> "," <> show b <> ")"
+  show (ValueLT' a b) = "ValueLT (" <> show a <> "," <> show b <> ")"
+  show (ValueLE' a b) = "ValueLE (" <> show a <> "," <> show b <> ")"
+  show (ValueEQ' a b) = "ValueEQ (" <> show a <> "," <> show b <> ")"
+  show TrueObs' = "TrueObs"
+  show FalseObs' = "FalseObs"
+
+marloweFixedPoint :: Int
+marloweFixedPoint = 1000000
 
 division :: Value' -> Value' -> Value'
 division lhs rhs =
-  do
-    let
-      n = evalVal lhs
-      d = evalVal rhs
-    Constant' (division' n d)
+  let
+    n = evalVal lhs
+    d = evalVal rhs
+  in
+    Constant' $ division' n d
   where
   division' :: BigInt -> BigInt -> BigInt
-  division' x _ | x == fromInt 0 = fromInt 0
-  division' _ y | y == fromInt 0 = fromInt 0
+  division' x _ | x == BigInt.fromInt 0 = BigInt.fromInt 0
+  division' _ y | y == BigInt.fromInt 0 = BigInt.fromInt 0
   division' n d =
     let
       q = n `quot` d
       r = n `rem` d
-      ar = abs r * (fromInt 2)
+      ar = abs r * (BigInt.fromInt 2)
       ad = abs d
     in
       if ar < ad then q -- reminder < 1/2
       else if ar > ad then q + signum n * signum d -- reminder > 1/2
       else
         let -- reminder == 1/2
-          qIsEven = q `rem` (fromInt 2) == (fromInt 0)
+          qIsEven = q `rem` (BigInt.fromInt 2) == (BigInt.fromInt 0)
         in
           if qIsEven then q else q + signum n * signum d
 
@@ -154,25 +178,22 @@ data RiskFactors a = RiskFactors
   , o_rf_RRMO :: a
   , o_rf_SCMO :: a
   , pp_payoff :: a
-  , xd_payoff :: a
-  , dv_payoff :: a
   }
 
 -- | Cash flows
-data CashFlow a = CashFlow
-  { tick :: Int
-  , cashParty :: String
-  , cashCounterParty :: String
-  , cashPaymentDay :: DateTime
-  , cashCalculationDay :: DateTime
-  , cashEvent :: EventType
+data CashFlow a b = CashFlow
+  { party :: b
+  , counterparty :: b
+  , paymentDay :: DateTime
+  , calculationDay :: DateTime
+  , event :: EventType
   , amount :: a
   , notional :: a
-  , cashCurrency :: String
+  , currency :: String
   }
 
-derive instance Generic (CashFlow a) _
-instance Show a => Show (CashFlow a) where
+derive instance Generic (CashFlow a b) _
+instance (Show a, Show b) => Show (CashFlow a b) where
   show = genericShow
 
 sign :: forall a. Ring a => CR -> a

@@ -5,7 +5,7 @@ module Marlowe.Actus
   , ContractTermsMarlowe
   , RiskFactorsMarlowe
   , genContract
-  -- == Conversion from Number to Marlowe representation
+  -- == Conversion from Decimal to Marlowe representation
   -- re-export
   -- utility
   , toMarlowe
@@ -16,15 +16,17 @@ import Prelude
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain (CashFlow(..), ContractState, ContractTerms(..), EventType, Observation'(..), RiskFactors, Value'(..), marloweFixedPoint)
 import Data.BigInt.Argonaut (BigInt, fromInt)
+import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (DateTime)
 import Data.DateTime.Instant (Instant, fromDateTime)
+import Data.Decimal (Decimal)
+import Data.Decimal as Decimal
 import Data.Foldable (foldl)
-import Data.Int (round)
 import Data.List (reverse)
 import Data.Maybe (Maybe(..))
-import Data.Tuple.Nested (type (/\), (/\))
+import Data.Tuple.Nested (type (/\))
 import Language.Marlowe.Core.V1.Semantics as MarloweSemantics
-import Language.Marlowe.Core.V1.Semantics.Types (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), TimeInterval(..), Value(..), adaToken)
+import Language.Marlowe.Core.V1.Semantics.Types (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), TimeInterval(..), Value(..), Token(..))
 import Language.Marlowe.Core.V1.Semantics.Types as MarloweCore
 import Marlowe.Time (unixEpoch)
 
@@ -95,29 +97,27 @@ toMarloweObservation (ValueEQ' a b) = ValueEQ (toMarloweValue a) (toMarloweValue
 toMarloweObservation TrueObs' = TrueObs
 toMarloweObservation FalseObs' = FalseObs
 
-toMarloweCashflow :: CashFlow Value' -> CashFlow Value
+toMarloweCashflow :: CashFlow Value' Party -> CashFlow Value Party
 toMarloweCashflow
   ( CashFlow
-      { tick
-      , cashParty
-      , cashCounterParty
-      , cashPaymentDay
-      , cashCalculationDay
-      , cashEvent
+      { party
+      , counterparty
+      , paymentDay
+      , calculationDay
+      , event
       , amount
       , notional
-      , cashCurrency
+      , currency
       }
   ) = CashFlow
-  { tick: tick
-  , cashParty: cashParty
-  , cashCounterParty: cashCounterParty
-  , cashPaymentDay: cashPaymentDay
-  , cashCalculationDay: cashCalculationDay
-  , cashEvent: cashEvent
+  { party
+  , counterparty
+  , paymentDay
+  , calculationDay
+  , event
   , amount: toMarloweValue amount
   , notional: toMarloweValue notional
-  , cashCurrency: cashCurrency
+  , currency
   }
 
 -- | 'genContract' validatates the applicabilty of the contract terms in order
@@ -129,67 +129,65 @@ genContract
      Party /\ Party
   ->
   -- | Risk factors per event and time
-  (String -> EventType -> DateTime -> RiskFactorsMarlowe)
+  (EventType -> DateTime -> RiskFactorsMarlowe)
   ->
   -- | ACTUS contract terms
   ContractTermsMarlowe
   ->
   -- | Marlowe contract
   Contract
-genContract (party /\ couterparty) rf ct =
+genContract parties riskFactors contractTerms =
   let
-    cfs = genProjectedCashflows rf ct
+    cashFlows = genProjectedCashflows parties riskFactors contractTerms
   in
-    foldl gen Close $ reverse (map toMarloweCashflow cfs)
+    foldl generator Close $ reverse (map toMarloweCashflow cashFlows)
   where
-  gen :: Contract -> CashFlow Value -> Contract
-  gen cont cf@(CashFlow { cashPaymentDay })
-    | hasRiskFactor cf =
+  generator :: Contract -> CashFlow Value Party -> Contract
+  generator continuation cashFlow@(CashFlow { paymentDay })
+    | hasRiskFactor cashFlow =
         When
           [ Case
-              (Choice (cashFlowToChoiceId cf) [ Bound (fromInt 0) (fromInt 1000000000) ])
-              (stub cont cf)
+              (Choice (cashFlowToChoiceId cashFlow) [ Bound (fromInt 0) (fromInt 1000000000) ])
+              (stub continuation cashFlow)
           ]
-          (fromDateTime cashPaymentDay)
+          (fromDateTime paymentDay)
           Close
-  gen cont cf = stub cont cf
+  generator continuation cashFlow = stub continuation cashFlow
 
-  stub cont (CashFlow { amount, cashPaymentDay }) =
-    let
-      t = fromDateTime cashPaymentDay
-      c = reduceContract cont
-    in
-      reduceContract $
-        If
-          ((Constant $ fromInt 0) `ValueLT` amount)
-          ( invoice
-              couterparty
-              party
-              amount
-              t
-              c
-          )
-          ( If
-              (amount `ValueLT` (Constant $ fromInt 0))
-              ( invoice
-                  party
-                  couterparty
-                  (NegValue amount)
-                  t
-                  c
-              )
-              c
-          )
+  stub continuation (CashFlow { amount, paymentDay, party, counterparty, currency }) =
+    reduceContract $
+      If
+        ((Constant $ fromInt 0) `ValueLT` amount)
+        ( invoice
+            counterparty
+            party
+            (Token "" currency)
+            amount
+            (fromDateTime paymentDay)
+            continuation
+        )
+        ( If
+            (amount `ValueLT` (Constant $ fromInt 0))
+            ( invoice
+                party
+                counterparty
+                (Token "" currency)
+                (NegValue amount)
+                (fromDateTime paymentDay)
+                continuation
+            )
+            continuation
+        )
 
-  invoice :: Party -> Party -> Value -> Instant -> Contract -> Contract
-  invoice a b amount timeout continue =
+  invoice :: Party -> Party -> Token -> Value -> Instant -> Contract -> Contract
+  invoice a b token amount timeout continue =
     When
       [ Case
-          (Deposit a a adaToken amount)
+          (Deposit a a token amount)
           ( Pay
               a
               (Party b)
-              adaToken
+              token
               amount
               continue
           )
@@ -197,14 +195,14 @@ genContract (party /\ couterparty) rf ct =
       timeout
       Close
 
-cashFlowToChoiceId :: forall a. CashFlow a -> ChoiceId
-cashFlowToChoiceId (CashFlow { cashEvent, cashPaymentDay }) =
+cashFlowToChoiceId :: forall a b. CashFlow a b -> ChoiceId
+cashFlowToChoiceId (CashFlow { event, paymentDay }) =
   let
-    l = show cashEvent <> show cashPaymentDay
+    l = show event <> show paymentDay
   in
     ChoiceId l (Role "RiskFactor")
 
-hasRiskFactor :: CashFlow Value -> Boolean
+hasRiskFactor :: CashFlow Value Party -> Boolean
 hasRiskFactor cf@(CashFlow { amount }) = hasRiskFactor' amount
   where
   hasRiskFactor' :: Value -> Boolean
@@ -222,13 +220,7 @@ hasRiskFactor cf@(CashFlow { amount }) = hasRiskFactor' amount
   hasRiskFactor' TimeIntervalEnd = false
   hasRiskFactor' (Cond _ a b) = hasRiskFactor' a || hasRiskFactor' b
 
-constant :: Number -> Value'
-constant n = Constant' $ toMarloweFixedPoint n
-  where
-  toMarloweFixedPoint :: Number -> BigInt
-  toMarloweFixedPoint x = marloweFixedPoint * fromInt (round x)
-
-toMarlowe :: ContractTerms Number -> ContractTermsMarlowe
+toMarlowe :: ContractTerms Decimal -> ContractTermsMarlowe
 toMarlowe (ContractTerms ct) =
   ContractTerms
     { contractId: ct.contractId
@@ -242,70 +234,76 @@ toMarlowe (ContractTerms ct) =
     , marketObjectCode: Nothing
     , contractPerformance: ct.contractPerformance
     , creditEventTypeCovered: ct.creditEventTypeCovered
-    , coverageOfCreditEnhancement: constant <$> ct.coverageOfCreditEnhancement
+    , coverageOfCreditEnhancement: constant =<< ct.coverageOfCreditEnhancement
     , guaranteedExposure: ct.guaranteedExposure
     , cycleOfFee: ct.cycleOfFee
     , cycleAnchorDateOfFee: ct.cycleAnchorDateOfFee
-    , feeAccrued: constant <$> ct.feeAccrued
+    , feeAccrued: constant =<< ct.feeAccrued
     , feeBasis: ct.feeBasis
-    , feeRate: constant <$> ct.feeRate
+    , feeRate: constant =<< ct.feeRate
     , cycleAnchorDateOfInterestPayment: ct.cycleAnchorDateOfInterestPayment
     , cycleOfInterestPayment: ct.cycleOfInterestPayment
-    , accruedInterest: constant <$> ct.accruedInterest
+    , accruedInterest: constant =<< ct.accruedInterest
     , capitalizationEndDate: ct.capitalizationEndDate
     , cycleAnchorDateOfInterestCalculationBase: ct.cycleAnchorDateOfInterestCalculationBase
     , cycleOfInterestCalculationBase: ct.cycleOfInterestCalculationBase
     , interestCalculationBase: ct.interestCalculationBase
-    , interestCalculationBaseAmount: constant <$> ct.interestCalculationBaseAmount
-    , nominalInterestRate: constant <$> ct.nominalInterestRate
-    , nominalInterestRate2: constant <$> ct.nominalInterestRate2
-    , interestScalingMultiplier: constant <$> ct.interestScalingMultiplier
-    , notionalPrincipal: constant <$> ct.notionalPrincipal
-    , premiumDiscountAtIED: constant <$> ct.premiumDiscountAtIED
+    , interestCalculationBaseAmount: constant =<< ct.interestCalculationBaseAmount
+    , nominalInterestRate: constant =<< ct.nominalInterestRate
+    , nominalInterestRate2: constant =<< ct.nominalInterestRate2
+    , interestScalingMultiplier: constant =<< ct.interestScalingMultiplier
+    , notionalPrincipal: constant =<< ct.notionalPrincipal
+    , premiumDiscountAtIED: constant =<< ct.premiumDiscountAtIED
     , maturityDate: ct.maturityDate
     , amortizationDate: ct.amortizationDate
     , exerciseDate: ct.exerciseDate
     , cycleAnchorDateOfPrincipalRedemption: ct.cycleAnchorDateOfPrincipalRedemption
     , cycleOfPrincipalRedemption: ct.cycleOfPrincipalRedemption
-    , nextPrincipalRedemptionPayment: constant <$> ct.nextPrincipalRedemptionPayment
+    , nextPrincipalRedemptionPayment: constant =<< ct.nextPrincipalRedemptionPayment
     , purchaseDate: ct.purchaseDate
-    , priceAtPurchaseDate: constant <$> ct.priceAtPurchaseDate
+    , priceAtPurchaseDate: constant =<< ct.priceAtPurchaseDate
     , terminationDate: ct.terminationDate
-    , priceAtTerminationDate: constant <$> ct.priceAtTerminationDate
-    , quantity: constant <$> ct.quantity
+    , priceAtTerminationDate: constant =<< ct.priceAtTerminationDate
+    , quantity: constant =<< ct.quantity
     , currency: ct.currency
     , currency2: ct.currency2
-    , scalingIndexAtStatusDate: constant <$> ct.scalingIndexAtStatusDate
+    , scalingIndexAtStatusDate: constant =<< ct.scalingIndexAtStatusDate
     , cycleAnchorDateOfScalingIndex: ct.cycleAnchorDateOfScalingIndex
     , cycleOfScalingIndex: ct.cycleOfScalingIndex
     , scalingEffect: ct.scalingEffect
-    , scalingIndexAtContractDealDate: constant <$> ct.scalingIndexAtContractDealDate
+    , scalingIndexAtContractDealDate: constant =<< ct.scalingIndexAtContractDealDate
     , marketObjectCodeOfScalingIndex: ct.marketObjectCodeOfScalingIndex
-    , notionalScalingMultiplier: constant <$> ct.notionalScalingMultiplier
+    , notionalScalingMultiplier: constant =<< ct.notionalScalingMultiplier
     , cycleOfOptionality: ct.cycleOfOptionality
     , cycleAnchorDateOfOptionality: ct.cycleAnchorDateOfOptionality
     , optionType: ct.optionType
-    , optionStrike1: constant <$> ct.optionStrike1
+    , optionStrike1: constant =<< ct.optionStrike1
     , optionExerciseType: ct.optionExerciseType
     , settlementPeriod: ct.settlementPeriod
     , deliverySettlement: ct.deliverySettlement
-    , exerciseAmount: constant <$> ct.exerciseAmount
-    , futuresPrice: constant <$> ct.futuresPrice
-    , penaltyRate: constant <$> ct.penaltyRate
+    , exerciseAmount: constant =<< ct.exerciseAmount
+    , futuresPrice: constant =<< ct.futuresPrice
+    , penaltyRate: constant =<< ct.penaltyRate
     , penaltyType: ct.penaltyType
     , prepaymentEffect: ct.prepaymentEffect
     , cycleOfRateReset: ct.cycleOfRateReset
     , cycleAnchorDateOfRateReset: ct.cycleAnchorDateOfRateReset
-    , nextResetRate: constant <$> ct.nextResetRate
-    , rateSpread: constant <$> ct.rateSpread
-    , rateMultiplier: constant <$> ct.rateMultiplier
-    , periodFloor: constant <$> ct.periodFloor
-    , periodCap: constant <$> ct.periodCap
-    , lifeCap: constant <$> ct.lifeCap
-    , lifeFloor: constant <$> ct.lifeFloor
+    , nextResetRate: constant =<< ct.nextResetRate
+    , rateSpread: constant =<< ct.rateSpread
+    , rateMultiplier: constant =<< ct.rateMultiplier
+    , periodFloor: constant =<< ct.periodFloor
+    , periodCap: constant =<< ct.periodCap
+    , lifeCap: constant =<< ct.lifeCap
+    , lifeFloor: constant =<< ct.lifeFloor
     , marketObjectCodeOfRateReset: ct.marketObjectCodeOfRateReset
     , cycleOfDividendPayment: ct.cycleOfDividendPayment
     , cycleAnchorDateOfDividendPayment: ct.cycleAnchorDateOfDividendPayment
-    , nextDividendPaymentAmount: constant <$> ct.nextDividendPaymentAmount
+    , nextDividendPaymentAmount: constant =<< ct.nextDividendPaymentAmount
     , enableSettlement: ct.enableSettlement
     }
+  where
+  constant :: Decimal -> Maybe Value'
+  constant n = Constant' <$> toMarloweFixedPoint n
+
+  toMarloweFixedPoint :: Decimal -> Maybe BigInt
+  toMarloweFixedPoint = BigInt.fromString <<< Decimal.toString <<< Decimal.floor <<< ((Decimal.fromInt marloweFixedPoint) * _)

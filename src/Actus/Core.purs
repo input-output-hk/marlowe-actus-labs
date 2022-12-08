@@ -17,14 +17,12 @@ import Data.DateTime (DateTime)
 import Data.Enum (fromEnum)
 import Data.Enum.Generic (class GenericBoundedEnum, genericFromEnum, genericToEnum)
 import Data.Generic.Rep (class Generic)
-import Data.List (List(..), concat, concatMap, dropWhile, filter, filterM, groupBy, mapMaybe, unzip, zip, (..), (:))
-import Data.List as List
+import Data.List (List(..), concat, concatMap, dropWhile, filter, filterM, groupBy, mapMaybe, sortBy, tail, unzip, zip, (..), (:))
 import Data.List.NonEmpty (NonEmptyList, toList)
 import Data.List.NonEmpty as NonEmptyList
 import Data.Maybe (Maybe(..), fromMaybe, isNothing)
 import Data.Semigroup.Foldable (foldl1)
 import Data.Traversable (traverse)
-import Data.Tuple (snd)
 import Data.Tuple.Nested (type (/\), (/\))
 
 -- |'genProjectedCashflows' generates a list of projected cashflows for
@@ -32,42 +30,48 @@ import Data.Tuple.Nested (type (/\), (/\))
 -- an empty list, if building the initial state given the contract terms
 -- fails or in case there are no cash flows.
 genProjectedCashflows
-  :: forall a
+  :: forall a b
    . ActusOps a
   => EuclideanRing a
   => ActusFrac a
+  => Show b
+  => Eq b
   =>
+  -- | Party and Counter-party for the contract
+  b /\ b
+  ->
   -- | Risk factors as a function of event type and time
-  (String -> EventType -> DateTime -> RiskFactors a)
+  (EventType -> DateTime -> RiskFactors a)
   ->
   -- | Contract terms
   ContractTerms a
   ->
   -- | List of projected cash flows
-  List (CashFlow a)
-genProjectedCashflows rf ct =
+  List (CashFlow a b)
+genProjectedCashflows parties riskFactors contractTerms =
   let
-    ctx = buildCtx rf ct
+    context = buildCtx riskFactors contractTerms
+    cashFlows = runReader genProjectedPayoffs context
   in
-    check ct $ genCashflow ct <$> runReader genProjectedPayoffs ctx
+    netting contractTerms $ genCashflow parties contractTerms <$> cashFlows
   where
-  check :: ContractTerms a -> List (CashFlow a) -> List (CashFlow a)
-  check (ContractTerms { deliverySettlement: Just DS_S }) = netCashflows
-  check _ = \x -> x
+  netting :: ContractTerms a -> List (CashFlow a b) -> List (CashFlow a b)
+  netting (ContractTerms { deliverySettlement: Just DS_S }) = netCashflows
+  netting _ = \x -> x
 
-  groupCashflows :: List (CashFlow a) -> List (NonEmptyList (CashFlow a))
+  groupCashflows :: List (CashFlow a b) -> List (NonEmptyList (CashFlow a b))
   groupCashflows cf = groupBy f cf
     where
     f (CashFlow a) (CashFlow b) =
-      a.cashEvent == b.cashEvent
-        && a.cashPaymentDay == b.cashPaymentDay
-        && a.cashParty == b.cashParty
-        && a.cashCounterParty == b.cashCounterParty
-        && a.cashCurrency == b.cashCurrency
+      a.event == b.event
+        && a.paymentDay == b.paymentDay
+        && a.party == b.party
+        && a.counterparty == b.counterparty
+        && a.currency == b.currency
 
   netCashflows cf = map (foldl1 plus) $ groupCashflows cf
     where
-    plus :: CashFlow a -> CashFlow a -> CashFlow a
+    plus :: CashFlow a b -> CashFlow a b -> CashFlow a b
     plus (CashFlow a) (CashFlow b) = CashFlow $
       a
         { amount = a.amount + b.amount
@@ -82,32 +86,36 @@ buildCtx
   => ActusFrac a
   =>
   -- | Risk factors as a function of event type and time
-  (String -> EventType -> DateTime -> RiskFactors a)
+  (EventType -> DateTime -> RiskFactors a)
   ->
   -- | Contract terms
   ContractTerms a
   ->
   -- | Context
   CtxSTF a
-buildCtx rf ct =
-  { contractTerms: ct
-  , fpSchedule: (_.calculationDay <$> schedule FP ct)
+buildCtx riskFactors contractTerms =
+  { contractTerms
+  , fpSchedule: (_.calculationDay <$> schedule FP contractTerms)
   , -- init & stf rely on the fee payment schedule
-    prSchedule: (_.calculationDay <$> schedule PR ct)
+    prSchedule: (_.calculationDay <$> schedule PR contractTerms)
   , -- init & stf rely on the principal redemption schedule
-    ipSchedule: (_.calculationDay <$> schedule IP ct)
+    ipSchedule: (_.calculationDay <$> schedule IP contractTerms)
   , -- init & stf rely on the interest payment schedule
-    maturity: (maturity ct)
-  , riskFactors: rf
+    maturity: (maturity contractTerms)
+  , riskFactors
   }
 
 -- |Generate cash flows
 genCashflow
-  :: forall a
+  :: forall a b
    . ActusOps a
   => EuclideanRing a
   => ActusFrac a
+  => Show b
   =>
+  -- | Party and Counter-party for the contract
+  b /\ b
+  ->
   -- | Contract terms
   ContractTerms a
   ->
@@ -115,18 +123,17 @@ genCashflow
   Event /\ ContractState a /\ a
   ->
   -- | Projected cash flow
-  CashFlow a
-genCashflow (ContractTerms { currency }) ((ev /\ { paymentDay, calculationDay }) /\ ContractState { nt } /\ am) =
+  CashFlow a b
+genCashflow (party /\ counterparty) (ContractTerms { currency }) ((event /\ { paymentDay, calculationDay }) /\ ContractState { nt } /\ amount) =
   CashFlow
-    { tick: 0
-    , cashParty: "party"
-    , cashCounterParty: "counterparty"
-    , cashPaymentDay: paymentDay
-    , cashCalculationDay: calculationDay
-    , cashEvent: ev
-    , amount: am
+    { party
+    , counterparty
+    , paymentDay
+    , calculationDay
+    , event
+    , amount
     , notional: nt
-    , cashCurrency: fromMaybe "unknown" currency
+    , currency: fromMaybe "unknown" currency
     }
 
 -- |Generate projected cash flows
@@ -136,10 +143,7 @@ genProjectedPayoffs
   => EuclideanRing a
   => ActusFrac a
   => Reader (CtxSTF a) (List (Event /\ ContractState a /\ a))
-genProjectedPayoffs =
-  do
-    ct <- _.contractTerms <$> ask
-    genProjectedPayoffs' $ genSchedule ct
+genProjectedPayoffs = (genSchedule <<< _.contractTerms <$> ask) >>= genProjectedPayoffs'
 
 -- |Generate projected cash flows
 genProjectedPayoffs'
@@ -155,13 +159,11 @@ genProjectedPayoffs'
   Reader (CtxSTF a) (List (Event /\ ContractState a /\ a))
 genProjectedPayoffs' events =
   do
-    st0 <- initializeState
-    states <- genStates events st0
+    states <- initializeState >>= genStates events
+    (eventTypes /\ filteredStates) <- unzip <$> filterM filtersStates (zip (fromMaybe Nil $ tail events) states)
 
-    let (x /\ y) = unzip states
-    payoffs <- trans $ genPayoffs x y
-
-    pure $ zip x (zip y payoffs)
+    payoffs <- trans $ genPayoffs eventTypes filteredStates
+    pure $ zip eventTypes $ zip filteredStates payoffs
   where
   trans :: forall b. Reader (CtxPOF a) b -> Reader (CtxSTF a) b
   trans = withReader (\{ contractTerms, riskFactors } -> { contractTerms, riskFactors })
@@ -178,8 +180,8 @@ genSchedule
   ->
   -- | Schedule
   List Event
-genSchedule ct =
-  List.sortBy (comparing \(ev /\ { paymentDay }) -> (paymentDay /\ ev)) $ genFixedSchedule ct
+genSchedule contractTerms =
+  sortBy (comparing \(ev /\ { paymentDay }) -> (paymentDay /\ ev)) $ genFixedSchedule contractTerms
 
 genFixedSchedule
   :: forall a
@@ -192,9 +194,11 @@ genFixedSchedule
   ->
   -- | Schedule
   List Event
-genFixedSchedule ct@(ContractTerms { terminationDate, statusDate }) =
-  filter filtersSchedules <<< postProcessSchedules <<< List.sortBy (comparing \(ev /\ { paymentDay }) -> (paymentDay /\ ev)) $ concatMap scheduleEvent allElements
+genFixedSchedule contractTerms@(ContractTerms { terminationDate, statusDate }) =
+  filter filtersSchedules <<< postProcessSchedules <<< sortBy (comparing \(ev /\ { paymentDay }) -> (paymentDay /\ ev)) $ event : concatMap scheduleEvent allElements
   where
+  event :: Event
+  event = AD /\ { calculationDay: statusDate, paymentDay: statusDate }
 
   allElements :: forall b rep. Generic b rep => GenericBoundedEnum rep => GenericTop rep => GenericBottom rep => List b
   allElements = mapMaybe genericToEnum (idxFrom .. idxTo)
@@ -202,7 +206,7 @@ genFixedSchedule ct@(ContractTerms { terminationDate, statusDate }) =
     idxFrom = genericFromEnum (genericBottom :: b)
     idxTo = genericFromEnum (genericTop :: b)
 
-  scheduleEvent ev = map (\d -> (ev /\ d)) $ schedule ev ct
+  scheduleEvent ev = map (ev /\ _) $ schedule ev contractTerms
 
   filtersSchedules :: Event -> Boolean
   filtersSchedules (_ /\ { calculationDay }) = isNothing terminationDate || Just calculationDay <= terminationDate
@@ -217,13 +221,7 @@ genFixedSchedule ct@(ContractTerms { terminationDate, statusDate }) =
       regroup = groupBy (\(_ /\ { calculationDay: l }) (_ /\ { calculationDay: r }) -> l == r)
 
       overwrite :: List (NonEmptyList Event) -> List (NonEmptyList Event)
-      overwrite = map f
-
-      f :: NonEmptyList Event -> NonEmptyList Event
-      f = NonEmptyList.sortBy g
-
-      g :: Event -> Event -> Ordering
-      g = comparing $ \(ev /\ _) -> fromEnum ev
+      overwrite = map (NonEmptyList.sortBy $ comparing $ \(ev /\ _) -> fromEnum ev)
     in
       concat <<< map toList <<< overwrite <<< regroup <<< trim
 
@@ -243,25 +241,13 @@ genStates
   ContractState a
   ->
   -- | New states
-  Reader (CtxSTF a) (List (Event /\ ContractState a))
-genStates scs stn@(ContractState { sd: statusDate }) = mapAccumLM' apply st0 scs >>= filterM filtersStates <<< snd
-  where
-  apply ((ev /\ { calculationDay }) /\ st) (ev' /\ t') =
-    do
-      newState <- stateTransition ev calculationDay st
-      pure (((ev' /\ t') /\ newState) /\ ((ev' /\ t') /\ newState))
-
-  st0 :: Event /\ ContractState a
-  st0 = (AD /\ { calculationDay: statusDate, paymentDay: statusDate }) /\ stn
-
-mapAccumLM' :: forall acc x y m. Monad m => (acc -> x -> m (acc /\ y)) -> acc -> List x -> m (acc /\ List y)
-mapAccumLM' f = go
-  where
-  go s (x : xs) = do
-    (s1 /\ x') <- f s x
-    (s2 /\ xs') <- go s1 xs
-    pure (s2 /\ x' : xs')
-  go s Nil = pure (s /\ Nil)
+  Reader (CtxSTF a) (List (ContractState a))
+genStates ((eventType /\ { calculationDay }) : events) state =
+  do
+    nextState <- stateTransition eventType calculationDay state
+    nextStates <- genStates events nextState
+    pure (nextState : nextStates)
+genStates Nil _ = pure Nil
 
 filtersStates
   :: forall a
@@ -270,17 +256,17 @@ filtersStates
   => ActusFrac a
   => ((EventType /\ ShiftedDay) /\ ContractState a)
   -> Reader (CtxSTF a) Boolean
-filtersStates ((ev /\ { calculationDay }) /\ _) =
+filtersStates ((event /\ { calculationDay }) /\ _) =
   do
-    ct'@(ContractTerms ct) <- _.contractTerms <$> ask
-    pure $ case ct.contractType of
-      PAM -> isNothing ct.purchaseDate || Just calculationDay >= ct.purchaseDate
-      LAM -> isNothing ct.purchaseDate || ev == PRD || Just calculationDay > ct.purchaseDate
-      NAM -> isNothing ct.purchaseDate || ev == PRD || Just calculationDay > ct.purchaseDate
+    contractTerms@(ContractTerms { contractType, purchaseDate, maturityDate, amortizationDate }) <- _.contractTerms <$> ask
+    pure $ case contractType of
+      PAM -> isNothing purchaseDate || Just calculationDay >= purchaseDate
+      LAM -> isNothing purchaseDate || event == PRD || Just calculationDay > purchaseDate
+      NAM -> isNothing purchaseDate || event == PRD || Just calculationDay > purchaseDate
       ANN ->
         let
-          b1 = isNothing ct.purchaseDate || ev == PRD || Just calculationDay > ct.purchaseDate
-          b2 = let m = ct.maturityDate <|> ct.amortizationDate <|> maturity ct' in isNothing m || Just calculationDay <= m
+          b1 = isNothing purchaseDate || event == PRD || Just calculationDay > purchaseDate
+          b2 = let m = maturityDate <|> amortizationDate <|> maturity contractTerms in isNothing m || Just calculationDay <= m
         in
           b1 && b2
 
@@ -299,6 +285,6 @@ genPayoffs
   ->
   -- | Payoffs
   Reader (CtxPOF a) (List a)
-genPayoffs evs sts = traverse calculatePayoff $ zip evs sts
+genPayoffs events states = traverse calculatePayoff $ zip events states
   where
-  calculatePayoff ((ev /\ { calculationDay }) /\ st) = payoff (ev /\ calculationDay) st
+  calculatePayoff ((event /\ { calculationDay }) /\ state) = payoff (event /\ calculationDay) state

@@ -18,7 +18,7 @@ type CtxPOF a =
     contractTerms :: ContractTerms a
   ,
     -- | Risk factors as a function of event type and time
-    riskFactors :: String -> EventType -> DateTime -> RiskFactors a
+    riskFactors :: EventType -> DateTime -> RiskFactors a
   }
 
 -- | The payoff function
@@ -36,7 +36,7 @@ payoff
   ->
   -- | Updated contract state
   Reader (CtxPOF a) a
-payoff (ev /\ t) st = asks $ do \ctx -> let terms@(ContractTerms ct :: ContractTerms a) = ctx.contractTerms in pof ev (ctx.riskFactors ct.contractId ev t) terms st
+payoff (ev /\ t) st = asks $ do \ctx -> let terms@(ContractTerms ct :: ContractTerms a) = ctx.contractTerms in pof ev (ctx.riskFactors ev t) terms st
   where
   ----------------------------
   -- Initial Exchange (IED) --
