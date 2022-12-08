@@ -49,12 +49,12 @@ genProjectedCashflows
   ->
   -- | List of projected cash flows
   List (CashFlow a b)
-genProjectedCashflows parties rf ct =
+genProjectedCashflows parties riskFactors contractTerms =
   let
-    ctx = buildCtx rf ct
-    cfs = runReader genProjectedPayoffs ctx
+    context = buildCtx riskFactors contractTerms
+    cashFlows = runReader genProjectedPayoffs context
   in
-    netting ct $ genCashflow parties ct <$> cfs
+    netting contractTerms $ genCashflow parties contractTerms <$> cashFlows
   where
   netting :: ContractTerms a -> List (CashFlow a b) -> List (CashFlow a b)
   netting (ContractTerms { deliverySettlement: Just DS_S }) = netCashflows
@@ -94,16 +94,16 @@ buildCtx
   ->
   -- | Context
   CtxSTF a
-buildCtx rf ct =
-  { contractTerms: ct
-  , fpSchedule: (_.calculationDay <$> schedule FP ct)
+buildCtx riskFactors contractTerms =
+  { contractTerms
+  , fpSchedule: (_.calculationDay <$> schedule FP contractTerms)
   , -- init & stf rely on the fee payment schedule
-    prSchedule: (_.calculationDay <$> schedule PR ct)
+    prSchedule: (_.calculationDay <$> schedule PR contractTerms)
   , -- init & stf rely on the principal redemption schedule
-    ipSchedule: (_.calculationDay <$> schedule IP ct)
+    ipSchedule: (_.calculationDay <$> schedule IP contractTerms)
   , -- init & stf rely on the interest payment schedule
-    maturity: (maturity ct)
-  , riskFactors: rf
+    maturity: (maturity contractTerms)
+  , riskFactors
   }
 
 -- |Generate cash flows
@@ -181,8 +181,8 @@ genSchedule
   ->
   -- | Schedule
   List Event
-genSchedule ct =
-  List.sortBy (comparing \(ev /\ { paymentDay }) -> (paymentDay /\ ev)) $ genFixedSchedule ct
+genSchedule contractTerms =
+  List.sortBy (comparing \(ev /\ { paymentDay }) -> (paymentDay /\ ev)) $ genFixedSchedule contractTerms
 
 genFixedSchedule
   :: forall a
@@ -195,7 +195,7 @@ genFixedSchedule
   ->
   -- | Schedule
   List Event
-genFixedSchedule ct@(ContractTerms { terminationDate, statusDate }) =
+genFixedSchedule contractTerms@(ContractTerms { terminationDate, statusDate }) =
   filter filtersSchedules <<< postProcessSchedules <<< List.sortBy (comparing \(ev /\ { paymentDay }) -> (paymentDay /\ ev)) $ event : concatMap scheduleEvent allElements
   where
   event :: Event
@@ -207,7 +207,7 @@ genFixedSchedule ct@(ContractTerms { terminationDate, statusDate }) =
     idxFrom = genericFromEnum (genericBottom :: b)
     idxTo = genericFromEnum (genericTop :: b)
 
-  scheduleEvent ev = map (ev /\ _) $ schedule ev ct
+  scheduleEvent ev = map (ev /\ _) $ schedule ev contractTerms
 
   filtersSchedules :: Event -> Boolean
   filtersSchedules (_ /\ { calculationDay }) = isNothing terminationDate || Just calculationDay <= terminationDate
@@ -222,13 +222,7 @@ genFixedSchedule ct@(ContractTerms { terminationDate, statusDate }) =
       regroup = groupBy (\(_ /\ { calculationDay: l }) (_ /\ { calculationDay: r }) -> l == r)
 
       overwrite :: List (NonEmptyList Event) -> List (NonEmptyList Event)
-      overwrite = map f
-
-      f :: NonEmptyList Event -> NonEmptyList Event
-      f = NonEmptyList.sortBy g
-
-      g :: Event -> Event -> Ordering
-      g = comparing $ \(ev /\ _) -> fromEnum ev
+      overwrite = map (NonEmptyList.sortBy $ comparing $ \(ev /\ _) -> fromEnum ev)
     in
       concat <<< map toList <<< overwrite <<< regroup <<< trim
 
@@ -263,17 +257,17 @@ filtersStates
   => ActusFrac a
   => ((EventType /\ ShiftedDay) /\ ContractState a)
   -> Reader (CtxSTF a) Boolean
-filtersStates ((ev /\ { calculationDay }) /\ _) =
+filtersStates ((event /\ { calculationDay }) /\ _) =
   do
-    ct'@(ContractTerms ct) <- _.contractTerms <$> ask
-    pure $ case ct.contractType of
-      PAM -> isNothing ct.purchaseDate || Just calculationDay >= ct.purchaseDate
-      LAM -> isNothing ct.purchaseDate || ev == PRD || Just calculationDay > ct.purchaseDate
-      NAM -> isNothing ct.purchaseDate || ev == PRD || Just calculationDay > ct.purchaseDate
+    contractTerms@(ContractTerms {contractType, purchaseDate, maturityDate, amortizationDate}) <- _.contractTerms <$> ask
+    pure $ case contractType of
+      PAM -> isNothing purchaseDate || Just calculationDay >= purchaseDate
+      LAM -> isNothing purchaseDate || event == PRD || Just calculationDay > purchaseDate
+      NAM -> isNothing purchaseDate || event == PRD || Just calculationDay > purchaseDate
       ANN ->
         let
-          b1 = isNothing ct.purchaseDate || ev == PRD || Just calculationDay > ct.purchaseDate
-          b2 = let m = ct.maturityDate <|> ct.amortizationDate <|> maturity ct' in isNothing m || Just calculationDay <= m
+          b1 = isNothing purchaseDate || event == PRD || Just calculationDay > purchaseDate
+          b2 = let m = maturityDate <|> amortizationDate <|> maturity contractTerms in isNothing m || Just calculationDay <= m
         in
           b1 && b2
 
