@@ -81,15 +81,15 @@ readApi x = do
   readName = map Name <<< Foreign.readString
 
   readEnable :: Foreign -> ExceptT (NonEmptyList ForeignError) m (Aff Unit)
-  readEnable x = do
-    f :: Effect (Promise Unit) <- Foreign.unsafeReadTagged "Function" x
-    arity :: Int <- Foreign.readInt =<< Foreign.Index.readProp "length" x
+  readEnable x' = do
+    f :: Effect (Promise Unit) <- Foreign.unsafeReadTagged "Function" x'
+    arity :: Int <- Foreign.readInt =<< Foreign.Index.readProp "length" x'
     unless (arity == 0) $ Foreign.fail $ ForeignError "Expected procedure of arity 0"
     pure $ toAffE f
 
   readIsEnabled :: Foreign -> ExceptT (NonEmptyList ForeignError) m (Aff Boolean)
-  readIsEnabled x = do
-    f :: Effect (Promise Boolean) <- Foreign.unsafeReadTagged "Function" x
-    arity :: Int <- Foreign.readInt =<< Foreign.Index.readProp "length" x
+  readIsEnabled x' = do
+    f :: Effect (Promise Boolean) <- Foreign.unsafeReadTagged "Function" x'
+    arity :: Int <- Foreign.readInt =<< Foreign.Index.readProp "length" x'
     unless (arity == 0) $ Foreign.fail $ ForeignError "Expected procedure of arity 0"
     pure $ toAffE f
