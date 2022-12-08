@@ -85,8 +85,8 @@ instance CommutativeRing Value'
 
 instance EuclideanRing Value' where
   degree _ = 1
-  div = division -- different rounding, not using DivValue
-  mod x y = Constant' $ evalVal x `mod` evalVal y
+  div x y = division (MulValue' (Constant' $ BigInt.fromInt marloweFixedPoint) x) y -- different rounding, not using DivValue
+  mod x y = Constant' $ (BigInt.fromInt marloweFixedPoint) * (evalVal x `mod` evalVal y)
 
 instance ActusOps Value' where
   _min x y = Cond' (ValueLT' x y) x y
@@ -126,11 +126,10 @@ marloweFixedPoint = 1000000
 
 division :: Value' -> Value' -> Value'
 division lhs rhs =
-  do
-    let
-      n = evalVal lhs
-      d = evalVal rhs
-    Constant' (division' n d)
+  let
+    n = evalVal lhs
+    d = evalVal rhs
+  in Constant' $ division' n d
   where
   division' :: BigInt -> BigInt -> BigInt
   division' x _ | x == BigInt.fromInt 0 = BigInt.fromInt 0

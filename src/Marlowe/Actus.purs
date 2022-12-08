@@ -136,25 +136,25 @@ genContract
   ->
   -- | Marlowe contract
   Contract
-genContract parties rf ct =
+genContract parties riskFactors contractTerms =
   let
-    cfs = genProjectedCashflows parties rf ct
+    cashFlows = genProjectedCashflows parties riskFactors contractTerms
   in
-    foldl gen Close $ reverse (map toMarloweCashflow cfs)
+    foldl generator Close $ reverse (map toMarloweCashflow cashFlows)
   where
-  gen :: Contract -> CashFlow Value Party -> Contract
-  gen cont cf@(CashFlow { paymentDay })
-    | hasRiskFactor cf =
+  generator :: Contract -> CashFlow Value Party -> Contract
+  generator continuation cashFlow@(CashFlow { paymentDay })
+    | hasRiskFactor cashFlow =
         When
           [ Case
-              (Choice (cashFlowToChoiceId cf) [ Bound (fromInt 0) (fromInt 1000000000) ])
-              (stub cont cf)
+              (Choice (cashFlowToChoiceId cashFlow) [ Bound (fromInt 0) (fromInt 1000000000) ])
+              (stub continuation cashFlow)
           ]
           (fromDateTime paymentDay)
           Close
-  gen cont cf = stub cont cf
+  generator continuation cashFlow = stub continuation cashFlow
 
-  stub cont (CashFlow { amount, paymentDay, party, counterparty, currency }) =
+  stub continuation (CashFlow { amount, paymentDay, party, counterparty, currency }) =
     reduceContract $
       If
         ((Constant $ fromInt 0) `ValueLT` amount)
@@ -164,7 +164,7 @@ genContract parties rf ct =
             (Token "" currency)
             amount
             (fromDateTime paymentDay)
-            cont
+            continuation
         )
         ( If
             (amount `ValueLT` (Constant $ fromInt 0))
@@ -174,9 +174,9 @@ genContract parties rf ct =
                 (Token "" currency)
                 (NegValue amount)
                 (fromDateTime paymentDay)
-                cont
+                continuation
             )
-            cont
+            continuation
         )
 
   invoice :: Party -> Party -> Token -> Value -> Instant -> Contract -> Contract

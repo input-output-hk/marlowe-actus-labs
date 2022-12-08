@@ -17,8 +17,7 @@ import Data.DateTime (DateTime)
 import Data.Enum (fromEnum)
 import Data.Enum.Generic (class GenericBoundedEnum, genericFromEnum, genericToEnum)
 import Data.Generic.Rep (class Generic)
-import Data.List (List(..), concat, concatMap, dropWhile, filter, filterM, groupBy, mapMaybe, tail, unzip, zip, (..), (:))
-import Data.List as List
+import Data.List (List(..), concat, concatMap, dropWhile, filter, filterM, groupBy, mapMaybe, sortBy, tail, unzip, zip, (..), (:))
 import Data.List.NonEmpty (NonEmptyList, toList)
 import Data.List.NonEmpty as NonEmptyList
 import Data.Maybe (Maybe(..), fromMaybe, isNothing)
@@ -182,7 +181,7 @@ genSchedule
   -- | Schedule
   List Event
 genSchedule contractTerms =
-  List.sortBy (comparing \(ev /\ { paymentDay }) -> (paymentDay /\ ev)) $ genFixedSchedule contractTerms
+  sortBy (comparing \(ev /\ { paymentDay }) -> (paymentDay /\ ev)) $ genFixedSchedule contractTerms
 
 genFixedSchedule
   :: forall a
@@ -196,7 +195,7 @@ genFixedSchedule
   -- | Schedule
   List Event
 genFixedSchedule contractTerms@(ContractTerms { terminationDate, statusDate }) =
-  filter filtersSchedules <<< postProcessSchedules <<< List.sortBy (comparing \(ev /\ { paymentDay }) -> (paymentDay /\ ev)) $ event : concatMap scheduleEvent allElements
+  filter filtersSchedules <<< postProcessSchedules <<< sortBy (comparing \(ev /\ { paymentDay }) -> (paymentDay /\ ev)) $ event : concatMap scheduleEvent allElements
   where
   event :: Event
   event = AD /\ { calculationDay: statusDate, paymentDay: statusDate }
@@ -259,7 +258,7 @@ filtersStates
   -> Reader (CtxSTF a) Boolean
 filtersStates ((event /\ { calculationDay }) /\ _) =
   do
-    contractTerms@(ContractTerms {contractType, purchaseDate, maturityDate, amortizationDate}) <- _.contractTerms <$> ask
+    contractTerms@(ContractTerms { contractType, purchaseDate, maturityDate, amortizationDate }) <- _.contractTerms <$> ask
     pure $ case contractType of
       PAM -> isNothing purchaseDate || Just calculationDay >= purchaseDate
       LAM -> isNothing purchaseDate || event == PRD || Just calculationDay > purchaseDate

@@ -4,17 +4,18 @@ import Prelude
 
 import Actus.Domain (ContractTerms, EventType, RiskFactors(..), Value'(..), marloweFixedPoint)
 import Control.Monad.Error.Class (throwError)
-import Data.Argonaut (JsonDecodeError, decodeJson, encodeJson, jsonParser, stringify)
+import Data.Argonaut (JsonDecodeError, decodeJson, jsonParser)
 import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (DateTime)
 import Data.Decimal (Decimal)
 import Data.Either (Either(..), either)
 import Data.Tuple.Nested ((/\))
 import Effect.Exception (error)
+import Language.Marlowe.Core.V1.Semantics (isClose)
 import Language.Marlowe.Core.V1.Semantics.Types (Party(..))
 import Marlowe.Actus (genContract, toMarlowe)
 import Node.Encoding (Encoding(..))
-import Node.FS.Aff (writeTextFile, readTextFile)
+import Node.FS.Aff (readTextFile)
 import Test.Spec (Spec, describe, it)
 import Test.Spec as Spec
 import Test.Spec.Assertions (fail)
@@ -30,15 +31,10 @@ spec = do
         (terms :: Either JsonDecodeError (ContractTerms Decimal)) = decodeJson json
       case terms of
         Left err -> fail (show err)
-        Right contractA -> do
+        Right contract -> do
           let
-            contractM = toMarlowe contractA
-            p1 = Address "addr1"
-            p2 = Address "addr2"
-            marloweContract = genContract (p1 /\ p2) riskFactors contractM
-
-          writeTextFile UTF8 "out.json" (stringify $ encodeJson marloweContract)
-          pure unit
+            marloweContract = genContract (Address "addr1" /\ Address "addr2") riskFactors $ toMarlowe contract
+          if isClose marloweContract then fail "Contract is not supposed to be Close" else pure unit
 
 riskFactors :: EventType -> DateTime -> RiskFactors Value'
 riskFactors _ _ = RiskFactors
