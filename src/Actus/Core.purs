@@ -17,14 +17,13 @@ import Data.DateTime (DateTime)
 import Data.Enum (fromEnum)
 import Data.Enum.Generic (class GenericBoundedEnum, genericFromEnum, genericToEnum)
 import Data.Generic.Rep (class Generic)
-import Data.List (List(..), concat, concatMap, dropWhile, filter, filterM, groupBy, mapMaybe, unzip, zip, (..), (:))
+import Data.List (List(..), concat, concatMap, dropWhile, filter, filterM, groupBy, mapMaybe, tail, unzip, zip, (..), (:))
 import Data.List as List
 import Data.List.NonEmpty (NonEmptyList, toList)
 import Data.List.NonEmpty as NonEmptyList
 import Data.Maybe (Maybe(..), fromMaybe, isNothing)
 import Data.Semigroup.Foldable (foldl1)
 import Data.Traversable (traverse)
-import Data.Tuple (snd)
 import Data.Tuple.Nested (type (/\), (/\))
 
 -- |'genProjectedCashflows' generates a list of projected cashflows for
@@ -145,10 +144,7 @@ genProjectedPayoffs
   => EuclideanRing a
   => ActusFrac a
   => Reader (CtxSTF a) (List (Event /\ ContractState a /\ a))
-genProjectedPayoffs =
-  do
-    ct <- _.contractTerms <$> ask
-    genProjectedPayoffs' $ genSchedule ct
+genProjectedPayoffs = (genSchedule <<< _.contractTerms <$> ask) >>= genProjectedPayoffs'
 
 -- |Generate projected cash flows
 genProjectedPayoffs'
@@ -164,13 +160,11 @@ genProjectedPayoffs'
   Reader (CtxSTF a) (List (Event /\ ContractState a /\ a))
 genProjectedPayoffs' events =
   do
-    st0 <- initializeState
-    states <- genStates events st0
+    states <- initializeState >>= genStates events
+    (eventTypes /\ filteredStates) <- unzip <$> filterM filtersStates (zip (fromMaybe Nil $ tail events) states)
 
-    let (x /\ y) = unzip states
-    payoffs <- trans $ genPayoffs x y
-
-    pure $ zip x (zip y payoffs)
+    payoffs <- trans $ genPayoffs eventTypes filteredStates
+    pure $ zip eventTypes $ zip filteredStates payoffs
   where
   trans :: forall b. Reader (CtxPOF a) b -> Reader (CtxSTF a) b
   trans = withReader (\{ contractTerms, riskFactors } -> { contractTerms, riskFactors })
@@ -202,8 +196,10 @@ genFixedSchedule
   -- | Schedule
   List Event
 genFixedSchedule ct@(ContractTerms { terminationDate, statusDate }) =
-  filter filtersSchedules <<< postProcessSchedules <<< List.sortBy (comparing \(ev /\ { paymentDay }) -> (paymentDay /\ ev)) $ concatMap scheduleEvent allElements
+  filter filtersSchedules <<< postProcessSchedules <<< List.sortBy (comparing \(ev /\ { paymentDay }) -> (paymentDay /\ ev)) $ event : concatMap scheduleEvent allElements
   where
+  event :: Event
+  event = AD /\ { calculationDay: statusDate, paymentDay: statusDate }
 
   allElements :: forall b rep. Generic b rep => GenericBoundedEnum rep => GenericTop rep => GenericBottom rep => List b
   allElements = mapMaybe genericToEnum (idxFrom .. idxTo)
@@ -211,7 +207,7 @@ genFixedSchedule ct@(ContractTerms { terminationDate, statusDate }) =
     idxFrom = genericFromEnum (genericBottom :: b)
     idxTo = genericFromEnum (genericTop :: b)
 
-  scheduleEvent ev = map (\d -> (ev /\ d)) $ schedule ev ct
+  scheduleEvent ev = map (ev /\ _) $ schedule ev ct
 
   filtersSchedules :: Event -> Boolean
   filtersSchedules (_ /\ { calculationDay }) = isNothing terminationDate || Just calculationDay <= terminationDate
@@ -252,25 +248,13 @@ genStates
   ContractState a
   ->
   -- | New states
-  Reader (CtxSTF a) (List (Event /\ ContractState a))
-genStates scs stn@(ContractState { sd: statusDate }) = mapAccumLM' apply st0 scs >>= filterM filtersStates <<< snd
-  where
-  apply ((ev /\ { calculationDay }) /\ st) (ev' /\ t') =
-    do
-      newState <- stateTransition ev calculationDay st
-      pure (((ev' /\ t') /\ newState) /\ ((ev' /\ t') /\ newState))
-
-  st0 :: Event /\ ContractState a
-  st0 = (AD /\ { calculationDay: statusDate, paymentDay: statusDate }) /\ stn
-
-mapAccumLM' :: forall acc x y m. Monad m => (acc -> x -> m (acc /\ y)) -> acc -> List x -> m (acc /\ List y)
-mapAccumLM' f = go
-  where
-  go s (x : xs) = do
-    (s1 /\ x') <- f s x
-    (s2 /\ xs') <- go s1 xs
-    pure (s2 /\ x' : xs')
-  go s Nil = pure (s /\ Nil)
+  Reader (CtxSTF a) (List (ContractState a))
+genStates ((eventType /\ { calculationDay }) : events) state =
+  do
+    nextState <- stateTransition eventType calculationDay state
+    nextStates <- genStates events nextState
+    pure (nextState : nextStates)
+genStates Nil _ = pure Nil
 
 filtersStates
   :: forall a
@@ -308,6 +292,6 @@ genPayoffs
   ->
   -- | Payoffs
   Reader (CtxPOF a) (List a)
-genPayoffs evs sts = traverse calculatePayoff $ zip evs sts
+genPayoffs events states = traverse calculatePayoff $ zip events states
   where
-  calculatePayoff ((ev /\ { calculationDay }) /\ st) = payoff (ev /\ calculationDay) st
+  calculatePayoff ((event /\ { calculationDay }) /\ state) = payoff (event /\ calculationDay) state
