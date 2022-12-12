@@ -20,7 +20,7 @@ spec possibleServerURL = do
     case possibleServerURL of
       Just serverURL -> Client.spec serverURL
       Nothing ->
-        it ("Skipping client tests as " <> _MARLOWE_WEB_SERVER_URL <> "env var is not set") do
+        it ("Skipping client tests as " <> _MARLOWE_WEB_SERVER_URL <> " env var is not set") do
          pure unit
 
 
