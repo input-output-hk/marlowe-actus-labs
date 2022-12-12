@@ -25,7 +25,6 @@ import Test.Marlowe.Runtime.Web as Web
 import Test.Spec as Spec
 import Test.Spec.Reporter.Console (consoleReporter)
 import Test.Spec.Runner (runSpec)
-import Test.Wallet.Internal as Test.Wallet.Internal
 
 main :: Effect Unit
 main = do
@@ -45,7 +44,6 @@ main = do
         TestFramework.spec testsLAM
         TestFramework.spec testsNAM
         TestFramework.spec testsANN
-        Test.Wallet.Internal.spec
 
   where
   readFile file = do

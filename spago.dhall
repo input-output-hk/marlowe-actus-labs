@@ -53,6 +53,8 @@
   , "web-dom"
   , "aff-promise"
   , "js-timers"
+  , "nullable"
+  , "web-promise"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]

@@ -1,52 +1,45 @@
-module Wallet where
+module Wallet
+  ( Api(..)
+  , ApiVersion(..)
+  , Icon(..)
+  , Name(..)
+  , Wallet(..)
+  , getWallets
+  ) where
 
 import Prelude
 
-import Control.Monad.Except (ExceptT, runExceptT)
-import Data.Either (either)
-import Data.List.Types (NonEmptyList)
+import Data.Maybe (Maybe)
+import Data.Nullable (Nullable)
+import Data.Nullable as Nullable
 import Effect (Effect)
-import Effect.Exception (throw)
-import Foreign (ForeignError)
-import Foreign as Foreign
+import Foreign (Foreign)
+import Foreign.Object (Object)
+import Web.HTML (Window)
+import Web.Promise (Promise)
 
-throwForeignErrors :: forall a. ExceptT (NonEmptyList ForeignError) Effect a -> Effect a
-throwForeignErrors = either (throw <<< show <<< map Foreign.renderForeignError) pure <=< runExceptT
+newtype ApiVersion = ApiVersion String
 
--- apis :: Cardano -> Effect (Array Wallet)
--- apis c = do
---   o :: Object Foreign <- throwForeignErrors $ Foreign.unsafeReadTagged "Object" $ Foreign.unsafeToForeign c
---   Array.mapMaybe Either.hush <$> traverse (runExceptT <<< readApi) (Object.values o)
+newtype Icon = Icon String
 
--- readApi :: forall m. Monad m => Foreign -> ExceptT (NonEmptyList ForeignError) m Wallet
--- readApi x = do
---   void $ Foreign.unsafeReadTagged "Object" x
---   apiVersion :: ApiVersion <- readApiVersion =<< Foreign.Index.readProp "apiVersion" x
---   enable :: Aff Api <- readEnable =<< Foreign.Index.readProp "enable" x
---   icon :: Icon <- readIcon =<< Foreign.Index.readProp "icon" x
---   isEnabled :: Aff Boolean <- readIsEnabled =<< Foreign.Index.readProp "isEnabled" x
---   name :: Name <- readName =<< Foreign.Index.readProp "name" x
---   pure $ Wallet { apiVersion, enable, icon, isEnabled, name }
---   where
---   readApiVersion :: Foreign -> ExceptT (NonEmptyList ForeignError) m ApiVersion
---   readApiVersion = map ApiVersion <<< Foreign.readString
+newtype Name = Name String
 
---   readIcon :: Foreign -> ExceptT (NonEmptyList ForeignError) m Icon
---   readIcon = map Icon <<< Foreign.readString
+{-
+TODO implement
+-}
+newtype Api = Api Foreign
 
---   readName :: Foreign -> ExceptT (NonEmptyList ForeignError) m Name
---   readName = map Name <<< Foreign.readString
+newtype Wallet = Wallet
+  { apiVersion :: ApiVersion
+  , enable :: Effect (Promise Api)
+  , icon :: Icon
+  , isEnabled :: Effect (Promise Boolean)
+  , name :: Name
+  }
 
---   readEnable :: Foreign -> ExceptT (NonEmptyList ForeignError) m (Aff Api)
---   readEnable x' = do
---     f :: Effect (Promise Api) <- Foreign.unsafeReadTagged "Function" x'
---     arity :: Int <- Foreign.readInt =<< Foreign.Index.readProp "length" x'
---     unless (arity == 0) $ Foreign.fail $ ForeignError "Expected procedure of arity 0"
---     pure $ toAffE f
+foreign import data Cardano :: Type
 
---   readIsEnabled :: Foreign -> ExceptT (NonEmptyList ForeignError) m (Aff Boolean)
---   readIsEnabled x' = do
---     f :: Effect (Promise Boolean) <- Foreign.unsafeReadTagged "Function" x'
---     arity :: Int <- Foreign.readInt =<< Foreign.Index.readProp "length" x'
---     unless (arity == 0) $ Foreign.fail $ ForeignError "Expected procedure of arity 0"
---     pure $ toAffE f
+foreign import getWallets_ :: Window -> Effect (Nullable (Object Wallet))
+
+getWallets :: Window -> Effect (Maybe (Object Wallet))
+getWallets = map Nullable.toMaybe <<< getWallets_
