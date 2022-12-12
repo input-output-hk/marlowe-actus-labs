@@ -56,7 +56,6 @@ main = do
     Nothing -> throw "Could not find element with id 'app-root'"
     Just container -> do
       reactRoot <- createRoot container
-      contractList <- contractList
 
       launchAff_ do
         contracts <- fetchContractHeaders serverUrl ("/contracts/")
