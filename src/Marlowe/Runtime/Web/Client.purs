@@ -10,6 +10,7 @@ import Data.Either (Either(..), either)
 import Data.Traversable (for)
 import Effect.Aff (Aff, Error, error)
 import Fetch (fetch)
+import Fetch as RequestMode
 import Foreign (Foreign)
 import Foreign.Object as Object
 import Marlowe.Runtime.Web.Types (ContractHeader, ContractState, ResourceLink(..), ResourceWithLinks, ServerURL(..), Tx, TxHeader, decodeResourceWithLink)
@@ -78,7 +79,7 @@ fetchResource (ServerURL serverUrl) (ResourceLink path) = do
     bringBackJson :: Foreign -> Json
     bringBackJson = unsafeCoerce
 
-  res <- fetch url { headers: { "Accept": "application/json" } }
+  res <- fetch url { headers: { "Accept": "application/json" } , mode: RequestMode.NoCors }
   json <- bringBackJson <$> res.json
 
   either
