@@ -4,7 +4,7 @@ import Prelude
 
 import Control.Monad.Error.Class (class MonadThrow)
 import Control.Monad.Except (throwError)
-import Data.Argonaut (class DecodeJson, Json, JsonDecodeError, decodeJson, fromObject, fromString, printJsonDecodeError, stringify)
+import Data.Argonaut (Json, JsonDecodeError, decodeJson, fromObject, fromString, stringify)
 import Data.Argonaut.Decode ((.:))
 import Data.Either (Either(..), either)
 import Data.Traversable (for)
@@ -17,37 +17,29 @@ import Marlowe.Runtime.Web.Types (ContractHeader, ContractState, ResourceLink(..
 import Unsafe.Coerce (unsafeCoerce)
 
 -- fetchConractHeaders
-fetchContractHeaders :: ServerURL -> String -> Aff (Array (ResourceWithLinks ContractHeader (contract :: ResourceLink ContractState)))
-fetchContractHeaders serverUrl location = do
-  let
-    res = ResourceLink location
+fetchContractHeaders :: ServerURL -> ResourceLink ContractHeader -> Aff (Array (ResourceWithLinks ContractHeader (contract :: ResourceLink ContractState)))
+fetchContractHeaders serverUrl res = do
   json <- fetchResource serverUrl res
   (contractsWithLinksJson :: Array Json) <- either (throwError <<< error <<< show) pure do
     obj <- decodeJson json
     obj .: "results"
-
   for contractsWithLinksJson \contractWithLinksJson -> do
       let contract :: Either JsonDecodeError (ResourceWithLinks ContractHeader (contract :: ResourceLink ContractState))
           contract = decodeResourceWithLink (map decodeJson) contractWithLinksJson
       handleError contractWithLinksJson contract
 
 -- fetchContract
-fetchContract :: ServerURL -> String -> Aff (ResourceWithLinks ContractState (transactions :: ResourceLink (Array TxHeader)))
-fetchContract serverUrl location = do
-  let
-    res = ResourceLink location
+fetchContract :: ServerURL -> ResourceLink ContractState -> Aff (ResourceWithLinks ContractState (transactions :: ResourceLink (Array TxHeader)))
+fetchContract serverUrl res = do
   json <- fetchResource serverUrl res
-
   let
     contractState :: Either JsonDecodeError (ResourceWithLinks ContractState (transactions :: ResourceLink (Array TxHeader)))
     contractState = decodeResourceWithLink (map decodeJson) json
   handleError json contractState
 
 -- fetchTransactionHeaders
-fetchTransactionHeaders :: ServerURL -> String -> Aff (Array (ResourceWithLinks TxHeader (transaction :: ResourceLink Tx)))
-fetchTransactionHeaders serverUrl location = do
-  let
-    res = ResourceLink location
+fetchTransactionHeaders :: ServerURL -> ResourceLink (ResourceLink TxHeader) -> Aff (Array (ResourceWithLinks TxHeader (transaction :: ResourceLink Tx)))
+fetchTransactionHeaders serverUrl res = do
   json <- fetchResource serverUrl res
   (txHeadersJsonArr :: Array Json) <- either (throwError <<< error <<< show) pure do
       obj <- decodeJson json
@@ -59,19 +51,16 @@ fetchTransactionHeaders serverUrl location = do
     handleError txHeaderJson txHeader
 
 -- fetchTransaction
-fetchTransaction :: ServerURL -> String -> Aff (ResourceWithLinks Tx (previous :: ResourceLink Tx))
-fetchTransaction serverUrl location = do
-  let
-    res = ResourceLink location
+fetchTransaction :: ServerURL -> ResourceLink (ResourceLink Tx) -> Aff (ResourceWithLinks Tx (previous :: ResourceLink Tx))
+fetchTransaction serverUrl res = do
   json <- fetchResource serverUrl res
-
   let
     tx :: Either JsonDecodeError (ResourceWithLinks Tx (previous :: ResourceLink Tx))
     tx = decodeResourceWithLink (map decodeJson) json
   handleError json tx
 
 -- fetchResource
-fetchResource :: forall a. DecodeJson a => ServerURL -> ResourceLink a -> Aff a
+fetchResource :: forall a. ServerURL -> ResourceLink a -> Aff Json
 fetchResource (ServerURL serverUrl) (ResourceLink path) = do
   let
     url = serverUrl <> path
@@ -80,12 +69,7 @@ fetchResource (ServerURL serverUrl) (ResourceLink path) = do
     bringBackJson = unsafeCoerce
 
   res <- fetch url { headers: { "Accept": "application/json" } , mode: RequestMode.NoCors }
-  json <- bringBackJson <$> res.json
-
-  either
-    (throwError <<< error <<< printJsonDecodeError)
-    pure
-    (decodeJson json)
+  bringBackJson <$> res.json
 
 -- handleError
 handleError :: forall a b c. Show b => MonadThrow Error a => Json -> Either b c -> a c
