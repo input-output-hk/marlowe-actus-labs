@@ -6,7 +6,6 @@ import Prelude
 
 import Data.Maybe (Maybe(..))
 import Effect (Effect)
-import Effect.Aff (launchAff_)
 import Effect.Class.Console as Console
 import Wallet as Wallet
 import Web.HTML (window)
@@ -16,22 +15,8 @@ main = do
   w <- window
   mC <- Wallet.cardano w
   case mC of
-    Nothing -> Console.log "boo 1"
-    Just c -> do
-      Console.log "yay 1"
-      mYoroi <- Wallet.yoroi c
-      case mYoroi of
-        Nothing -> Console.log "boo 2"
-        Just yoroi -> do
-          Console.log "yay 2"
-          Console.log =<< Wallet.name yoroi
-          yoroiIsEnabled <- Wallet.isEnabled yoroi
-          yoroiEnable <- Wallet.enable yoroi
-          launchAff_ do
-            isEnabled <- yoroiIsEnabled
-            Console.log $ "isEnabled: " <> show isEnabled
-            yoroiApi <- yoroiEnable
-            Console.log "yay 3"
+    Nothing -> Console.log "nay"
+    Just _ -> Console.log "yay"
 
 -- import Data.Array as Array
 -- import Data.Maybe (Maybe(..), maybe)

@@ -55,6 +55,7 @@
   , "js-timers"
   , "nullable"
   , "web-promise"
+  , "js-object"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]
