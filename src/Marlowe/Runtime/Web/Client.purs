@@ -10,15 +10,15 @@ import Data.Either (Either(..), either)
 import Data.Traversable (for)
 import Effect.Aff (Aff, Error, error)
 import Fetch (fetch)
-import Fetch as RequestMode
 import Foreign (Foreign)
 import Foreign.Object as Object
 import Marlowe.Runtime.Web.Types (ContractHeader, ContractState, ResourceLink(..), ResourceWithLinks, ServerURL(..), Tx, TxHeader, decodeResourceWithLink)
 import Unsafe.Coerce (unsafeCoerce)
 
 -- fetchConractHeaders
-fetchContractHeaders :: ServerURL -> ResourceLink ContractHeader -> Aff (Array (ResourceWithLinks ContractHeader (contract :: ResourceLink ContractState)))
-fetchContractHeaders serverUrl res = do
+fetchContractHeaders :: ServerURL -> Aff (Array (ResourceWithLinks ContractHeader (contract :: ResourceLink ContractState)))
+fetchContractHeaders serverUrl = do
+  let res = ResourceLink "contracts"
   json <- fetchResource serverUrl res
   (contractsWithLinksJson :: Array Json) <- either (throwError <<< error <<< show) pure do
     obj <- decodeJson json
@@ -38,7 +38,7 @@ fetchContract serverUrl res = do
   handleError json contractState
 
 -- fetchTransactionHeaders
-fetchTransactionHeaders :: ServerURL -> ResourceLink (ResourceLink TxHeader) -> Aff (Array (ResourceWithLinks TxHeader (transaction :: ResourceLink Tx)))
+fetchTransactionHeaders :: ServerURL -> ResourceLink (Array TxHeader) -> Aff (Array (ResourceWithLinks TxHeader (transaction :: ResourceLink Tx)))
 fetchTransactionHeaders serverUrl res = do
   json <- fetchResource serverUrl res
   (txHeadersJsonArr :: Array Json) <- either (throwError <<< error <<< show) pure do
@@ -51,7 +51,7 @@ fetchTransactionHeaders serverUrl res = do
     handleError txHeaderJson txHeader
 
 -- fetchTransaction
-fetchTransaction :: ServerURL -> ResourceLink (ResourceLink Tx) -> Aff (ResourceWithLinks Tx (previous :: ResourceLink Tx))
+fetchTransaction :: ServerURL -> ResourceLink Tx -> Aff (ResourceWithLinks Tx (previous :: ResourceLink Tx))
 fetchTransaction serverUrl res = do
   json <- fetchResource serverUrl res
   let
@@ -68,7 +68,9 @@ fetchResource (ServerURL serverUrl) (ResourceLink path) = do
     bringBackJson :: Foreign -> Json
     bringBackJson = unsafeCoerce
 
-  res <- fetch url { headers: { "Accept": "application/json" } , mode: RequestMode.NoCors }
+  res <- fetch url { headers: { "Accept": "application/json" } }
+  -- TODO: check HTTP status code - if 206 get next chunk (via Range)
+
   bringBackJson <$> res.json
 
 -- handleError

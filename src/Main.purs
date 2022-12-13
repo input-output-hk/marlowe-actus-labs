@@ -46,7 +46,7 @@ testWallet = launchAff_ do
             Console.log <<< ("getUtxos: " <> _) <<< show =<< Wallet.getUtxos api
 
 serverUrl :: ServerURL
-serverUrl = ServerURL "http://localhost:49207/" -- TODO: to config
+serverUrl = ServerURL "http://localhost:49204/" -- TODO: to config
 
 main :: Effect Unit
 main = do
@@ -58,5 +58,5 @@ main = do
       reactRoot <- createRoot container
 
       launchAff_ do
-        contracts <- fetchContractHeaders serverUrl (ResourceLink "contracts/")
+        contracts <- fetchContractHeaders serverUrl
         liftEffect $ renderRoot reactRoot (contractList contracts)
