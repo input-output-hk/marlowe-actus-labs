@@ -16,7 +16,7 @@ import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Exception (throw)
 import Marlowe.Runtime.Web.Client (fetchContractHeaders)
-import Marlowe.Runtime.Web.Types (ServerURL(..))
+import Marlowe.Runtime.Web.Types (ResourceLink(..), ServerURL(..))
 import React.Basic.DOM.Client (createRoot, renderRoot)
 import Web.DOM (Element)
 import Web.DOM.NonElementParentNode (getElementById)
@@ -46,7 +46,7 @@ testWallet = launchAff_ do
             Console.log <<< ("getUtxos: " <> _) <<< show =<< Wallet.getUtxos api
 
 serverUrl :: ServerURL
-serverUrl = ServerURL "http://localhost:49207" -- TODO: to config
+serverUrl = ServerURL "http://localhost:49207/" -- TODO: to config
 
 main :: Effect Unit
 main = do
@@ -58,5 +58,5 @@ main = do
       reactRoot <- createRoot container
 
       launchAff_ do
-        contracts <- fetchContractHeaders serverUrl ("/contracts/")
+        contracts <- fetchContractHeaders serverUrl (ResourceLink "contracts/")
         liftEffect $ renderRoot reactRoot (contractList contracts)
