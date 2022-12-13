@@ -54,7 +54,7 @@
   , "aff-promise"
   , "js-timers"
   , "nullable"
-  , "web-promise"
+  , "js-promise-aff"
   , "js-object"
   ]
 , packages = ./packages.dhall
