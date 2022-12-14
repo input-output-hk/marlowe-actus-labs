@@ -94,3 +94,8 @@ in upstream
       [ "argonaut", "effect", "prelude", "quickcheck", "typelevel" ]
       "https://github.com/danieljharvey/purescript-refined.git"
       "v1.0.0"
+  with
+    js-object = mkPackage
+      [ "aff", "effect", "heterogeneous", "prelude", "typelevel-prelude", "contravariant", "newtype", "record", "unsafe-coerce" ]
+      "https://github.com/purescript-codegen/purescript-js-object.git"
+      "73db55f89744b032f44c9ec49804f46e3ee63ed7"

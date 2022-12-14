@@ -14,10 +14,10 @@ import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Effect.Exception (error)
 import Foreign.Object (Object)
-import Node.Encoding (Encoding(..))
-import Node.FS.Aff (readTextFile)
 import Foreign.Object as Object
 import Marlowe.Runtime.Web.Types (ServerURL(..))
+import Node.Encoding (Encoding(..))
+import Node.FS.Aff (readTextFile)
 import Node.Process (getEnv)
 import Test.Actus.Domain.ContractTerms as ContractTerms
 import Test.Marlowe.Actus as MarloweActus
@@ -36,7 +36,7 @@ main = do
     testsLAM <- readFile "./test/Actus/Domain/actus-tests-lam.json"
     testsNAM <- readFile "./test/Actus/Domain/actus-tests-nam.json"
     testsANN <- readFile "./test/Actus/Domain/actus-tests-ann.json"
-  
+
     runSpec [ consoleReporter ] $ do
       Spec.parallel do
         ContractTerms.spec
