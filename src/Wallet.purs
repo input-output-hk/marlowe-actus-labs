@@ -44,7 +44,13 @@ import Web.HTML (Window)
 
 newtype Address = Address String
 
+instance Show Address where
+  show (Address s) = show s
+
 newtype Cbor = Cbor String
+
+instance Show Cbor where
+  show (Cbor s) = show s
 
 newtype Bytes = Bytes String
 
@@ -105,6 +111,13 @@ _Cardano
      }
 _Cardano = mkFFI (Proxy :: Proxy Cardano)
 
+-- | Manually tested and works with Nami (after a delay)
+-- |
+-- | The Nami and Yoroi browser extensions injects themselves into the
+-- | running website with
+-- | ```js
+-- | window.cardano = { ...window.cardano, nami = stuff }
+-- | ```
 cardano :: Window -> Effect (Maybe Cardano)
 cardano w = do
   eProp <- runExceptT $ Foreign.Index.readProp "cardano" $ Foreign.unsafeToForeign w
@@ -114,30 +127,47 @@ cardano w = do
       | Foreign.isUndefined prop -> pure Nothing
       | otherwise -> pure $ Just $ Foreign.unsafeFromForeign prop
 
+-- | Manually tested and works with Nami.
+-- |
+-- | Remember that the Nami browser extension injects itself with
+-- | ```js
+-- | window.cardano = { ...window.cardano, nami = stuff }
+-- | ```
+-- | after a delay so if you want to wait for it with an artificial delay,
+-- | you have to preceed the delay before invoking `cardano` rather than
+-- | this procedure.
 nami :: Cardano -> Effect (Maybe Wallet)
 nami = map Nullable.toMaybe <<< _Cardano.nami
 
+-- | Not yet manually tested.
 yoroi :: Cardano -> Effect (Maybe Wallet)
 yoroi = map Nullable.toMaybe <<< _Cardano.yoroi
 
+-- | Manually tested and works with Nami.
 apiVersion :: Wallet -> Effect String
 apiVersion = _Wallet.apiVersion
 
+-- | Manually tested and works with Nami.
 enable :: Wallet -> Aff Api
 enable = Promise.toAffE <<< _Wallet.enable
 
+-- | Manually tested and works with Nami.
 icon :: Wallet -> Effect String
 icon = _Wallet.icon
 
+-- | Manually tested and works with Nami.
 isEnabled :: Wallet -> Aff Boolean
 isEnabled = Promise.toAffE <<< _Wallet.isEnabled
 
+-- | Manually tested and works with Nami.
 name :: Wallet -> Effect String
 name = _Wallet.name
 
+-- | Manually tested and works with Nami.
 getNetworkId :: Api -> Aff Int
 getNetworkId = Promise.toAffE <<< _Api.getNetworkId
 
+-- | Manually tested and does not work with Nami.
 getBalance :: Api -> Aff Number
 getBalance = Promise.toAffE <<< _Api.getBalance
 
