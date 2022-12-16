@@ -26,6 +26,8 @@ encodeDateTime = instantToJson <<< fromDateTime
 decodeDateTime :: Json -> Either JsonDecodeError DateTime
 decodeDateTime json = rmap toDateTime (instantFromJson json)
 
+-- Using acronyms from `actus-dictionary-terms.json` for encoding/decoding
+-- https://github.com/actusfrf/actus-dictionary
 instance EncodeJson (Metadata Decimal) where
   encodeJson (Metadata (ContractTerms ct)) =
     "cid" := ct.contractId
