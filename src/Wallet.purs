@@ -51,7 +51,7 @@ import Web.HTML (Window)
 newtype Address = Address String
 
 instance Show Address where
-  show (Address s) = show s
+  show (Address s) = "(Address " <> show s <> ")"
 
 data TransactionUnspentOutput
 
@@ -190,21 +190,27 @@ getNetworkId = Promise.toAffE <<< _Api.getNetworkId
 getBalance :: Api -> Aff (Cbor Value)
 getBalance = Promise.toAffE <<< _Api.getBalance
 
+-- | Manually tested and works with Nami.
 getChangeAddress :: Api -> Aff Address
 getChangeAddress = Promise.toAffE <<< _Api.getChangeAddress
 
+-- | Manually tested and works with Nami.
 getCollateral :: Api -> Cbor Coin -> Aff (Maybe (Array (Cbor TransactionUnspentOutput)))
 getCollateral api = map Nullable.toMaybe <<< Promise.toAffE <<< _Api.getCollateral api
 
+-- | Manually tested and works with Nami.
 getRewardAddresses :: Api -> Aff (Array Address)
 getRewardAddresses = Promise.toAffE <<< _Api.getRewardAddresses
 
+-- | Manually tested and works with Nami.
 getUnusedAddresses :: Api -> Aff (Array Address)
 getUnusedAddresses = Promise.toAffE <<< _Api.getUnusedAddresses
 
+-- | Manually tested and works with Nami.
 getUsedAddresses :: Api -> Aff (Array Address)
 getUsedAddresses = Promise.toAffE <<< _Api.getUsedAddresses
 
+-- | Manually tested and works with Nami.
 getUtxos :: Api -> Aff (Maybe (Array (Cbor TransactionUnspentOutput)))
 getUtxos = map Nullable.toMaybe <<< Promise.toAffE <<< _Api.getUtxos
 
