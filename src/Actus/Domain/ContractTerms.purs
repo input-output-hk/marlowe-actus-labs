@@ -823,6 +823,9 @@ instance Show a => Show (ContractTerms a) where
 decodeDecimal :: Json -> Either JsonDecodeError Decimal
 decodeDecimal = decodeFromString (String.trimStart >>> Decimal.fromString)
 
+encodeDecimal :: Decimal -> Json
+encodeDecimal = fromString <<< Decimal.toString
+
 decodeDateTime :: Json -> Either JsonDecodeError DateTime
 decodeDateTime json = do
   str <- decodeJson json
