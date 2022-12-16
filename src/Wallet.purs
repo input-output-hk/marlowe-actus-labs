@@ -2,6 +2,12 @@ module Wallet
   ( Address(..)
   , Bytes(..)
   , Cbor(..)
+  , Coin
+  , Hash32(..)
+  , Transaction(..)
+  , TransactionUnspentOutput
+  , TransactionWitnessSet(..)
+  , Value(..)
   , apiVersion
   , cardano
   , enable
@@ -44,36 +50,55 @@ import Web.HTML (Window)
 
 newtype Address = Address String
 
-newtype Cbor = Cbor String
+instance Show Address where
+  show (Address s) = "(Address " <> show s <> ")"
+
+data TransactionUnspentOutput
+
+data Coin
+
+data Transaction
+
+data Value
+
+data TransactionWitnessSet
+
+data Hash32
+
+newtype Cbor :: forall k. k -> Type
+newtype Cbor a = Cbor String
+
+instance Show (Cbor a) where
+  show (Cbor s) = "(Cbor " <> show s <> ")"
 
 newtype Bytes = Bytes String
 
 type Api = JSObject
   ( getNetworkId :: EffectMth0 (Promise Int)
-  , getUtxos :: EffectMth0 (Promise (Array Cbor))
-  , getCollateral :: EffectMth1 Cbor (Promise (Array Cbor))
-  , getBalance :: EffectMth0 (Promise Number)
+  , getUtxos :: EffectMth0 (Promise (Nullable (Array (Cbor TransactionUnspentOutput))))
+  , getCollateral :: EffectMth1 (Cbor Coin) (Promise (Nullable (Array (Cbor TransactionUnspentOutput))))
+  , getBalance :: EffectMth0 (Promise (Cbor Value))
   , getUsedAddresses :: EffectMth0 (Promise (Array Address))
   , getUnusedAddresses :: EffectMth0 (Promise (Array Address))
   , getChangeAddress :: EffectMth0 (Promise Address)
   , getRewardAddresses :: EffectMth0 (Promise (Array Address))
-  , signTx :: EffectMth2 Cbor Boolean (Promise Cbor)
+  , signTx :: EffectMth2 (Cbor Transaction) Boolean (Promise (Cbor TransactionWitnessSet))
   , signData :: EffectMth2 Address Bytes (Promise Bytes)
-  , submitTx :: EffectMth1 Cbor (Promise Cbor)
+  , submitTx :: EffectMth1 (Cbor Transaction) (Promise (Cbor Hash32))
   )
 
 _Api
-  :: { getBalance :: Api -> Effect (Promise Number)
+  :: { getBalance :: Api -> Effect (Promise (Cbor Value))
      , getChangeAddress :: Api -> Effect (Promise Address)
-     , getCollateral :: Api -> Cbor -> Effect (Promise (Array Cbor))
+     , getCollateral :: Api -> Cbor Coin -> Effect (Promise (Nullable (Array (Cbor TransactionUnspentOutput))))
      , getNetworkId :: Api -> Effect (Promise Int)
      , getRewardAddresses :: Api -> Effect (Promise (Array Address))
      , getUnusedAddresses :: Api -> Effect (Promise (Array Address))
      , getUsedAddresses :: Api -> Effect (Promise (Array Address))
-     , getUtxos :: Api -> Effect (Promise (Array Cbor))
+     , getUtxos :: Api -> Effect (Promise (Nullable (Array (Cbor TransactionUnspentOutput))))
      , signData :: Api -> Address -> Bytes -> Effect (Promise Bytes)
-     , signTx :: Api -> Cbor -> Boolean -> Effect (Promise Cbor)
-     , submitTx :: Api -> Cbor -> Effect (Promise Cbor)
+     , signTx :: Api -> Cbor Transaction -> Boolean -> Effect (Promise (Cbor TransactionWitnessSet))
+     , submitTx :: Api -> Cbor Transaction -> Effect (Promise (Cbor Hash32))
      }
 _Api = mkFFI (Proxy :: Proxy Api)
 
@@ -105,6 +130,13 @@ _Cardano
      }
 _Cardano = mkFFI (Proxy :: Proxy Cardano)
 
+-- | Manually tested and works with Nami (after a delay)
+-- |
+-- | The Nami and Yoroi browser extensions injects themselves into the
+-- | running website with
+-- | ```js
+-- | window.cardano = { ...window.cardano, nami = stuff }
+-- | ```
 cardano :: Window -> Effect (Maybe Cardano)
 cardano w = do
   eProp <- runExceptT $ Foreign.Index.readProp "cardano" $ Foreign.unsafeToForeign w
@@ -114,56 +146,79 @@ cardano w = do
       | Foreign.isUndefined prop -> pure Nothing
       | otherwise -> pure $ Just $ Foreign.unsafeFromForeign prop
 
+-- | Manually tested and works with Nami.
+-- |
+-- | Remember that the Nami browser extension injects itself with
+-- | ```js
+-- | window.cardano = { ...window.cardano, nami = stuff }
+-- | ```
+-- | after a delay so if you want to wait for it with an artificial delay,
+-- | you have to preceed the delay before invoking `cardano` rather than
+-- | this procedure.
 nami :: Cardano -> Effect (Maybe Wallet)
 nami = map Nullable.toMaybe <<< _Cardano.nami
 
+-- | Not yet manually tested.
 yoroi :: Cardano -> Effect (Maybe Wallet)
 yoroi = map Nullable.toMaybe <<< _Cardano.yoroi
 
+-- | Manually tested and works with Nami.
 apiVersion :: Wallet -> Effect String
 apiVersion = _Wallet.apiVersion
 
+-- | Manually tested and works with Nami.
 enable :: Wallet -> Aff Api
 enable = Promise.toAffE <<< _Wallet.enable
 
+-- | Manually tested and works with Nami.
 icon :: Wallet -> Effect String
 icon = _Wallet.icon
 
+-- | Manually tested and works with Nami.
 isEnabled :: Wallet -> Aff Boolean
 isEnabled = Promise.toAffE <<< _Wallet.isEnabled
 
+-- | Manually tested and works with Nami.
 name :: Wallet -> Effect String
 name = _Wallet.name
 
+-- | Manually tested and works with Nami.
 getNetworkId :: Api -> Aff Int
 getNetworkId = Promise.toAffE <<< _Api.getNetworkId
 
-getBalance :: Api -> Aff Number
+-- | Manually tested and works with Nami.
+getBalance :: Api -> Aff (Cbor Value)
 getBalance = Promise.toAffE <<< _Api.getBalance
 
+-- | Manually tested and works with Nami.
 getChangeAddress :: Api -> Aff Address
 getChangeAddress = Promise.toAffE <<< _Api.getChangeAddress
 
-getCollateral :: Api -> Cbor -> Aff (Array Cbor)
-getCollateral api = Promise.toAffE <<< _Api.getCollateral api
+-- | Manually tested and works with Nami.
+getCollateral :: Api -> Cbor Coin -> Aff (Maybe (Array (Cbor TransactionUnspentOutput)))
+getCollateral api = map Nullable.toMaybe <<< Promise.toAffE <<< _Api.getCollateral api
 
+-- | Manually tested and works with Nami.
 getRewardAddresses :: Api -> Aff (Array Address)
 getRewardAddresses = Promise.toAffE <<< _Api.getRewardAddresses
 
+-- | Manually tested and works with Nami.
 getUnusedAddresses :: Api -> Aff (Array Address)
 getUnusedAddresses = Promise.toAffE <<< _Api.getUnusedAddresses
 
+-- | Manually tested and works with Nami.
 getUsedAddresses :: Api -> Aff (Array Address)
 getUsedAddresses = Promise.toAffE <<< _Api.getUsedAddresses
 
-getUtxos :: Api -> Aff (Array Cbor)
-getUtxos = Promise.toAffE <<< _Api.getUtxos
+-- | Manually tested and works with Nami.
+getUtxos :: Api -> Aff (Maybe (Array (Cbor TransactionUnspentOutput)))
+getUtxos = map Nullable.toMaybe <<< Promise.toAffE <<< _Api.getUtxos
 
 signData :: Api -> Address -> Bytes -> Aff Bytes
 signData api address = Promise.toAffE <<< _Api.signData api address
 
-signTx :: Api -> Cbor -> Boolean -> Aff Cbor
+signTx :: Api -> Cbor Transaction -> Boolean -> Aff (Cbor TransactionWitnessSet)
 signTx api cbor = Promise.toAffE <<< _Api.signTx api cbor
 
-submitTx :: Api -> Cbor -> Aff Cbor
+submitTx :: Api -> Cbor Transaction -> Aff (Cbor Hash32)
 submitTx api = Promise.toAffE <<< _Api.submitTx api

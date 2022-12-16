@@ -13,16 +13,20 @@ import Wallet as Wallet
 import Web.HTML (window)
 
 main :: Effect Unit
-main = do
-  w <- window
-  mC <- Wallet.cardano w
+main = launchAff_ do
+  delay (Milliseconds 3_000.0)
+  mC <- liftEffect (Wallet.cardano =<< window)
   case mC of
     Nothing -> Console.log "nay"
-    Just c -> launchAff_ do
-      delay (Milliseconds 3_000.0)
+    Just c -> do
       liftEffect (Wallet.nami c)
         >>= case _ of
           Nothing -> Console.log "boo"
           Just nami -> do
             api <- Wallet.enable nami
-            Console.log <<< show =<< Wallet.getNetworkId api
+            Console.log <<< ("getBalance: " <> _) <<< show =<< Wallet.getBalance api
+            Console.log <<< ("getChangeAddress: " <> _) <<< show =<< Wallet.getChangeAddress api
+            Console.log <<< ("getRewardAddresses: " <> _) <<< show =<< Wallet.getRewardAddresses api
+            Console.log <<< ("getUnusedAddresses: " <> _) <<< show =<< Wallet.getUnusedAddresses api
+            Console.log <<< ("getUsedAddresses: " <> _) <<< show =<< Wallet.getUsedAddresses api
+            Console.log <<< ("getUtxos: " <> _) <<< show =<< Wallet.getUtxos api
