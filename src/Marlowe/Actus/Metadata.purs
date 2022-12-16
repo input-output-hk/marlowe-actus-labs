@@ -17,6 +17,7 @@ import Marlowe.Time (instantFromJson, instantToJson)
 
 newtype Metadata value = Metadata (ContractTerms value)
 
+derive instance Eq a => Eq (Metadata a)
 derive instance Generic (Metadata value) _
 
 encodeDateTime :: DateTime -> Json
@@ -265,5 +266,4 @@ instance DecodeJson (Metadata Decimal) where
       , cycleOfDividendPayment
       , cycleAnchorDateOfDividendPayment
       , nextDividendPaymentAmount
-      , enableSettlement: false
       }

@@ -299,7 +299,6 @@ toMarlowe (ContractTerms ct) =
     , cycleOfDividendPayment: ct.cycleOfDividendPayment
     , cycleAnchorDateOfDividendPayment: ct.cycleAnchorDateOfDividendPayment
     , nextDividendPaymentAmount: constant =<< ct.nextDividendPaymentAmount
-    , enableSettlement: ct.enableSettlement
     }
   where
   constant :: Decimal -> Maybe Value'
