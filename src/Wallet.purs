@@ -186,7 +186,7 @@ name = _Wallet.name
 getNetworkId :: Api -> Aff Int
 getNetworkId = Promise.toAffE <<< _Api.getNetworkId
 
--- | Manually tested and does not work with Nami.
+-- | Manually tested and works with Nami.
 getBalance :: Api -> Aff (Cbor Value)
 getBalance = Promise.toAffE <<< _Api.getBalance
 
