@@ -2,58 +2,35 @@ module Marlowe.Runtime.Web.Types where
 
 import Prelude
 
-import Contrib.Data.Argonaut.Generic.Record (class DecodeRecord, DecodeJsonFieldFn, decodeRecord)
-import Data.Argonaut (class DecodeJson, Json, JsonDecodeError, decodeJson)
-import Data.Either (Either)
-import Data.Generic.Rep (class Generic)
-import Data.Newtype (class Newtype)
 import Contrib.Data.Argonaut (JsonParser, JsonParserResult, decodeFromString)
 import Contrib.Data.Argonaut.Generic.Record (DecodeJsonFieldFn, decodeNewtypedRecord)
-import Data.Argonaut (class DecodeJson, Json, JsonDecodeError(..), decodeJson)
+import Contrib.Data.Argonaut.Generic.Record (class DecodeRecord, DecodeJsonFieldFn, decodeRecord)
+import Data.Argonaut (class DecodeJson, Json, JsonDecodeError, decodeJson)
+import Data.Argonaut (class DecodeJson, class EncodeJson, Json, JsonDecodeError(..), decodeJson, encodeJson)
+import Data.Argonaut.Decode.Combinators ((.:))
 import Data.Argonaut.Decode.Decoders (decodeMaybe)
 import Data.DateTime (DateTime)
+import Data.Either (Either)
 import Data.Either (Either, note)
+import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep (class Generic)
 import Data.Int as Int
 import Data.JSDate as JSDate
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
-import Data.Newtype (class Newtype)
+import Data.Newtype (class Newtype, un)
+import Data.Newtype (class Newtype, unwrap)
 import Data.String as String
 import Data.Traversable (for)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Unsafe (unsafePerformEffect)
+import Fetch.Core.Request (Request)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Record as Record
-
-newtype ResourceLink :: Type -> Type
-newtype ResourceLink resource = ResourceLink String
-
-derive instance Generic (ResourceLink resource) _
-derive instance Newtype (ResourceLink resource) _
-derive instance Eq (ResourceLink resource)
-derive instance Ord (ResourceLink resource)
-instance DecodeJson (ResourceLink resource) where
-  decodeJson json = ResourceLink <$> decodeJson json
-
-type ResourceWithLinksRow resource linksRow =
-  ( links :: { | linksRow }
-  , resource :: resource
-  )
-
-type ResourceWithLinks :: Type -> Row Type -> Type
-type ResourceWithLinks resource linksRow = { | ResourceWithLinksRow resource linksRow }
-
-decodeResourceWithLink
-  :: forall a linksRow
-   . DecodeRecord (resource :: DecodeJsonFieldFn a) (ResourceWithLinksRow a linksRow)
-  => DecodeJsonFieldFn a
-  -> Json
-  -> Either JsonDecodeError (ResourceWithLinks a linksRow)
-decodeResourceWithLink decodeResource = decodeRecord { resource: decodeResource }
+import Type.Row.Homogeneous as Row
 
 newtype TxId = TxId String
 
@@ -104,6 +81,10 @@ data MarloweVersion = V1
 derive instance Generic MarloweVersion _
 derive instance Eq MarloweVersion
 derive instance Ord MarloweVersion
+instance EncodeJson MarloweVersion where
+  encodeJson = encodeJson <<< case _ of
+    V1 -> "v1"
+
 instance DecodeJson MarloweVersion where
   decodeJson = decodeFromString case _ of
     "v1" -> Just V1
@@ -142,7 +123,7 @@ instance DecodeJson BlockHeader where
 -- FIXME: We want to make it more concrete soon ;-)
 type Metadata = Map Int (Object Json)
 
-type ContractHeaderRowBase r =
+type ContractHeadersRowBase r =
   ( contractId :: TxOutRef
   , roleTokenMintingPolicyId :: PolicyId
   , version :: MarloweVersion
@@ -152,7 +133,7 @@ type ContractHeaderRowBase r =
   | r
   )
 
-newtype ContractHeader = ContractHeader { | ContractHeaderRowBase () }
+newtype ContractHeader = ContractHeader { | ContractHeadersRowBase () }
 
 derive instance Generic ContractHeader _
 derive instance Newtype ContractHeader _
@@ -176,18 +157,34 @@ metadataFieldDecoder = { metadata: map decodeMetadata :: Maybe Json -> Maybe (Js
 instance DecodeJson ContractHeader where
   decodeJson = decodeNewtypedRecord metadataFieldDecoder
 
--- FIXME: The belowe two types are just stubs for now - we can probably use them using serialization lib bindings or transaction-lib:
--- * https://github.com/Emurgo/cardano-serialization-lib
--- * https://github.com/Plutonomicon/cardano-transaction-lib
-newtype TextEnvelope (a :: Type) = TextEnvelope String
+newtype CborHex = CborHex String
+
+derive instance Eq CborHex
+derive newtype instance DecodeJson CborHex
+
+newtype TextEnvelope (a :: Type) = TextEnvelope
+  { type_ :: String
+  , description :: String
+  , cborHex :: CborHex
+  }
 
 derive instance Generic (TextEnvelope a) _
 derive instance Newtype (TextEnvelope a) _
 derive instance Eq (TextEnvelope a)
 
--- We don't loook under the hood so it is a bit "unsafe"
+instance DecodeJson (TextEnvelope a) where
+  decodeJson = unsafeDecodeTextEnvelope
+
+-- We don't loook under the hood so it is a bit "unsafe" - in a given
+-- context when we know what `a` "should be" we can use this function
+-- or the above instance.
 unsafeDecodeTextEnvelope :: forall a. JsonParser (TextEnvelope a)
-unsafeDecodeTextEnvelope = map TextEnvelope <$> decodeJson
+unsafeDecodeTextEnvelope json = TextEnvelope <$> do
+  (obj :: Object Json) <- decodeJson json
+  type_ <- obj .: "teType"
+  description <- obj .: "teDescription"
+  cborHex <- obj .: "teCborHex"
+  pure { type_, description, cborHex }
 
 decodeTxBodyTextEnvelope :: JsonParser (TextEnvelope TxBody)
 decodeTxBodyTextEnvelope = unsafeDecodeTextEnvelope
@@ -198,7 +195,7 @@ derive instance Generic TxBody _
 derive instance Newtype TxBody _
 derive instance Eq TxBody
 
-type ContractStateRow = ContractHeaderRowBase
+type ContractStateRow = ContractHeadersRowBase
   ( initialContract :: V1.Contract
   , currentContract :: Maybe V1.Contract
   , state :: Maybe V1.State
@@ -228,8 +225,8 @@ type TxRowBase r =
   | r
   )
 
-type TxHeaderRow = TxRowBase (utxo :: Maybe TxOutRef)
-newtype TxHeader = TxHeader { | TxHeaderRow }
+type TxHeadersRow = TxRowBase (utxo :: Maybe TxOutRef)
+newtype TxHeader = TxHeader { | TxHeadersRow }
 
 derive instance Generic TxHeader _
 derive instance Newtype TxHeader _
@@ -278,3 +275,184 @@ instance DecodeJson Tx where
       }
 
 newtype ServerURL = ServerURL String
+
+newtype Lovelace = Lovelace Int
+
+derive instance Newtype Lovelace _
+
+instance EncodeJson Lovelace where
+  encodeJson = encodeJson <<< un Lovelace
+
+newtype Address = Address String
+
+derive instance Newtype Address _
+
+addressToString :: Address -> String
+addressToString = un Address
+
+instance EncodeJson Address where
+  encodeJson = encodeJson <<< addressToString
+
+-- Base types for typed API endpoints
+
+newtype ResourceLink :: Type -> Type
+newtype ResourceLink resource = ResourceLink String
+
+derive instance Generic (ResourceLink resource) _
+derive instance Newtype (ResourceLink resource) _
+derive instance Eq (ResourceLink resource)
+derive instance Ord (ResourceLink resource)
+instance DecodeJson (ResourceLink resource) where
+  decodeJson json = ResourceLink <$> decodeJson json
+
+type ResourceWithLinksRow resource linksRow =
+  ( links :: { | linksRow }
+  , resource :: resource
+  )
+
+type ResourceWithLinks :: Type -> Row Type -> Type
+type ResourceWithLinks resource linksRow = { | ResourceWithLinksRow resource linksRow }
+
+-- | We perform GET and POST against this endpoint. Links structure is shared between response and resource.
+newtype IndexEndpoint :: Type -> Type -> Type -> Row Type -> Type
+newtype IndexEndpoint postRequest postResponse getResponse links =
+  IndexEndpoint (ResourceLink (Array (ResourceWithLinks getResponse links)))
+
+derive instance Eq (IndexEndpoint postRequest postResponse getResponse links)
+derive instance Newtype (IndexEndpoint postRequest postResponse getResponse links) _
+derive newtype instance DecodeJson (IndexEndpoint postRequest postResponse getResponse links)
+
+-- | We perform GET and PUT against this endpoint.
+newtype ResourceEndpoint :: Type -> Type -> Row Type -> Type
+newtype ResourceEndpoint putRequest getResponse links =
+  ResourceEndpoint (ResourceLink (ResourceWithLinks getResponse links))
+
+derive instance Eq (ResourceEndpoint putRequest getResponse links)
+derive instance Newtype (ResourceEndpoint putRequest getResponse links) _
+derive newtype instance DecodeJson (ResourceEndpoint putRequest getResponse links)
+
+class ToResourceLink t a | t -> a where
+  toResourceLink :: t -> ResourceLink a
+
+instance ToResourceLink (ResourceLink a) a where
+  toResourceLink = identity
+else instance ToResourceLink (ResourceEndpoint putRequest getResponse links) (ResourceWithLinks getResponse links) where
+  toResourceLink (ResourceEndpoint link) = toResourceLink link
+else instance ToResourceLink (IndexEndpoint postRequest postResponse getResponse links) (Array (ResourceWithLinks getResponse links)) where
+  toResourceLink (IndexEndpoint link) = toResourceLink link
+-- | I'm closing the type class here for convenience. If we want to have other instances we can drop this approach.
+else instance (Newtype n t, ToResourceLink t a) => ToResourceLink n a where
+  toResourceLink = toResourceLink <<< unwrap
+
+decodeResourceWithLink
+  :: forall a linksRow
+   . DecodeRecord (resource :: DecodeJsonFieldFn a) (ResourceWithLinksRow a linksRow)
+  => DecodeJsonFieldFn a
+  -> Json
+  -> Either JsonDecodeError (ResourceWithLinks a linksRow)
+decodeResourceWithLink decodeResource = decodeRecord { resource: decodeResource }
+
+class EncodeHeaders a r | a -> r where
+  encodeHeaders :: Row.Homogeneous r String => a -> { | r }
+
+class EncodeJsonBody a where
+  encodeJsonBody :: a -> Json
+
+-- API Endpoints
+
+newtype PostContractsRequest = PostContractsRequest
+  { metadata :: Metadata
+  -- , version :: MarloweVersion
+  -- , roles :: Maybe RolesConfig
+  , contract :: V1.Contract
+  , minUTxODeposit :: Lovelace
+  , changeAddress :: Address
+  , address :: Address
+  , collateralUTxO :: Address
+  }
+
+instance EncodeJsonBody PostContractsRequest where
+  encodeJsonBody (PostContractsRequest r) = encodeJson
+    { metadata: r.metadata
+    , version: V1
+    , roles: Nothing :: Maybe String
+    , contract: r.contract
+    , minUTxODeposit: r.minUTxODeposit
+    }
+
+type PostContractsHeadersRow =
+  ( "X-Change-Address" :: String
+  , "X-Address" :: String
+  , "X-Colateral-UTxO" :: String
+  )
+
+instance EncodeHeaders PostContractsRequest PostContractsHeadersRow where
+  encodeHeaders (PostContractsRequest { changeAddress, address, collateralUTxO }) =
+    { "X-Change-Address": addressToString changeAddress
+    , "X-Address": addressToString address
+    , "X-Colateral-UTxO": addressToString collateralUTxO
+    }
+
+newtype PostContractsResponse = PostContractsResponse
+  { contractId :: TxOutRef
+  , txBody :: TextEnvelope TxBody
+  , description :: String
+  }
+
+derive instance Newtype PostContractsResponse _
+
+instance DecodeJson PostContractsResponse where
+  decodeJson = decodeNewtypedRecord
+    { txBody: map decodeTxBodyTextEnvelope :: Maybe _ -> Maybe _ }
+
+type GetContractsResponse = ContractHeader
+
+newtype ContractsEndpoint = ContractsEndpoint
+  (IndexEndpoint PostContractsRequest PostContractsResponse GetContractsResponse (contract :: ContractEndpoint))
+
+derive instance Eq ContractsEndpoint
+derive instance Newtype ContractsEndpoint _
+derive newtype instance DecodeJson ContractsEndpoint
+
+newtype PutContractRequest = PutContractRequest Int
+
+type GetContractResponse = ContractState
+
+newtype ContractEndpoint = ContractEndpoint
+  (ResourceEndpoint PutContractRequest GetContractResponse (transactions :: TransactionsEndpoint))
+
+derive instance Eq ContractEndpoint
+derive instance Newtype ContractEndpoint _
+derive newtype instance DecodeJson ContractEndpoint
+
+newtype PostTransactionsRequest = PostTransactionsRequest Int
+
+newtype PostTransactionsResponse = PostTransactinosResponse Int
+
+type GetTransactionsResponse = TxHeader
+
+newtype TransactionsEndpoint = TransactionsEndpoint
+  (IndexEndpoint PostTransactionsRequest PostTransactionsResponse GetTransactionsResponse (transaction :: TransactionEndpoint))
+
+derive instance Eq TransactionsEndpoint
+derive instance Newtype TransactionsEndpoint _
+derive newtype instance DecodeJson TransactionsEndpoint
+
+newtype PutTransactionRequest = PutTransactionRequest
+  { txBody :: TextEnvelope TxBody
+  }
+
+type GetTransactionResponse = Tx
+
+newtype TransactionEndpoint = TransactionEndpoint
+  (ResourceEndpoint PutTransactionRequest GetTransactionResponse (previous :: Maybe TransactionEndpoint, next :: Maybe TransactionEndpoint))
+
+derive instance Eq TransactionEndpoint
+derive instance Newtype TransactionEndpoint _
+derive newtype instance DecodeJson TransactionEndpoint
+
+-- Entry point
+
+api :: ContractsEndpoint
+api = ContractsEndpoint (IndexEndpoint (ResourceLink "contracts"))
+
