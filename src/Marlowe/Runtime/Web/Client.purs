@@ -2,119 +2,248 @@ module Marlowe.Runtime.Web.Client where
 
 import Prelude
 
-import Control.Apply (lift2)
-import Control.Monad.Error.Class (class MonadThrow)
-import Control.Monad.Except (throwError)
-import Data.Argonaut (Json, JsonDecodeError, decodeJson, fromObject, fromString, stringify)
+import Contrib.Data.Argonaut (JsonParser)
+import Contrib.Fetch (FetchError, fetchEither, jsonBody)
+import Control.Monad.Except (ExceptT(..), runExceptT, throwError)
+import Control.Monad.Loops (unfoldrM)
+import Control.Monad.Trans.Class (lift)
+import Data.Argonaut (class DecodeJson, JsonDecodeError, decodeJson, stringify)
 import Data.Argonaut.Decode ((.:))
-import Data.Array (concat, singleton, (:))
+import Data.Array (fold)
 import Data.Bifunctor (lmap)
-import Data.Either (Either(..), either)
+import Data.Either (Either(..))
+import Data.Foldable (length)
+import Data.Generic.Rep (class Generic)
+import Data.HTTP.Method (Method(..))
+import Data.List (List)
+import Data.List as List
 import Data.Map (Map, fromFoldable, lookup)
 import Data.Maybe (Maybe(..))
+import Data.Show.Generic (genericShow)
 import Data.String.CaseInsensitive (CaseInsensitiveString(..))
-import Data.Traversable (for)
+import Data.Tuple.Nested ((/\))
 import Debug (traceM)
-import Effect.Aff (Aff, Error, error)
-import Fetch (fetch)
+import Effect.Aff (Aff, Error)
+import Effect.Aff.Class (class MonadAff, liftAff)
+import Fetch (RequestMode(..))
 import Fetch.Core.Headers (Headers, toArray)
-import Foreign (Foreign)
+import Foreign.Object (Object)
 import Foreign.Object as Object
-import Marlowe.Runtime.Web.Types (ContractHeader, ContractState, ResourceLink(..), ResourceWithLinks, ServerURL(..), Tx, TxHeader, decodeResourceWithLink)
-import Unsafe.Coerce (unsafeCoerce)
+import Marlowe.Runtime.Web.Types (class EncodeHeaders, class EncodeJsonBody, class ToResourceLink, IndexEndpoint(..), ResourceEndpoint(..), ResourceLink(..), ServerURL(..), encodeHeaders, encodeJsonBody, toResourceLink)
+import Prim.Row (class Lacks) as Row
+import Record as R
+import Type.Prelude (Proxy(..))
+import Type.Row.Homogeneous (class Homogeneous) as Row
 
--- fetchConractHeaders
-fetchContractHeaders :: ServerURL -> Aff (Array (ResourceWithLinks ContractHeader (contract :: ResourceLink ContractState)))
-fetchContractHeaders serverUrl = do
-  let res = ResourceLink "contracts"
-  jsons <- fetchResources serverUrl res
-  (contractsWithLinksJson :: Array (Array Json)) <- either (throwError <<< error <<< show) pure $
-    for jsons \json -> do
-      obj <- decodeJson json
-      obj .: "results"
-  for (concat contractsWithLinksJson) \contractWithLinksJson -> do
-      let contract :: Either JsonDecodeError (ResourceWithLinks ContractHeader (contract :: ResourceLink ContractState))
-          contract = decodeResourceWithLink (map decodeJson) contractWithLinksJson
-      handleError contractWithLinksJson contract
+data ClientError
+  = FetchError FetchError
+  | ResponseDecodingError JsonDecodeError
 
--- fetchContract
-fetchContract :: ServerURL -> ResourceLink ContractState -> Aff (ResourceWithLinks ContractState (transactions :: ResourceLink (Array TxHeader)))
-fetchContract serverUrl res = do
-  json <- fetchResource serverUrl res
+derive instance Generic ClientError _
+
+instance Show ClientError where
+  show = genericShow
+
+type GetResourceResponse res = Either ClientError res
+
+allowedStatusCodes :: Array Int
+allowedStatusCodes = [ 200, 201, 206 ]
+
+decodeResponse :: forall a. DecodeJson a => JsonParser a
+decodeResponse json = do
+  obj <- decodeJson json
+  res <- obj .: "results"
+  decodeJson res
+
+newtype Range = Range String
+
+getResource
+  :: forall a extraHeaders
+   . DecodeJson a
+  => Row.Lacks "Accept" extraHeaders
+  => Row.Lacks "Access-Control-Request-Headers" extraHeaders
+  => Row.Homogeneous ("Accept" :: String, "Access-Control-Request-Headers" :: String | extraHeaders) String
+  => ServerURL
+  -> ResourceLink a
+  -> { | extraHeaders }
+  -> Aff (GetResourceResponse { headers :: Headers, payload :: a, status :: Int })
+getResource (ServerURL serverUrl) (ResourceLink path) extraHeaders = do
   let
-    contractState :: Either JsonDecodeError (ResourceWithLinks ContractState (transactions :: ResourceLink (Array TxHeader)))
-    contractState = decodeResourceWithLink (map decodeJson) json
-  handleError json contractState
+    url = serverUrl <> "/" <> path
 
--- fetchTransactionHeaders
-fetchTransactionHeaders :: ServerURL -> ResourceLink (Array TxHeader) -> Aff (Array (ResourceWithLinks TxHeader (transaction :: ResourceLink Tx)))
-fetchTransactionHeaders serverUrl res = do
-  jsons <- fetchResources serverUrl res
-  (txHeadersJsonArr :: Array (Array Json)) <- either (throwError <<< error <<< show) pure $
-    for jsons \json -> do
-      obj <- decodeJson json
-      obj .: "results"
+    reqHeaders =
+      R.insert (Proxy :: Proxy "Access-Control-Request-Headers") "Range, Accept"
+        $ R.insert (Proxy :: Proxy "Accept") "application/json"
+        $ extraHeaders
 
-  for (concat txHeadersJsonArr) \txHeaderJson -> do
-    let txHeader :: Either JsonDecodeError (ResourceWithLinks TxHeader (transaction :: ResourceLink Tx))
-        txHeader = decodeResourceWithLink (map decodeJson) txHeaderJson
-    handleError txHeaderJson txHeader
+  runExceptT do
+    res@{ status, headers: resHeaders } <- ExceptT $ fetchEither url { headers: reqHeaders, mode: Cors } allowedStatusCodes FetchError
+    lift (jsonBody res) >>= decodeResponse >>> case _ of
+      Left err -> throwError (ResponseDecodingError err)
+      Right payload -> pure { payload, headers: resHeaders, status }
 
--- fetchTransaction
-fetchTransaction :: ServerURL -> ResourceLink Tx -> Aff (ResourceWithLinks Tx (previous :: ResourceLink Tx))
-fetchTransaction serverUrl res = do
-  json <- fetchResource serverUrl res
+getPage
+  :: forall a
+   . DecodeJson a
+  => ServerURL
+  -> ResourceLink a
+  -> Maybe Range
+  -> Aff (GetResourceResponse ({ page :: a, nextRange :: Maybe Range }))
+getPage serverUrl path possibleRange = runExceptT do
+  { headers, payload, status } <- ExceptT case possibleRange of
+    Nothing ->
+      getResource serverUrl path {"Range": "contractId"}
+    Just (Range range) -> do
+      traceM "range"
+      res <- getResource serverUrl path { "Range": range }
+      traceM "range done"
+      pure res
+  traceM "STATUS:"
+  traceM status
   let
-    tx :: Either JsonDecodeError (ResourceWithLinks Tx (previous :: ResourceLink Tx))
-    tx = decodeResourceWithLink (map decodeJson) json
-  handleError json tx
+    toHeaders :: Headers -> Map CaseInsensitiveString String
+    toHeaders = toArray >>> map (lmap CaseInsensitiveString) >>> fromFoldable
 
--- fetchResource
-fetchResource :: forall a. ServerURL -> ResourceLink a -> Aff Json
-fetchResource (ServerURL serverUrl) (ResourceLink path) = do
+    nextRange = case status, lookup (CaseInsensitiveString "Next-Range") (toHeaders headers) of
+      206, Just nr -> Just (Range nr)
+      _, _ -> Nothing
+
+  traceM "HEADERS:"
+  traceM $ (toHeaders headers)
+  traceM $ (Object.fromFoldable (toArray headers) :: Object String)
+
+  pure { page: payload, nextRange }
+
+data FoldPageStep = FetchPage (Maybe Range) | StopFetching
+
+foldMapMPages
+  :: forall a b m
+   . DecodeJson a
+  => MonadAff m
+  => Monoid b
+  => ServerURL
+  -> ResourceLink a
+  -> ({ page :: a, currRange :: Maybe Range } -> m b)
+  -> m (GetResourceResponse b)
+foldMapMPages serverUrl path f = do
   let
-    url = serverUrl <> path
+    seed = FetchPage Nothing
+  bs <- runExceptT $ flip unfoldrM seed case _ of
+    StopFetching -> pure Nothing
+    FetchPage currRange -> do
+      traceM "Fetching page"
+      { page, nextRange } <- ExceptT $ liftAff $ getPage serverUrl path currRange
+      traceM "Fetching page done"
+      b <- lift $ f { page, currRange }
+      case nextRange of
+        Just _ -> pure $ Just (b /\ FetchPage nextRange)
+        Nothing -> pure $ Just (b /\ StopFetching)
+  pure (fold <$> bs)
 
-    bringBackJson :: Foreign -> Json
-    bringBackJson = unsafeCoerce
+getPages
+  :: forall a m
+   . DecodeJson a
+  => MonadAff m
+  => ServerURL
+  -> ResourceLink a
+  -> m
+       ( GetResourceResponse
+           ( List
+               { page :: a
+               , currRange :: Maybe Range
+               }
+           )
+       )
+getPages serverUrl path = foldMapMPages serverUrl path (pure <<< List.singleton)
 
-  res <- fetch url { headers: { "Accept": "application/json" } }
-  bringBackJson <$> res.json
+getResource'
+  :: forall a extraHeaders endpoint
+   . DecodeJson a
+  => Row.Lacks "Accept" extraHeaders
+  => Row.Lacks "Access-Control-Request-Headers" extraHeaders
+  => Row.Homogeneous ("Accept" :: String, "Access-Control-Request-Headers" :: String | extraHeaders) String
+  => ToResourceLink endpoint a
+  => ServerURL
+  -> endpoint
+  -> Record extraHeaders
+  -> Aff (GetResourceResponse { headers :: Headers, payload :: a, status :: Int })
+getResource' serverUrl path = getResource serverUrl (toResourceLink path)
 
--- fetchResources
-fetchResources :: forall a. ServerURL -> ResourceLink a -> Aff (Array Json)
-fetchResources (ServerURL serverUrl) (ResourceLink path) = do
+getPage'
+  :: forall a endpoint
+   . DecodeJson a
+  => ToResourceLink endpoint a
+  => ServerURL
+  -> endpoint
+  -> Maybe Range
+  -> Aff (GetResourceResponse ({ page :: a, nextRange :: Maybe Range }))
+getPage' serverUrl path = getPage serverUrl (toResourceLink path)
+
+foldMapMPages'
+  :: forall a b m t
+   . DecodeJson a
+  => MonadAff m
+  => Monoid b
+  => ToResourceLink t a
+  => ServerURL
+  -> t
+  -> ( { currRange :: Maybe Range
+       , page :: a
+       }
+       -> m b
+     )
+  -> m (Either ClientError b)
+foldMapMPages' serverUrl path = foldMapMPages serverUrl (toResourceLink path)
+
+post
+  :: forall links postRequest postResponse getResponse extraHeaders
+   . DecodeJson postResponse
+  => EncodeHeaders postRequest extraHeaders
+  => EncodeJsonBody postRequest
+  => Row.Homogeneous extraHeaders String
+  => Row.Homogeneous ("Accept" :: String, "Content-Type" :: String | extraHeaders) String
+  => Row.Lacks "Accept" extraHeaders
+  => Row.Lacks "Content-Type" extraHeaders
+  => ServerURL
+  -> IndexEndpoint postRequest postResponse getResponse links
+  -> postRequest
+  -> Aff (GetResourceResponse postResponse)
+post (ServerURL serverUrl) (IndexEndpoint (ResourceLink path)) req = runExceptT do
   let
-    url = serverUrl <> path
+    url = serverUrl <> "/" <> path
+    body = stringify $ encodeJsonBody req
 
-    bringBackJson :: Foreign -> Json
-    bringBackJson = unsafeCoerce
+    headers :: { "Accept" :: String, "Content-Type" :: String | extraHeaders }
+    headers =
+      R.insert (Proxy :: Proxy "Accept") "application/json"
+        $ R.insert (Proxy :: Proxy "Content-Type") "application/json"
+        $ (encodeHeaders req :: { | extraHeaders })
 
-    fetchAll :: _ -> Aff (Array Json)
-    fetchAll header = do
-       { json, status, headers } <- fetch url header
-       if status == 206
-         then
-            case lookup (CaseInsensitiveString "Next-Range") (toHeaders headers) of
-               Just nextRange ->
-                  lift2 (:)
-                    (bringBackJson <$> json)
-                    (fetchAll { headers: { "Accept": "application/json" , "Range": nextRange } })
-               _ -> do
-                 traceM json
-                 throwError $ error "HTTP 206 but Next-Range header missing"
-         else
-            singleton <<< bringBackJson <$> json
+  response <- ExceptT $ fetchEither url { method: POST, body, headers } allowedStatusCodes FetchError
+  (lift (jsonBody response)) >>= decodeJson >>> case _ of
+    Left err -> throwError (ResponseDecodingError err)
+    Right payload -> pure payload
 
-  fetchAll { headers: { "Accept": "application/json" , "Range": "contractId" } }
+put
+  :: forall links putRequest getResponse extraHeaders
+   . EncodeHeaders putRequest extraHeaders
+  => EncodeJsonBody putRequest
+  => Row.Homogeneous extraHeaders String
+  => Row.Homogeneous ("Accept" :: String, "Content-Type" :: String | extraHeaders) String
+  => Row.Lacks "Accept" extraHeaders
+  => Row.Lacks "Content-Type" extraHeaders
+  => ServerURL
+  -> ResourceEndpoint putRequest getResponse links
+  -> putRequest
+  -> Aff (Either FetchError Unit)
+put (ServerURL serverUrl) (ResourceEndpoint (ResourceLink path)) req = runExceptT do
+  let
+    url = serverUrl <> "/" <> path
+    body = stringify $ encodeJsonBody req
 
--- from: Fetch.Internal.Headers
-toHeaders :: Headers -> Map CaseInsensitiveString String
-toHeaders = toArray >>> map (lmap CaseInsensitiveString) >>> fromFoldable
-
--- handleError
-handleError :: forall a b c. Show b => MonadThrow Error a => Json -> Either b c -> a c
-handleError json (Left err) =
-  let errJson = fromObject $ Object.fromHomogeneous { json, err: fromString $ show err }
-   in throwError $ error $ stringify errJson
-handleError _ (Right c) = pure c
+    headers :: { "Accept" :: String, "Content-Type" :: String | extraHeaders }
+    headers =
+      R.insert (Proxy :: Proxy "Accept") "application/json"
+        $ R.insert (Proxy :: Proxy "Content-Type") "application/json"
+        $ (encodeHeaders req :: { | extraHeaders })
+  void $ ExceptT $ fetchEither url { method: PUT, body, headers } allowedStatusCodes identity

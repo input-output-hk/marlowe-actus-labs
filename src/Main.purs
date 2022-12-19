@@ -4,8 +4,10 @@ module Main
 
 import Prelude
 
-import Component.ContractList (contractList)
+import Component.ContractList (mkContractList)
+import Data.Either (Either, either)
 import Data.Maybe (Maybe(..))
+import Data.Newtype (un)
 import Effect (Effect)
 import Effect.Aff (Milliseconds(..), delay, launchAff_)
 import Effect.Class (liftEffect)
@@ -13,10 +15,11 @@ import Effect.Class.Console as Console
 import Wallet as Wallet
 import Web.HTML (window)
 import Effect.Aff (launchAff_)
+import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
-import Effect.Exception (throw)
-import Marlowe.Runtime.Web.Client (fetchContractHeaders)
-import Marlowe.Runtime.Web.Types (ResourceLink(..), ServerURL(..))
+import Effect.Exception (error, throw)
+import Marlowe.Runtime.Web.Client (foldMapMPages, foldMapMPages')
+import Marlowe.Runtime.Web.Types (ResourceLink(..), ServerURL(..), api)
 import React.Basic.DOM.Client (createRoot, renderRoot)
 import Web.DOM (Element)
 import Web.DOM.NonElementParentNode (getElementById)
@@ -46,7 +49,13 @@ testWallet = launchAff_ do
             Console.log <<< ("getUtxos: " <> _) <<< show =<< Wallet.getUtxos api
 
 serverUrl :: ServerURL
-serverUrl = ServerURL "http://localhost:49204/" -- TODO: to config
+serverUrl = ServerURL "http://localhost:49706"
+
+liftEitherWith :: forall a err. (err -> String) -> Either err a -> Effect a
+liftEitherWith showErr = either (throw <<< showErr) pure
+
+liftEither :: forall a err. Show err => Either err a -> Effect a
+liftEither = either (throw <<< show) pure
 
 main :: Effect Unit
 main = do
@@ -56,7 +65,8 @@ main = do
     Nothing -> throw "Could not find element with id 'app-root'"
     Just container -> do
       reactRoot <- createRoot container
-
+      contractListComponent <- mkContractList
       launchAff_ do
-        contracts <- fetchContractHeaders serverUrl
-        liftEffect $ renderRoot reactRoot (contractList contracts)
+        -- contracts <- foldMapMPages' serverUrl api (pure <<< _.page) >>= liftEither >>> liftEffect
+        liftEffect $ renderRoot reactRoot (contractListComponent [])
+
