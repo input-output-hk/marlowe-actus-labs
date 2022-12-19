@@ -34,7 +34,6 @@ import Web.HTML (window)
 import Web.HTML.HTMLDocument (toNonElementParentNode)
 import Web.HTML.Window (document)
 
-
 type SubmissionError = String
 
 type ContractId = TxOutRef
@@ -63,7 +62,7 @@ mkContractForm = component "ContractForm" \onNewContract -> React.do
     renderValidation = case validationResult of
       NotValidated -> mempty
       Failure validationMessage ->
-        DOM.div { style: css { color: "red" }} [ text validationMessage ]
+        DOM.div { style: css { color: "red" } } [ text validationMessage ]
       Validated contract -> text "SUCCESS"
 
     validateForm = case parseJson value of
@@ -81,7 +80,7 @@ mkContractForm = component "ContractForm" \onNewContract -> React.do
                 }
             , renderValidation
             , R.input
-              { type: "submit" }
+                { type: "submit" }
             ]
         }
 
@@ -110,30 +109,29 @@ mkContractList = do
 
     pure $ case state of
       { newContract: Just Creating } -> DOM.div {}
-        [ DOM.title {} [ text "Add Contract"]
+        [ DOM.title {} [ text "Add Contract" ]
         , contractForm onNewContract
         ]
       { newContract: Just (Submitting _) } -> text "Submitting"
       { newContract: Just _ } -> text "STUB: Other contract creation step"
       { newContract: Nothing } -> DOM.div {} $
         [ DOM.a
-          { onClick: onAddContractClick, href: "#" }
-          "Add Contract"
+            { onClick: onAddContractClick, href: "#" }
+            "Add Contract"
         ]
-        <> map
-              ( \({ links }) ->
-                  DOM.div
-                    { className: "contracts-list" }
-                    [ text $ unwrap $ toResourceLink links.contract ]
-              )
-              state.contractList
+          <> map
+            ( \({ links }) ->
+                DOM.div
+                  { className: "contracts-list" }
+                  [ text $ unwrap $ toResourceLink links.contract ]
+            )
+            state.contractList
 
-          -- <<< filter
-          --   ( \{ resource } ->
-          --       let
-          --         ContractHeader header = resource
-          --       in
-          --         header.metadata == empty -- TODO: find ACTUS contract in Metadata
-          --   )
-
+-- <<< filter
+--   ( \{ resource } ->
+--       let
+--         ContractHeader header = resource
+--       in
+--         header.metadata == empty -- TODO: find ACTUS contract in Metadata
+--   )
 

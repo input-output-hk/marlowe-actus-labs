@@ -27,7 +27,6 @@ import Web.HTML (HTMLDocument, window)
 import Web.HTML.HTMLDocument (toNonElementParentNode)
 import Web.HTML.Window (document)
 
-
 -- | TODO: move this testing code to a separate "app"
 testWallet :: Effect Unit
 testWallet = launchAff_ do

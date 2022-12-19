@@ -84,6 +84,7 @@ derive instance Ord MarloweVersion
 instance EncodeJson MarloweVersion where
   encodeJson = encodeJson <<< case _ of
     V1 -> "v1"
+
 instance DecodeJson MarloweVersion where
   decodeJson = decodeFromString case _ of
     "v1" -> Just V1
@@ -157,6 +158,7 @@ instance DecodeJson ContractHeader where
   decodeJson = decodeNewtypedRecord metadataFieldDecoder
 
 newtype CborHex = CborHex String
+
 derive instance Eq CborHex
 derive newtype instance DecodeJson CborHex
 
@@ -165,6 +167,7 @@ newtype TextEnvelope (a :: Type) = TextEnvelope
   , description :: String
   , cborHex :: CborHex
   }
+
 derive instance Generic (TextEnvelope a) _
 derive instance Newtype (TextEnvelope a) _
 derive instance Eq (TextEnvelope a)
@@ -274,12 +277,14 @@ instance DecodeJson Tx where
 newtype ServerURL = ServerURL String
 
 newtype Lovelace = Lovelace Int
+
 derive instance Newtype Lovelace _
 
 instance EncodeJson Lovelace where
   encodeJson = encodeJson <<< un Lovelace
 
 newtype Address = Address String
+
 derive instance Newtype Address _
 
 addressToString :: Address -> String
@@ -312,6 +317,7 @@ type ResourceWithLinks resource linksRow = { | ResourceWithLinksRow resource lin
 newtype IndexEndpoint :: Type -> Type -> Type -> Row Type -> Type
 newtype IndexEndpoint postRequest postResponse getResponse links =
   IndexEndpoint (ResourceLink (Array (ResourceWithLinks getResponse links)))
+
 derive instance Eq (IndexEndpoint postRequest postResponse getResponse links)
 derive instance Newtype (IndexEndpoint postRequest postResponse getResponse links) _
 derive newtype instance DecodeJson (IndexEndpoint postRequest postResponse getResponse links)
@@ -320,6 +326,7 @@ derive newtype instance DecodeJson (IndexEndpoint postRequest postResponse getRe
 newtype ResourceEndpoint :: Type -> Type -> Row Type -> Type
 newtype ResourceEndpoint putRequest getResponse links =
   ResourceEndpoint (ResourceLink (ResourceWithLinks getResponse links))
+
 derive instance Eq (ResourceEndpoint putRequest getResponse links)
 derive instance Newtype (ResourceEndpoint putRequest getResponse links) _
 derive newtype instance DecodeJson (ResourceEndpoint putRequest getResponse links)
@@ -391,6 +398,7 @@ newtype PostContractsResponse = PostContractsResponse
   , txBody :: TextEnvelope TxBody
   , description :: String
   }
+
 derive instance Newtype PostContractsResponse _
 
 instance DecodeJson PostContractsResponse where
@@ -401,6 +409,7 @@ type GetContractsResponse = ContractHeader
 
 newtype ContractsEndpoint = ContractsEndpoint
   (IndexEndpoint PostContractsRequest PostContractsResponse GetContractsResponse (contract :: ContractEndpoint))
+
 derive instance Eq ContractsEndpoint
 derive instance Newtype ContractsEndpoint _
 derive newtype instance DecodeJson ContractsEndpoint
@@ -410,7 +419,8 @@ newtype PutContractRequest = PutContractRequest Int
 type GetContractResponse = ContractState
 
 newtype ContractEndpoint = ContractEndpoint
-  ( ResourceEndpoint PutContractRequest GetContractResponse (transactions :: TransactionsEndpoint) )
+  (ResourceEndpoint PutContractRequest GetContractResponse (transactions :: TransactionsEndpoint))
+
 derive instance Eq ContractEndpoint
 derive instance Newtype ContractEndpoint _
 derive newtype instance DecodeJson ContractEndpoint
@@ -422,7 +432,8 @@ newtype PostTransactionsResponse = PostTransactinosResponse Int
 type GetTransactionsResponse = TxHeader
 
 newtype TransactionsEndpoint = TransactionsEndpoint
-  ( IndexEndpoint PostTransactionsRequest PostTransactionsResponse GetTransactionsResponse (transaction :: TransactionEndpoint))
+  (IndexEndpoint PostTransactionsRequest PostTransactionsResponse GetTransactionsResponse (transaction :: TransactionEndpoint))
+
 derive instance Eq TransactionsEndpoint
 derive instance Newtype TransactionsEndpoint _
 derive newtype instance DecodeJson TransactionsEndpoint
@@ -435,6 +446,7 @@ type GetTransactionResponse = Tx
 
 newtype TransactionEndpoint = TransactionEndpoint
   (ResourceEndpoint PutTransactionRequest GetTransactionResponse (previous :: Maybe TransactionEndpoint, next :: Maybe TransactionEndpoint))
+
 derive instance Eq TransactionEndpoint
 derive instance Newtype TransactionEndpoint _
 derive newtype instance DecodeJson TransactionEndpoint
@@ -443,5 +455,4 @@ derive newtype instance DecodeJson TransactionEndpoint
 
 api :: ContractsEndpoint
 api = ContractsEndpoint (IndexEndpoint (ResourceLink "contracts"))
-
 

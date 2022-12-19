@@ -28,11 +28,11 @@ type StatusCode = Int
 data FetchError
   = InvalidStatusCode Response
   | FetchError Error
+
 derive instance Generic FetchError _
 instance Show FetchError where
   show (InvalidStatusCode response) = "InvalidStatusCode"
   show (FetchError error) = "FetchError " <> show error
-
 
 fetchEither
   :: forall input output thruIn thruOut headers err
@@ -56,10 +56,8 @@ fetchEither url r allowedStatusCodes handleError = runExceptT do
   res <- ExceptT $ (Right <$> fetch) `catchError` \err -> do
     pure $ Left $ handleError $ FetchError err
 
-  if res.status `A.elem` allowedStatusCodes
-    then pure res
-    else throwError $ handleError $ InvalidStatusCode res
-
+  if res.status `A.elem` allowedStatusCodes then pure res
+  else throwError $ handleError $ InvalidStatusCode res
 
 -- For the full safety we should introduce a newtype wrapper for the Response record
 jsonBody :: Response -> Aff Json

@@ -92,7 +92,7 @@ getPage
 getPage serverUrl path possibleRange = runExceptT do
   { headers, payload, status } <- ExceptT case possibleRange of
     Nothing ->
-      getResource serverUrl path {"Range": "contractId"}
+      getResource serverUrl path { "Range": "contractId" }
     Just (Range range) -> do
       traceM "range"
       res <- getResource serverUrl path { "Range": range }
