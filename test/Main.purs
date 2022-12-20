@@ -21,6 +21,7 @@ import Node.FS.Aff (readTextFile)
 import Node.Process (getEnv)
 import Test.Actus.Domain.ContractTerms as ContractTerms
 import Test.Marlowe.Actus as MarloweActus
+import Test.Marlowe.Actus.Metadata as Metadata
 import Test.Marlowe.Runtime.Web (_MARLOWE_WEB_SERVER_URL)
 import Test.Marlowe.Runtime.Web as Web
 import Test.Spec as Spec
@@ -40,6 +41,7 @@ main = do
     runSpec [ consoleReporter ] $ do
       Spec.parallel do
         ContractTerms.spec
+        Metadata.spec
         TestFramework.spec testsPAM
         TestFramework.spec testsLAM
         TestFramework.spec testsNAM
