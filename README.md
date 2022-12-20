@@ -23,5 +23,5 @@ Devel env `shell.nix` doesn't cover `Js` deps so in order to build the app you h
 Start the server with
 
 ```
-npm start
+npm run start
 ```
