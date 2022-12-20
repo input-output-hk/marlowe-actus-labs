@@ -14,8 +14,10 @@ import React.Basic.Hooks as React
 import Wallet as Wallet
 import Web.HTML (HTMLDocument, window)
 
-data WalletState = -- { cardano :: Maybe Wallet.Cardano }
-  Connected | NotConnected
+data WalletState
+  = -- { cardano :: Maybe Wallet.Cardano }
+    Connected
+  | NotConnected
 
 mkWalletConnect :: Effect (WalletState -> JSX)
 mkWalletConnect = do
@@ -23,7 +25,7 @@ mkWalletConnect = do
     ((state :: WalletState) /\ updateState) <- useState walletState
     let
       onConnectClick = handler_ do
-         updateState f
+        updateState f
       f Connected = NotConnected
       f NotConnected = Connected
 
@@ -31,14 +33,14 @@ mkWalletConnect = do
       Connected -> pure $
         DOM.div {}
           [ DOM.button
-            { onClick: onConnectClick }
-            "Disconnect Wallet"
+              { onClick: onConnectClick }
+              "Disconnect Wallet"
           ]
       NotConnected -> pure $
         DOM.div {}
           [ DOM.button
-            { onClick: onConnectClick }
-            "Connect Wallet"
+              { onClick: onConnectClick }
+              "Connect Wallet"
           ]
 
 connectWallet :: Effect Unit
