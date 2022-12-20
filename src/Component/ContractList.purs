@@ -2,50 +2,38 @@ module Component.ContractList where
 
 import Prelude
 
-import Actus.Domain (ContractTerms)
-import Data.Argonaut (parseJson)
-import Data.Array (filter)
-import Data.Array.NonEmpty (cons')
+import Actus.Domain (ContractTerms, EventType, RiskFactors(..), Value'(..), marloweFixedPoint)
+import Data.Argonaut (decodeJson, parseJson)
+import Data.BigInt.Argonaut as BigInt
+import Data.DateTime (DateTime)
+import Data.Decimal (Decimal)
 import Data.Either (Either(..))
-import Data.Map (empty)
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Maybe (Maybe)
-import Data.Newtype (unwrap)
-import Data.Tuple.Nested (type (/\), (/\))
+import Data.Tuple.Nested (type (/\))
 import Effect (Effect)
-import Effect.Exception (throw)
-import Language.Marlowe.Core.V1.Semantics.Types as V1
-import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractHeader(..), TxOutRef(..), ResourceWithLinks, toResourceLink)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party(..))
+import Marlowe.Actus (RiskFactorsMarlowe, genContract, toMarlowe)
+import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractHeader(..), ResourceWithLinks, TxOutRef, txOutRefToString)
 import React.Basic.DOM (css, text)
 import React.Basic.DOM as R
-import React.Basic.DOM.Client (createRoot, renderRoot)
 import React.Basic.DOM.Events (preventDefault, targetValue)
-import React.Basic.DOM.Generated as GDOM
 import React.Basic.DOM.Simplified.Generated as DOM
 import React.Basic.Events (EventHandler, handler, handler_)
-import React.Basic.Hooks (Component, Hook, UseState, component, useState, (/\))
-import React.Basic.Hooks (JSX)
+import React.Basic.Hooks (Hook, JSX, UseState, component, useState, (/\))
 import React.Basic.Hooks as React
-import React.Basic.Hooks as React
-import Test.QuickCheck (mkSeed)
-import Test.QuickCheck.Gen (Gen, elements, runGen)
-import Web.DOM.NonElementParentNode (getElementById)
-import Web.HTML (window)
-import Web.HTML.HTMLDocument (toNonElementParentNode)
-import Web.HTML.Window (document)
 
 type SubmissionError = String
 
 type ContractId = TxOutRef
 
-type ContractTermsV1 = ContractTerms V1.Value
+type ActusTerms = ContractTerms Decimal -- V1.Value
 
 type ValidationError = String
 
 data FormState
   = NotValidated
   | Failure ValidationError
-  | Validated ContractTermsV1
+  | Validated (ActusTerms /\ Contract)
 
 -- An example of a simple "custom hook"
 useInput :: String -> Hook (UseState String) (String /\ EventHandler)
@@ -54,6 +42,7 @@ useInput initialValue = React.do
   let onChange = handler targetValue (setValue <<< const <<< fromMaybe "")
   pure (value /\ onChange)
 
+mkContractForm :: Effect (((ContractTerms Decimal) /\ Contract -> Effect Unit) -> JSX)
 mkContractForm = component "ContractForm" \onNewContract -> React.do
   (validationResult /\ updateValidationResult) <- useState NotValidated
   (value /\ onValueChange) <- useInput ""
@@ -63,11 +52,29 @@ mkContractForm = component "ContractForm" \onNewContract -> React.do
       NotValidated -> mempty
       Failure validationMessage ->
         DOM.div { style: css { color: "red" } } [ text validationMessage ]
-      Validated contract -> text "SUCCESS"
+      Validated (terms /\ contract) -> text $ "SUCCESS" <> show contract
 
-    validateForm = case parseJson value of
-      Right json ->
-        updateValidationResult (const $ Failure "STUB: JSON validated we should proceed further with actus validation here")
+    validateForm = case parseJson value >>= decodeJson of
+      Right terms -> do
+        let
+          termsMarlowe = toMarlowe terms
+
+          role1 = Role "R1" -- FIXME
+          role2 = Role "R2" -- FIXME
+
+          riskFactors :: EventType -> DateTime -> RiskFactorsMarlowe
+          riskFactors _ _ = RiskFactors -- FIXME
+            { o_rf_CURS: fromInt 1
+            , o_rf_RRMO: fromInt 1
+            , o_rf_SCMO: fromInt 1
+            , pp_payoff: fromInt 0
+            }
+            where
+            fromInt = Constant' <<< BigInt.fromInt <<< (marloweFixedPoint * _)
+
+          contract = genContract (role1 /\ role2) riskFactors termsMarlowe
+        onNewContract (terms /\ contract)
+
       Left _ -> updateValidationResult (const $ Failure "Invalid json")
   pure
     $ R.form
@@ -86,16 +93,25 @@ mkContractForm = component "ContractForm" \onNewContract -> React.do
 
 data NewContractState
   = Creating
-  | Submitting (ContractTermsV1)
-  | SubmissionError ContractTermsV1 SubmissionError
-  | SubmissionsSuccess ContractTermsV1 ContractId
+  | Submitting (ActusTerms /\ Contract)
+  | SubmissionError ActusTerms SubmissionError
+  | SubmissionsSuccess ActusTerms ContractId
 
 type ContractListState =
   { contractList :: Array (ResourceWithLinks ContractHeader (contract :: ContractEndpoint))
   , newContract :: Maybe NewContractState
   }
 
-mkContractList :: Effect (_ -> JSX)
+mkContractList
+  :: Effect
+       ( Array
+           { links ::
+               { contract :: ContractEndpoint
+               }
+           , resource :: ContractHeader
+           }
+         -> JSX
+       )
 mkContractList = do
   contractForm <- mkContractForm
 
@@ -103,35 +119,45 @@ mkContractList = do
     ((state :: ContractListState) /\ updateState) <- useState { contractList, newContract: Nothing }
     let
       onAddContractClick = handler_ do
-        updateState \state -> state { newContract = Just Creating }
+        updateState _ { newContract = Just Creating }
 
-      onNewContract contractTerms = updateState _ { newContract = Just (Submitting contractTerms) }
+      onNewContract contractTerms = do
+        updateState _ { newContract = Just (Submitting contractTerms) }
 
-    pure $ case state of
-      { newContract: Just Creating } -> DOM.div {}
+    case state of
+      { newContract: Just Creating } -> pure $ DOM.div {}
         [ DOM.title {} [ text "Add Contract" ]
         , contractForm onNewContract
         ]
-      { newContract: Just (Submitting _) } -> text "Submitting"
-      { newContract: Just _ } -> text "STUB: Other contract creation step"
-      { newContract: Nothing } -> DOM.div {} $
-        [ DOM.a
-            { onClick: onAddContractClick, href: "#" }
-            "Add Contract"
+      { newContract: Just (Submitting contract) } -> pure $ text ("Submitting" <> show contract)
+      { newContract: Just _ } -> pure $ text "STUB: Other contract creation step"
+      { newContract: Nothing } -> pure $
+        DOM.div {}
+          [ DOM.a
+              { onClick: onAddContractClick, href: "#" }
+              "Add Contract"
+          ] <> contractsTable state.contractList
+
+contractsTable :: Array (ResourceWithLinks ContractHeader (contract :: ContractEndpoint)) -> JSX
+contractsTable contractList =
+  DOM.table { className: "table table-striped" } $
+    [ DOM.thead {} $
+        [ DOM.tr {}
+            [ DOM.th {} [ text "Status" ]
+            , DOM.th {} [ text "Contract ID" ]
+            , DOM.th {} [ text "View" ]
+            ]
         ]
-          <> map
-            ( \({ links }) ->
-                DOM.div
-                  { className: "contracts-list" }
-                  [ text $ unwrap $ toResourceLink links.contract ]
-            )
-            state.contractList
+    , DOM.tbody {} $ map contractRow contractList
+    ]
 
--- <<< filter
---   ( \{ resource } ->
---       let
---         ContractHeader header = resource
---       in
---         header.metadata == empty -- TODO: find ACTUS contract in Metadata
---   )
-
+contractRow :: ResourceWithLinks ContractHeader (contract :: ContractEndpoint) -> JSX
+contractRow ({ resource: ContractHeader { contractId, status } }) =
+  DOM.tr {}
+    [ DOM.td {} [ text $ show status ]
+    , DOM.td {} [ text $ txOutRefToString contractId ]
+    , DOM.td {} [ DOM.a { href: "#", onClick: onEdit } "Edit" ]
+    ]
+  where
+  onEdit = handler_ do
+    pure unit

@@ -98,6 +98,11 @@ data TxStatus
 derive instance Eq TxStatus
 derive instance Ord TxStatus
 
+instance Show TxStatus where
+  show Unsigned = "Unsigned"
+  show Submitted = "Submitted"
+  show Confirmed = "Confirmed"
+
 --  deriving (Show, Eq, Ord)
 
 instance DecodeJson TxStatus where
