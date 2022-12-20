@@ -9,8 +9,6 @@ import Data.Argonaut (Json)
 import Data.Array as A
 import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
-import Data.Show.Generic (genericShow)
-import Debug (traceM)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Effect.Exception (Error)
@@ -31,7 +29,7 @@ data FetchError
 
 derive instance Generic FetchError _
 instance Show FetchError where
-  show (InvalidStatusCode response) = "InvalidStatusCode"
+  show (InvalidStatusCode _) = "InvalidStatusCode"
   show (FetchError error) = "FetchError " <> show error
 
 fetchEither
@@ -47,11 +45,8 @@ fetchEither
 fetchEither url r allowedStatusCodes handleError = runExceptT do
   let
     fetch = do
-      traceM "new"
       request <- liftEffect $ new url $ Request.convert r
-      traceM "Core.fetch"
       cResponse <- Promise.toAffE $ Response.promiseToPromise <$> Core.fetch request
-      traceM "convert"
       pure $ Response.convert cResponse
   res <- ExceptT $ (Right <$> fetch) `catchError` \err -> do
     pure $ Left $ handleError $ FetchError err

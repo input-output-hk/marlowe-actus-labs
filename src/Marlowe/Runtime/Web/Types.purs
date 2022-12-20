@@ -21,9 +21,11 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, un)
 import Data.Newtype (class Newtype, unwrap)
+import Data.Profunctor.Strong ((***))
 import Data.String as String
 import Data.Traversable (for)
 import Data.Tuple.Nested (type (/\), (/\))
+import Debug (traceM)
 import Effect.Unsafe (unsafePerformEffect)
 import Fetch.Core.Request (Request)
 import Foreign.Object (Object)
@@ -125,8 +127,36 @@ derive instance Ord BlockHeader
 instance DecodeJson BlockHeader where
   decodeJson json = BlockHeader <$> decodeJson json
 
--- FIXME: We want to make it more concrete soon ;-)
-type Metadata = Map Int (Object Json)
+newtype Metadata = Metadata (Map Int (Object Json))
+derive instance Generic Metadata _
+derive instance Newtype Metadata _
+derive instance Eq Metadata
+instance Semigroup Metadata where
+  append (Metadata a) (Metadata b) = Metadata (Map.union a b)
+instance Monoid Metadata where
+  mempty = Metadata Map.empty
+
+instance EncodeJson Metadata where
+  encodeJson = encodeJson
+    <<< Object.fromFoldable
+    <<< map (show *** identity)
+    <<< (Map.toUnfoldable :: _ -> Array _)
+    <<< un Metadata
+
+instance DecodeJson Metadata where
+  decodeJson json = do
+    (obj :: Object (Object Json)) <- decodeJson json
+
+    (arr :: Array (Int /\ Object Json)) <- for (Object.toUnfoldable obj) \(idx /\ value) -> do
+      idx' <- do
+        let
+          err = TypeMismatch $ "Expecting an integer metadata label but got: " <> show idx
+        note err $ Int.fromString idx
+      pure (idx' /\ value)
+    pure <<< Metadata <<< Map.fromFoldable $ arr
+
+metadataFieldDecoder :: { metadata :: DecodeJsonFieldFn Metadata }
+metadataFieldDecoder = { metadata: map decodeJson :: Maybe Json -> Maybe (JsonParserResult Metadata) }
 
 type ContractHeadersRowBase r =
   ( contractId :: TxOutRef
@@ -143,21 +173,6 @@ newtype ContractHeader = ContractHeader { | ContractHeadersRowBase () }
 derive instance Generic ContractHeader _
 derive instance Newtype ContractHeader _
 derive instance Eq ContractHeader
-
-decodeMetadata :: JsonParser Metadata
-decodeMetadata json = do
-  (obj :: Object (Object Json)) <- decodeJson json
-
-  (arr :: Array (Int /\ Object Json)) <- for (Object.toUnfoldable obj) \(idx /\ value) -> do
-    idx' <- do
-      let
-        err = TypeMismatch $ "Expecting an integer metadata label but got: " <> show idx
-      note err $ Int.fromString idx
-    pure (idx' /\ value)
-  pure $ Map.fromFoldable arr
-
-metadataFieldDecoder :: { metadata :: DecodeJsonFieldFn Metadata }
-metadataFieldDecoder = { metadata: map decodeMetadata :: Maybe Json -> Maybe (JsonParserResult Metadata) }
 
 instance DecodeJson ContractHeader where
   decodeJson = decodeNewtypedRecord metadataFieldDecoder
@@ -186,9 +201,9 @@ instance DecodeJson (TextEnvelope a) where
 unsafeDecodeTextEnvelope :: forall a. JsonParser (TextEnvelope a)
 unsafeDecodeTextEnvelope json = TextEnvelope <$> do
   (obj :: Object Json) <- decodeJson json
-  type_ <- obj .: "teType"
-  description <- obj .: "teDescription"
-  cborHex <- obj .: "teCborHex"
+  type_ <- obj .: "type"
+  description <- obj .: "description"
+  cborHex <- obj .: "cborHex"
   pure { type_, description, cborHex }
 
 decodeTxBodyTextEnvelope :: JsonParser (TextEnvelope TxBody)
@@ -281,13 +296,6 @@ instance DecodeJson Tx where
 
 newtype ServerURL = ServerURL String
 
-newtype Lovelace = Lovelace Int
-
-derive instance Newtype Lovelace _
-
-instance EncodeJson Lovelace where
-  encodeJson = encodeJson <<< un Lovelace
-
 newtype Address = Address String
 
 derive instance Newtype Address _
@@ -370,10 +378,10 @@ newtype PostContractsRequest = PostContractsRequest
   -- , version :: MarloweVersion
   -- , roles :: Maybe RolesConfig
   , contract :: V1.Contract
-  , minUTxODeposit :: Lovelace
+  , minUTxODeposit :: V1.Ada
   , changeAddress :: Address
-  , address :: Address
-  , collateralUTxO :: Address
+  , addresses :: Array Address
+  , collateralUTxOs :: Array TxOutRef
   }
 
 instance EncodeJsonBody PostContractsRequest where
@@ -392,16 +400,15 @@ type PostContractsHeadersRow =
   )
 
 instance EncodeHeaders PostContractsRequest PostContractsHeadersRow where
-  encodeHeaders (PostContractsRequest { changeAddress, address, collateralUTxO }) =
+  encodeHeaders (PostContractsRequest { changeAddress, addresses, collateralUTxOs }) =
     { "X-Change-Address": addressToString changeAddress
-    , "X-Address": addressToString address
-    , "X-Colateral-UTxO": addressToString collateralUTxO
+    , "X-Address": String.joinWith "," (map addressToString addresses)
+    , "X-Colateral-UTxO": String.joinWith "," (map txOutRefToString collateralUTxOs)
     }
 
 newtype PostContractsResponse = PostContractsResponse
   { contractId :: TxOutRef
   , txBody :: TextEnvelope TxBody
-  , description :: String
   }
 
 derive instance Newtype PostContractsResponse _
@@ -460,4 +467,3 @@ derive newtype instance DecodeJson TransactionEndpoint
 
 api :: ContractsEndpoint
 api = ContractsEndpoint (IndexEndpoint (ResourceLink "contracts"))
-

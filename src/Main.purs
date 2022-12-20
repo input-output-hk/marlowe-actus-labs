@@ -19,11 +19,11 @@ import Effect.Class (liftEffect)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Effect.Exception (error, throw)
-import Marlowe.Runtime.Web.Client (foldMapMPages, foldMapMPages')
+import Marlowe.Runtime.Web.Client (foldMapMPages, foldMapMPages', getPage')
 import Marlowe.Runtime.Web.Types (ResourceLink(..), ServerURL(..), api)
 import React.Basic.DOM.Client (createRoot, renderRoot)
-import Wallet as Wallet
 import React.Basic.DOM.Simplified.Generated as DOM
+import Wallet as Wallet
 import Web.DOM (Element)
 import Web.DOM.NonElementParentNode (getElementById)
 import Web.HTML (HTMLDocument, window)
@@ -86,7 +86,9 @@ main configJson = do
       reactRoot <- createRoot container
       contractListComponent <- mkContractList
       launchAff_ do
-        contracts <- foldMapMPages' config.marloweWebServerUrl api (pure <<< _.page) >>= liftEither >>> liftEffect
+        -- contracts <- foldMapMPages' config.marloweWebServerUrl api (pure <<< _.page) >>= liftEither >>> liftEffect
+        -- FIXME: this is a temporary hack to get the first page of contracts to speed up development
+        contracts <- getPage' config.marloweWebServerUrl api Nothing >>= liftEither >>> liftEffect <#> _.page
         liftEffect $ renderRoot reactRoot (
           DOM.div {className: "container-fluid"} $
             [DOM.div {className: "row"} $

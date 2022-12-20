@@ -3,6 +3,7 @@ module Marlowe.Runtime.Web.Client where
 import Prelude
 
 import Contrib.Data.Argonaut (JsonParser)
+import Contrib.Data.Argonaut.Generic.Record (class DecodeRecord, DecodeJsonFieldFn)
 import Contrib.Fetch (FetchError, fetchEither, jsonBody)
 import Control.Monad.Except (ExceptT(..), runExceptT, throwError)
 import Control.Monad.Loops (unfoldrM)
@@ -19,6 +20,7 @@ import Data.List (List)
 import Data.List as List
 import Data.Map (Map, fromFoldable, lookup)
 import Data.Maybe (Maybe(..))
+import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.String.CaseInsensitive (CaseInsensitiveString(..))
 import Data.Tuple.Nested ((/\))
@@ -29,7 +31,7 @@ import Fetch (RequestMode(..))
 import Fetch.Core.Headers (Headers, toArray)
 import Foreign.Object (Object)
 import Foreign.Object as Object
-import Marlowe.Runtime.Web.Types (class EncodeHeaders, class EncodeJsonBody, class ToResourceLink, IndexEndpoint(..), ResourceEndpoint(..), ResourceLink(..), ServerURL(..), encodeHeaders, encodeJsonBody, toResourceLink)
+import Marlowe.Runtime.Web.Types (class EncodeHeaders, class EncodeJsonBody, class ToResourceLink, IndexEndpoint(..), ResourceEndpoint(..), ResourceLink(..), ResourceWithLinks, ServerURL(..), ResourceWithLinksRow, decodeResourceWithLink, encodeHeaders, encodeJsonBody, toResourceLink)
 import Prim.Row (class Lacks) as Row
 import Record as R
 import Type.Prelude (Proxy(..))
@@ -200,6 +202,7 @@ post
    . DecodeJson postResponse
   => EncodeHeaders postRequest extraHeaders
   => EncodeJsonBody postRequest
+  => DecodeRecord (resource :: DecodeJsonFieldFn postResponse) (ResourceWithLinksRow postResponse links)
   => Row.Homogeneous extraHeaders String
   => Row.Homogeneous ("Accept" :: String, "Content-Type" :: String | extraHeaders) String
   => Row.Lacks "Accept" extraHeaders
@@ -207,7 +210,7 @@ post
   => ServerURL
   -> IndexEndpoint postRequest postResponse getResponse links
   -> postRequest
-  -> Aff (GetResourceResponse postResponse)
+  -> Aff (GetResourceResponse (ResourceWithLinks postResponse links))
 post (ServerURL serverUrl) (IndexEndpoint (ResourceLink path)) req = runExceptT do
   let
     url = serverUrl <> "/" <> path
@@ -220,9 +223,29 @@ post (ServerURL serverUrl) (IndexEndpoint (ResourceLink path)) req = runExceptT 
         $ (encodeHeaders req :: { | extraHeaders })
 
   response <- ExceptT $ fetchEither url { method: POST, body, headers } allowedStatusCodes FetchError
-  (lift (jsonBody response)) >>= decodeJson >>> case _ of
+  (lift (jsonBody response)) >>= decodeResourceWithLink (map decodeJson :: Maybe _ -> Maybe _) >>> case _ of
     Left err -> throwError (ResponseDecodingError err)
     Right payload -> pure payload
+
+post'
+  :: forall t links postRequest postResponse getResponse extraHeaders
+   . Newtype t (IndexEndpoint postRequest postResponse getResponse links)
+  => DecodeJson postResponse
+  => DecodeRecord (resource :: DecodeJsonFieldFn postResponse) (ResourceWithLinksRow postResponse links)
+  => EncodeHeaders postRequest extraHeaders
+  => EncodeJsonBody postRequest
+  => Row.Homogeneous extraHeaders String
+  => Row.Homogeneous ("Accept" :: String, "Content-Type" :: String | extraHeaders) String
+  => Row.Lacks "Accept" extraHeaders
+  => Row.Lacks "Content-Type" extraHeaders
+  => ServerURL
+  -> t
+  -> postRequest
+  -> Aff (Either ClientError (ResourceWithLinks postResponse links))
+post' serverUrl endpoint req = do
+  let
+    endpoint' = unwrap endpoint
+  post serverUrl endpoint' req
 
 put
   :: forall links putRequest getResponse extraHeaders
