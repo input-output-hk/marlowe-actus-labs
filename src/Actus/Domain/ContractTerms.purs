@@ -810,8 +810,6 @@ newtype ContractTerms a = ContractTerms
   , cycleOfDividendPayment :: Maybe Cycle -- ^ Cycle Of Dividend
   , cycleAnchorDateOfDividendPayment :: Maybe DateTime -- ^ Cycle Anchor Date Of Dividend
   , nextDividendPaymentAmount :: Maybe a -- ^ Next Dividend Payment Amount
-
-  , enableSettlement :: Boolean -- ^ Enable settlement currency
   }
 
 derive instance Newtype (ContractTerms a) _
@@ -822,6 +820,9 @@ instance Show a => Show (ContractTerms a) where
 
 decodeDecimal :: Json -> Either JsonDecodeError Decimal
 decodeDecimal = decodeFromString (String.trimStart >>> Decimal.fromString)
+
+encodeDecimal :: Decimal -> Json
+encodeDecimal = fromString <<< Decimal.toString
 
 decodeDateTime :: Json -> Either JsonDecodeError DateTime
 decodeDateTime json = do
@@ -947,5 +948,3 @@ instance DecodeJson (ContractTerms Decimal) where
       (Proxy :: Proxy "cycleOfDividendPayment") :=? decodeFromString decodeCycle
       (Proxy :: Proxy "cycleAnchorDateOfDividendPayment") :=? decodeDateTime
       (Proxy :: Proxy "nextDividendPaymentAmount") :=? decodeDecimal
-
-      (Proxy :: Proxy "enableSettlement") :=! decodeJson $ false
