@@ -23,6 +23,7 @@ import Marlowe.Runtime.Web.Client (foldMapMPages, foldMapMPages')
 import Marlowe.Runtime.Web.Types (ResourceLink(..), ServerURL(..), api)
 import React.Basic.DOM.Client (createRoot, renderRoot)
 import Wallet as Wallet
+import React.Basic.DOM.Simplified.Generated as DOM
 import Web.DOM (Element)
 import Web.DOM.NonElementParentNode (getElementById)
 import Web.HTML (HTMLDocument, window)
@@ -85,6 +86,17 @@ main configJson = do
       reactRoot <- createRoot container
       contractListComponent <- mkContractList
       launchAff_ do
-        -- contracts <- foldMapMPages' config.serverUrl api (pure <<< _.page) >>= liftEither >>> liftEffect
-        liftEffect $ renderRoot reactRoot (contractListComponent [])
-
+        contracts <- foldMapMPages' config.marloweWebServerUrl api (pure <<< _.page) >>= liftEither >>> liftEffect
+        liftEffect $ renderRoot reactRoot (
+          DOM.div {className: "container-fluid"} $
+            [DOM.div {className: "row"} $
+              [ DOM.div {className: "col"} $ "ACTUS 1"
+              , DOM.div {className: "col"} $ "ACTUS 2"
+              , DOM.div {className: "col"} $ "Wallet status"
+              ]
+              , DOM.div {className: "row"} $
+              [ DOM.div {className: "col"} $ (contractListComponent contracts)
+              , DOM.div {className: "col"} $ "Events table"
+              ]
+            ]
+          )
