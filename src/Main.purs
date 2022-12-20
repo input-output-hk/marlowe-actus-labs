@@ -5,6 +5,7 @@ module Main
 import Prelude
 
 import Component.ContractList (mkContractList)
+import Component.Wallet (WalletState(..), mkWalletConnect)
 import Contrib.Data.Argonaut (JsonParser)
 import Data.Argonaut (Json, decodeJson, (.:))
 import Data.Either (Either, either)
@@ -27,7 +28,6 @@ import Wallet as Wallet
 import Web.DOM (Element)
 import Web.DOM.NonElementParentNode (getElementById)
 import Web.HTML (HTMLDocument, window)
-import Web.HTML (window)
 import Web.HTML.HTMLDocument (toNonElementParentNode)
 import Web.HTML.Window (document)
 
@@ -85,6 +85,7 @@ main configJson = do
     Just container -> do
       reactRoot <- createRoot container
       contractListComponent <- mkContractList
+      walletComponent <- mkWalletConnect
       launchAff_ do
         -- contracts <- foldMapMPages' config.marloweWebServerUrl api (pure <<< _.page) >>= liftEither >>> liftEffect
         -- FIXME: this is a temporary hack to get the first page of contracts to speed up development
@@ -94,10 +95,10 @@ main configJson = do
             [DOM.div {className: "row"} $
               [ DOM.div {className: "col"} $ "ACTUS 1"
               , DOM.div {className: "col"} $ "ACTUS 2"
-              , DOM.div {className: "col"} $ "Wallet status"
+              , DOM.div {className: "col"} $ walletComponent NotConnected
               ]
               , DOM.div {className: "row"} $
-              [ DOM.div {className: "col"} $ (contractListComponent contracts)
+              [ DOM.div {className: "col"} $ contractListComponent contracts
               , DOM.div {className: "col"} $ "Events table"
               ]
             ]
