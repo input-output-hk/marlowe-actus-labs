@@ -93,7 +93,7 @@ main configJson = do
         -- FIXME: this is a temporary hack to get the first page of contracts to speed up development
         contracts <- getPage' config.marloweWebServerUrl api Nothing >>= liftEither >>> liftEffect <#> _.page
         liftEffect $ renderRoot reactRoot
-          ( DOM.div { className: "container-fluid" } $
+          ( DOM.div { className: "container" } $
               [ DOM.div { className: "row" } $
                   [ DOM.div { className: "col" } $ "ACTUS 1"
                   , DOM.div { className: "col" } $ "ACTUS 2"
