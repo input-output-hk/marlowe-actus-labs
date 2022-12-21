@@ -2,6 +2,7 @@ module Test.Marlowe.Actus where
 
 import Prelude
 
+import Actus.Core (genProjectedCashflows)
 import Actus.Domain (ContractTerms, EventType, RiskFactors(..), Value'(..), marloweFixedPoint)
 import Control.Monad.Error.Class (throwError)
 import Data.Argonaut (JsonDecodeError, decodeJson, jsonParser)
@@ -33,7 +34,8 @@ spec = do
         Left err -> fail (show err)
         Right contract -> do
           let
-            marloweContract = genContract (Address "addr1" /\ Address "addr2") riskFactors $ toMarlowe contract
+            cashFlows = genProjectedCashflows (Address "addr1" /\ Address "addr2") riskFactors $ toMarlowe contract
+            marloweContract = genContract cashFlows
           if isClose marloweContract then fail "Contract is not supposed to be Close" else pure unit
 
 riskFactors :: EventType -> DateTime -> RiskFactors Value'

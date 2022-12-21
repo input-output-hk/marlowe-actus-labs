@@ -33,13 +33,13 @@ mkWalletConnect = do
       Connected -> pure $
         DOM.div {}
           [ DOM.button
-              { onClick: onConnectClick }
+              { className: "btn btn-primary", onClick: onConnectClick }
               "Disconnect Wallet"
           ]
       NotConnected -> pure $
         DOM.div {}
           [ DOM.button
-              { onClick: onConnectClick }
+              { className: "btn btn-primary", onClick: onConnectClick }
               "Connect Wallet"
           ]
 

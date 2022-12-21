@@ -22,7 +22,7 @@ import Data.DateTime.Instant (Instant, fromDateTime)
 import Data.Decimal (Decimal)
 import Data.Decimal as Decimal
 import Data.Foldable (foldl)
-import Data.List (reverse)
+import Data.List (List, reverse)
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\))
 import Language.Marlowe.Core.V1.Semantics as MarloweSemantics
@@ -120,27 +120,15 @@ toMarloweCashflow
   , currency
   }
 
--- | 'genContract' validatates the applicabilty of the contract terms in order
--- to genereate a Marlowe contract with risk factors observed at a given point
--- in time
+-- | 'genContract' generates contract terms from projected cash-flows
 genContract
   ::
-     -- | Party and Counter-party for the contract
-     Party /\ Party
-  ->
-  -- | Risk factors per event and time
-  (EventType -> DateTime -> RiskFactorsMarlowe)
-  ->
-  -- | ACTUS contract terms
-  ContractTermsMarlowe
+     -- | List of projected cash-flows
+     List (CashFlow Value' Party)
   ->
   -- | Marlowe contract
   Contract
-genContract parties riskFactors contractTerms =
-  let
-    cashFlows = genProjectedCashflows parties riskFactors contractTerms
-  in
-    foldl generator Close $ reverse (map toMarloweCashflow cashFlows)
+genContract cashFlows = foldl generator Close $ reverse (map toMarloweCashflow cashFlows)
   where
   generator :: Contract -> CashFlow Value Party -> Contract
   generator continuation cashFlow@(CashFlow { paymentDay })
