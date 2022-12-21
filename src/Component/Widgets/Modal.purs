@@ -37,7 +37,7 @@ mkModal = do
     useEffectOnce do
       doc <- (window >>= document) <#> toDocument
       getElementsByTagName "body" doc >>= HTMLCollection.toArray >>= case _ of
-        [root] -> do
+        [ root ] -> do
           -- | FIXME: We should not override the existing classes etc.
           setAttribute "style" "overflow: hidden; padding-right: 15px" root
           setAttribute "class" "modal-open" root
@@ -60,17 +60,17 @@ mkModal = do
       onModalDialogClicked = handler stopPropagation (const $ pure unit)
 
     pure $
-      DOM.div { className: "modal fade show", onClick: onModalClicked, style: css { "display": "block" }, _aria: fromHomogeneous { modal: "true" }, role: "dialog"}
+      DOM.div { className: "modal fade show", onClick: onModalClicked, style: css { "display": "block" }, _aria: fromHomogeneous { modal: "true" }, role: "dialog" }
         [ DOM.div { className: "modal-dialog", onClick: onModalDialogClicked }
-          [ DOM.div { className: "modal-content" }
-            [ DOM.div { className: "modal-header" }
-              [ DOM.h5 { className: "modal-title" }
-                [ (title :: JSX )]
-                , DOM.button { className: "btn-close" , _data: fromHomogeneous { "bs-dismiss": "modal" }, onClick: handler_ onDismiss, type: "button", _aria: fromHomogeneous { label: "Close" }}
-                ([] :: Array JSX)
-              ]
-            , DOM.div { className: "modal-body" }
-              [ (body :: JSX) ]
+            [ DOM.div { className: "modal-content" }
+                [ DOM.div { className: "modal-header" }
+                    [ DOM.h5 { className: "modal-title" }
+                        [ (title :: JSX) ]
+                    , DOM.button { className: "btn-close", _data: fromHomogeneous { "bs-dismiss": "modal" }, onClick: handler_ onDismiss, type: "button", _aria: fromHomogeneous { label: "Close" } }
+                        ([] :: Array JSX)
+                    ]
+                , DOM.div { className: "modal-body" }
+                    [ (body :: JSX) ]
+                ]
             ]
-          ]
         ]

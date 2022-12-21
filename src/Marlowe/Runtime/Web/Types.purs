@@ -128,11 +128,13 @@ instance DecodeJson BlockHeader where
   decodeJson json = BlockHeader <$> decodeJson json
 
 newtype Metadata = Metadata (Map Int (Object Json))
+
 derive instance Generic Metadata _
 derive instance Newtype Metadata _
 derive instance Eq Metadata
 instance Semigroup Metadata where
   append (Metadata a) (Metadata b) = Metadata (Map.union a b)
+
 instance Monoid Metadata where
   mempty = Metadata Map.empty
 

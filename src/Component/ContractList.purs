@@ -3,6 +3,8 @@ module Component.ContractList where
 import Prelude
 
 import Actus.Domain (ContractTerms, EventType, RiskFactors(..), Value'(..), marloweFixedPoint)
+import Component.ContractForm (mkContractForm)
+import Component.Modal (mkModal)
 import Data.Argonaut (decodeJson, parseJson)
 import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (DateTime)
@@ -42,55 +44,6 @@ useInput initialValue = React.do
   let onChange = handler targetValue (setValue <<< const <<< fromMaybe "")
   pure (value /\ onChange)
 
-mkContractForm :: Effect (((ContractTerms Decimal) /\ Contract -> Effect Unit) -> JSX)
-mkContractForm = component "ContractForm" \onNewContract -> React.do
-  (validationResult /\ updateValidationResult) <- useState NotValidated
-  (value /\ onValueChange) <- useInput ""
-
-  let
-    renderValidation = case validationResult of
-      NotValidated -> mempty
-      Failure validationMessage ->
-        DOM.div { style: css { color: "red" } } [ text validationMessage ]
-      Validated (terms /\ contract) -> text $ "SUCCESS" <> show contract
-
-    validateForm = case parseJson value >>= decodeJson of
-      Right terms -> do
-        let
-          termsMarlowe = toMarlowe terms
-
-          role1 = Role "R1" -- FIXME
-          role2 = Role "R2" -- FIXME
-
-          riskFactors :: EventType -> DateTime -> RiskFactorsMarlowe
-          riskFactors _ _ = RiskFactors -- FIXME
-            { o_rf_CURS: fromInt 1
-            , o_rf_RRMO: fromInt 1
-            , o_rf_SCMO: fromInt 1
-            , pp_payoff: fromInt 0
-            }
-            where
-            fromInt = Constant' <<< BigInt.fromInt <<< (marloweFixedPoint * _)
-
-          contract = genContract (role1 /\ role2) riskFactors termsMarlowe
-        onNewContract (terms /\ contract)
-
-      Left _ -> updateValidationResult (const $ Failure "Invalid json")
-  pure
-    $ R.form
-        { onSubmit: handler preventDefault (const $ validateForm)
-        , children:
-            [ R.input
-                { placeholder: "Contract"
-                , value
-                , onChange: onValueChange
-                }
-            , renderValidation
-            , R.input
-                { type: "submit" }
-            ]
-        }
-
 data NewContractState
   = Creating
   | Submitting (ActusTerms /\ Contract)
@@ -98,8 +51,7 @@ data NewContractState
   | SubmissionsSuccess ActusTerms ContractId
 
 type ContractListState =
-  { contractList :: Array (ResourceWithLinks ContractHeader (contract :: ContractEndpoint))
-  , newContract :: Maybe NewContractState
+  { newContract :: Maybe NewContractState
   }
 
 mkContractList
@@ -114,9 +66,10 @@ mkContractList
        )
 mkContractList = do
   contractForm <- mkContractForm
+  modal <- mkModal
 
   component "ContractList" \contractList -> React.do
-    ((state :: ContractListState) /\ updateState) <- useState { contractList, newContract: Nothing }
+    ((state :: ContractListState) /\ updateState) <- useState { newContract: Just Creating }
     let
       onAddContractClick = handler_ do
         updateState _ { newContract = Just Creating }
@@ -124,19 +77,40 @@ mkContractList = do
       onNewContract contractTerms = do
         updateState _ { newContract = Just (Submitting contractTerms) }
 
-    case state of
-      { newContract: Just Creating } -> pure $ DOM.div {}
-        [ DOM.title {} [ text "Add Contract" ]
-        , contractForm onNewContract
-        ]
-      { newContract: Just (Submitting contract) } -> pure $ text ("Submitting" <> show contract)
-      { newContract: Just _ } -> pure $ text "STUB: Other contract creation step"
-      { newContract: Nothing } -> pure $
-        DOM.div {}
-          [ DOM.a
-              { onClick: onAddContractClick, href: "#" }
-              "Add Contract"
-          ] <> contractsTable state.contractList
+    pure $
+      DOM.div {}
+        [ case state.newContract of
+            Just Creating ->
+              modal
+                { title: text "Add contract"
+                , onDismiss: updateState _ { newContract = Nothing }
+                , body: contractForm onNewContract
+                }
+            -- [ DOM.title {} [ text "Add Contract" ]
+            -- , contractForm onNewContract
+            -- ]
+            Just (Submitting contract) ->
+              modal
+                { title: text "Submitting"
+                -- FIXME: Should we ignore dismisses - we are not able to cancel submission I can imagine?
+                , onDismiss: updateState _ { newContract = Nothing }
+                , body:
+                    -- FIXME: We should still present the form
+                    text ("Submitting" <> show contract)
+                }
+            -- FIXME: Just a stub...
+            Just _ ->
+              modal
+                { title: text "Success or failure"
+                , onDismiss: updateState _ { newContract = Nothing }
+                , body:
+                    text ("Success or failure...")
+                }
+            Nothing -> mempty
+        , DOM.a
+            { onClick: onAddContractClick, href: "#" }
+            "Add Contract"
+        ] <> contractsTable contractList
 
 contractsTable :: Array (ResourceWithLinks ContractHeader (contract :: ContractEndpoint)) -> JSX
 contractsTable contractList =
@@ -161,3 +135,4 @@ contractRow ({ resource: ContractHeader { contractId, status } }) =
   where
   onEdit = handler_ do
     pure unit
+

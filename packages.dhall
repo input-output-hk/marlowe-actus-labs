@@ -99,3 +99,10 @@ in upstream
       [ "aff", "effect", "heterogeneous", "prelude", "typelevel-prelude", "contravariant", "newtype", "record", "unsafe-coerce" ]
       "https://github.com/purescript-codegen/purescript-js-object.git"
       "73db55f89744b032f44c9ec49804f46e3ee63ed7"
+  with
+    atleast = mkPackage
+      [ "arrays" , "effect" , "enums" , "fast-vect" , "foldable-traversable" , "integers" 
+      , "maybe" , "partial" , "prelude" , "quickcheck" , "unsafe-coerce"
+      ]
+      "https://github.com/JamieBallingall/purescript-atleast.git"
+      "x0.5.1"

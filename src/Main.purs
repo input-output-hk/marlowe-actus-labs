@@ -74,8 +74,8 @@ main configJson = do
   config <- liftEither $ decodeConfig configJson
   let
     log :: String -> Effect Unit
-    log = if config.develMode
-      then Console.log
+    log =
+      if config.develMode then Console.log
       else const (pure unit)
 
   doc :: HTMLDocument <- document =<< window
@@ -90,16 +90,16 @@ main configJson = do
         -- contracts <- foldMapMPages' config.marloweWebServerUrl api (pure <<< _.page) >>= liftEither >>> liftEffect
         -- FIXME: this is a temporary hack to get the first page of contracts to speed up development
         contracts <- getPage' config.marloweWebServerUrl api Nothing >>= liftEither >>> liftEffect <#> _.page
-        liftEffect $ renderRoot reactRoot (
-          DOM.div {className: "container-fluid"} $
-            [DOM.div {className: "row"} $
-              [ DOM.div {className: "col"} $ "ACTUS 1"
-              , DOM.div {className: "col"} $ "ACTUS 2"
-              , DOM.div {className: "col"} $ walletComponent NotConnected
+        liftEffect $ renderRoot reactRoot
+          ( DOM.div { className: "container" } $
+              [ DOM.div { className: "row" } $
+                  [ DOM.div { className: "col" } $ "ACTUS 1"
+                  , DOM.div { className: "col" } $ "ACTUS 2"
+                  , DOM.div { className: "col" } $ walletComponent NotConnected
+                  ]
+              , DOM.div { className: "row" } $
+                  [ DOM.div { className: "col" } $ contractListComponent contracts
+                  , DOM.div { className: "col" } $ "Events table"
+                  ]
               ]
-              , DOM.div {className: "row"} $
-              [ DOM.div {className: "col"} $ contractListComponent contracts
-              , DOM.div {className: "col"} $ "Events table"
-              ]
-            ]
           )

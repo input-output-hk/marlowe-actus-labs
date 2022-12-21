@@ -7,6 +7,7 @@
   , "argonaut-generic"
   , "array-builder"
   , "arrays"
+  , "atleast"
   , "bifunctors"
   , "console"
   , "control"
