@@ -100,7 +100,8 @@ toMarloweObservation FalseObs' = FalseObs
 toMarloweCashflow :: CashFlow Value' Party -> CashFlow Value Party
 toMarloweCashflow
   ( CashFlow
-      { party
+      { contractId
+      , party
       , counterparty
       , paymentDay
       , calculationDay
@@ -110,7 +111,8 @@ toMarloweCashflow
       , currency
       }
   ) = CashFlow
-  { party
+  { contractId
+  , party
   , counterparty
   , paymentDay
   , calculationDay

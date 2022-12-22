@@ -182,7 +182,8 @@ data RiskFactors a = RiskFactors
 
 -- | Cash flows
 data CashFlow a b = CashFlow
-  { party :: b
+  { contractId :: String
+  , party :: b
   , counterparty :: b
   , paymentDay :: DateTime
   , calculationDay :: DateTime

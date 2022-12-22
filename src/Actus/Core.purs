@@ -68,6 +68,7 @@ genProjectedCashflows parties riskFactors contractTerms =
         && a.party == b.party
         && a.counterparty == b.counterparty
         && a.currency == b.currency
+        && a.contractId == b.contractId
 
   netCashflows cf = map (foldl1 plus) $ groupCashflows cf
     where
@@ -124,9 +125,10 @@ genCashflow
   ->
   -- | Projected cash flow
   CashFlow a b
-genCashflow (party /\ counterparty) (ContractTerms { currency }) ((event /\ { paymentDay, calculationDay }) /\ ContractState { nt } /\ amount) =
+genCashflow (party /\ counterparty) (ContractTerms { contractId, currency }) ((event /\ { paymentDay, calculationDay }) /\ ContractState { nt } /\ amount) =
   CashFlow
-    { party
+    { contractId
+    , party
     , counterparty
     , paymentDay
     , calculationDay

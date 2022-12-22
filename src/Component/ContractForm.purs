@@ -89,18 +89,6 @@ mkContractForm = do
               where
               fromInt = Constant' <<< BigInt.fromInt <<< (marloweFixedPoint * _)
 
-            {-
-            projectedCashFlows = genProjectedCashflows (role1 /\ role2)
-              ( \_ _ ->
-                  RiskFactors
-                    { o_rf_CURS: Decimal.fromInt 1
-                    , o_rf_RRMO: Decimal.fromInt 1
-                    , o_rf_SCMO: Decimal.fromInt 1
-                    , pp_payoff: Decimal.fromInt 0
-                    }
-              )
-              terms
-              -}
             cashflowsMarlowe = genProjectedCashflows (role1 /\ role2) riskFactors termsMarlowe
             contract = genContract cashflowsMarlowe
           setJsonValidation (const $ Just (Right contract))

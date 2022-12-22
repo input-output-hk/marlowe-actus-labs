@@ -118,7 +118,7 @@ mkContractList = do
               , title: text "ACTUS Contract Terms"
               }
             Nothing -> mempty
-        ] <> DOM.table { className: "table table-striped" }
+        ] <> DOM.table { className: "table table-hover" }
         [ DOM.thead {} $
             [ DOM.tr {}
                 [ DOM.th {} [ text "Status" ]

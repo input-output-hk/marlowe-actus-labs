@@ -24,6 +24,7 @@
   , "foldable-traversable"
   , "foreign"
   , "foreign-object"
+  , "formatters"
   , "heterogeneous"
   , "http-methods"
   , "indexed-monad"
