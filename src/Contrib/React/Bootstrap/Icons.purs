@@ -1,6 +1,8 @@
 module Contrib.React.Bootstrap.Icons
   ( Icon
   , toJSX
+  , cashStack
+  , infoSquare
   , fileEarmarkPlus
   , wallet2
   )
@@ -22,8 +24,15 @@ newtype Icon = Icon JSX
 toJSX :: Icon -> JSX
 toJSX (Icon jsx) = jsx
 
-wallet2 :: Icon
-wallet2 = unsafeIcon "wallet2"
+cashStack :: Icon
+cashStack = unsafeIcon "cash-stack"
 
 fileEarmarkPlus :: Icon
 fileEarmarkPlus = unsafeIcon "file-earmark-plus"
+
+infoSquare :: Icon
+infoSquare = unsafeIcon "info-square"
+
+wallet2 :: Icon
+wallet2 = unsafeIcon "wallet2"
+

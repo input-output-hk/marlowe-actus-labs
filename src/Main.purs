@@ -96,6 +96,7 @@ main configJson = do
         -- contracts <- foldMapMPages' config.marloweWebServerUrl api (pure <<< _.page) >>= liftEither >>> liftEffect
         -- FIXME: this is a temporary hack to get the first page of contracts to speed up development
         contracts <- getPage' config.marloweWebServerUrl api Nothing >>= liftEither >>> liftEffect <#> _.page
+
         walletInfoCtx <- liftEffect $ createContext Nothing
         let
           mkAppCtx =

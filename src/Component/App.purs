@@ -8,9 +8,8 @@ import Component.EventList (mkEventList)
 import Component.Modal (mkModal)
 import Component.Types (MkComponentM, ContractHeaderResource)
 import Component.Widgets (linkButtonWithIcon, linkWithIcon)
-import Component.Widgets.Icons as Icons
-import Component.Widgets.Icons as Icons
 import Contrib.React.Bootstrap as Bootstrap
+import Contrib.React.Bootstrap.Icons as Icons
 import Control.Monad.Reader.Class (asks)
 import Data.Array as Array
 import Data.Maybe (Maybe(..))
@@ -39,18 +38,20 @@ mkApp = do
     possibleWalletInfo /\ setWalletInfo <- useState' Nothing
     configuringWallet /\ setConfiguringWallet <- useState' false
 
-    pure $ provider walletInfoCtx possibleWalletInfo $
-        [ DOM.div { className: "container-xl" } $
-            DOM.div { className: "row" } $
-              [ Bootstrap.alert $ { dissmisable: true, show: true, closeLabel: "Close", variant: Bootstrap.variant.dark, children: _ }
-                [ DOOM.text "ALERT BODY"
-                ]
-              , DOM.a { href: "#", className: "navbar-brand" } "ACTUS 1"
-              , DOM.div { className: "col-3" } $ "About"
-              , DOM.div { className: "col-3 text-end" } $
-                  [ linkButtonWithIcon Icons.wallet2 (DOOM.text "Connect Wallet") $ setConfiguringWallet true
-                  ]
-                  <> Monoid.guard configuringWallet
+    pure $ provider walletInfoCtx possibleWalletInfo
+        [ DOM.nav { className: "navbar mb-lg-4 navbar-expand-sm navbar-light" } $
+            DOM.div { className: "container-xl" }
+              [ DOM.a { href: "#", className: "navbar-brand" } "Marlowe Actus Labs"
+              , DOM.div { className: "navbar-collapse justify-content-end text-end" } $
+                  [ DOM.ul { className: "navbar-nav gap-2" }
+                    [ DOM.li { className: "nav-item" } $
+                        linkWithIcon Icons.infoSquare (DOOM.text "About") "nav-link" (pure unit)
+                    , DOM.li { className: "nav-item" } $
+                        linkWithIcon Icons.cashStack (DOOM.text "Cash flows") "nav-link" (pure unit)
+                    , DOM.li { className: "nav-item" } $
+                        linkWithIcon Icons.wallet2 (DOOM.text "Connect Wallet") "nav-link" (setConfiguringWallet true)
+                    ]
+                  ] <> Monoid.guard configuringWallet
                     [ modal
                       { onDismiss: setConfiguringWallet false
                       , body: walletComponent
@@ -62,8 +63,7 @@ mkApp = do
                     ]
               ]
         , DOM.div { className: "container-xl" } $ Array.singleton $
-            DOM.div { className: "row" } $
-              [ DOM.div { className: "col" } $ contractListComponent contracts
+              [ contractListComponent contracts
               , DOM.div { className: "col" } $ eventListComponent contracts
               ]
         ]

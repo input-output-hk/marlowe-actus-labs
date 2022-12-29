@@ -28,9 +28,9 @@ link label = DOM.button
   }
   [ label ]
 
-linkWithIcon :: Icon -> JSX -> Effect Unit -> JSX
-linkWithIcon icon label onClick = DOM.button
-  { className: "btn btn-link text-decoration-none text-decoration-underline-hover text-reset"
+linkWithIcon :: Icon -> JSX -> String -> Effect Unit -> JSX
+linkWithIcon icon label className onClick = DOM.button
+  { className: "btn btn-link text-decoration-none text-decoration-underline-hover text-reset " <> className
   , onClick: handler preventDefault (const $ onClick)
   , type: "button"
   }
@@ -39,9 +39,9 @@ linkWithIcon icon label onClick = DOM.button
   , label
   ]
 
-linkButtonWithIcon :: Icon -> JSX -> Effect Unit -> JSX
-linkButtonWithIcon icon label onClick = DOM.button
-  { className: "btn btn-link text-decoration-none text-reset border border-1 bg-light-hover"
+linkButtonWithIcon :: Icon -> JSX -> String -> Effect Unit -> JSX
+linkButtonWithIcon icon label className onClick = DOM.button
+  { className: "btn btn-link text-decoration-none text-reset border border-1 bg-light-hover " <> className
   , onClick: handler preventDefault (const $ onClick)
   , type: "button"
   }

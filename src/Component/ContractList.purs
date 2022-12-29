@@ -7,8 +7,8 @@ import Component.ContractForm (mkContractForm)
 import Component.Modal (mkModal)
 import Component.Types (ContractHeaderResource)
 import Component.Widgets (linkWithIcon)
-import Component.Widgets.Icons (fileEarmarkPlus)
 import Contrib.React.Bootstrap.Icons as Icons
+import Data.Array as Array
 import Data.Decimal (Decimal)
 import Data.List (List)
 import Data.Map (keys)
@@ -74,62 +74,67 @@ mkContractList = do
         updateState _ { metadata = Just metadata }
 
     pure $
-      DOM.div {}
+      DOOM.div_
         [ case state.newContract of
-            Just Creating ->
-              modal
-                { title: text "Add contract"
-                , onDismiss: updateState _ { newContract = Nothing }
-                , body: contractForm onNewContract
-                }
-            -- [ DOM.title {} [ text "Add Contract" ]
-            -- , contractForm onNewContract
-            -- ]
-            Just (Submitting contract) ->
-              modal
-                { title: text "Submitting"
-                -- FIXME: Should we ignore dismisses - we are not able to cancel submission I can imagine?
-                , onDismiss: updateState _ { newContract = Nothing }
-                , body:
-                    -- FIXME: We should still present the form
-                    text ("Submitting" <> show contract)
-                }
-            -- FIXME: Just a stub...
-            Just _ ->
-              modal
-                { title: text "Success or failure"
-                , onDismiss: updateState _ { newContract = Nothing }
-                , body:
-                    text ("Success or failure...")
-                }
-            Nothing -> mempty
-        , linkWithIcon
-            Icons.fileEarmarkPlus
-            (DOOM.text "Add contract")
-            onAddContractClick
-        , case state.metadata of
+              Just Creating ->
+                modal
+                  { title: text "Add contract"
+                  , onDismiss: updateState _ { newContract = Nothing }
+                  , body: contractForm onNewContract
+                  }
+              -- [ DOM.title {} [ text "Add Contract" ]
+              -- , contractForm onNewContract
+              -- ]
+              Just (Submitting contract) ->
+                modal
+                  { title: text "Submitting"
+                  -- FIXME: Should we ignore dismisses - we are not able to cancel submission I can imagine?
+                  , onDismiss: updateState _ { newContract = Nothing }
+                  , body:
+                      -- FIXME: We should still present the form
+                      text ("Submitting" <> show contract)
+                  }
+              -- FIXME: Just a stub...
+              Just _ ->
+                modal
+                  { title: text "Success or failure"
+                  , onDismiss: updateState _ { newContract = Nothing }
+                  , body:
+                      text ("Success or failure...")
+                  }
+              Nothing -> mempty
+        , DOM.div {className: "row justify-content-end"} $ Array.singleton $
+            DOM.div { className: "col-3 text-end" }
+              [ linkWithIcon
+                  Icons.fileEarmarkPlus
+                  (DOOM.text "Add contract")
+                  ""
+                  onAddContractClick
+              ]
+        , DOM.div { className: "row"} $ Array.singleton $ case state.metadata of
             Just (Metadata metadata) -> modal $
               { body: text $ show (keys metadata) -- FIXME: Just a stub...
               , onDismiss: updateState _ { metadata = Nothing }
               , title: text "ACTUS Contract Terms"
               }
             Nothing -> mempty
-        ] <>
-          DOM.table { className: "table table-striped table-hover" }
-            [ DOM.thead {} $
-                [ DOM.tr {}
-                    [ DOM.th {} [ text "Status" ]
-                    , DOM.th {} [ text "Contract ID" ]
-                    , DOM.th {} [ text "View" ]
-                    ]
-                ]
-            , DOM.tbody {} $ map
-                ( \{ resource: ContractHeader { contractId, status, metadata } } ->
-                    DOM.tr {}
-                      [ DOM.td {} [ text $ show status ]
-                      , DOM.td {} [ text $ txOutRefToString contractId ]
-                      , DOM.td {} [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
+        , DOM.div { className: "row" } $ Array.singleton $
+            DOM.table { className: "table table-striped table-hover" }
+              [ DOM.thead {} $
+                  [ DOM.tr {}
+                      [ DOM.th {} [ text "Status" ]
+                      , DOM.th {} [ text "Contract ID" ]
+                      , DOM.th {} [ text "View" ]
                       ]
-                )
-                contractList
-            ]
+                  ]
+              , DOM.tbody {} $ map
+                  ( \{ resource: ContractHeader { contractId, status, metadata } } ->
+                      DOM.tr {}
+                        [ DOM.td {} [ text $ show status ]
+                        , DOM.td {} [ text $ txOutRefToString contractId ]
+                        , DOM.td {} [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
+                        ]
+                  )
+                  contractList
+              ]
+        ]
