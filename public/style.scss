@@ -1,0 +1,44 @@
+@import "bootstrap/scss/functions";
+@import "bootstrap/scss/variables";
+@import "bootstrap/scss/maps";
+@import "bootstrap/scss/utilities";
+
+$utilities: map-merge(
+  $utilities, (
+    "text-decoration": (
+      property: text-decoration,
+      state: hover,
+      values: none underline line-through,
+    ),
+    "background-color": (
+      property: background-color,
+      class: bg,
+      local-vars: (
+        "bg-opacity": 1
+      ),
+      state: hover,
+      values: map-merge(
+        $utilities-bg-colors,
+        (
+          "transparent": transparent
+        )
+      )
+    )
+    // "background-color": (
+    //   property: background-color,
+    //   class: bgg,
+    //   state: hover,
+    //   values: map-merge(
+    //     $utilities-bg-colors,
+    //     (
+    //       "transparent": transparent
+    //     )
+    //   )
+    // )
+  )
+);
+
+// @debug '*** Utilities: #{$utilities}';
+
+
+@import "bootstrap/scss/bootstrap";
