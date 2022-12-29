@@ -1,12 +1,21 @@
 {
   "dependencies": {
     "big-integer": "^1.6.51",
+    "bootstrap": "^5.2.3",
+    "bootstrap-icons": "^1.10.2",
+    "css-loader": "^6.7.3",
     "decimal.js": "^10.4.2",
     "domready": "^1.0.8",
     "html-webpack-plugin": "^5.5.0",
     "json-bigint": "^1.0.0",
+    "postcss-loader": "^7.0.2",
     "react": "^18.2.0",
+    "react-bootstrap": "^2.7.0",
     "react-dom": "^18.2.0",
+    "react-icons": "^4.7.1",
+    "sass": "^1.57.1",
+    "sass-loader": "^13.2.0",
+    "style-loader": "^3.3.1",
     "webpack": "^5.75.0",
     "webpack-dev-server": "^4.11.1"
   },

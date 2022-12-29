@@ -25,6 +25,7 @@
   , "foreign"
   , "foreign-object"
   , "formatters"
+  , "halogen-subscriptions"
   , "heterogeneous"
   , "http-methods"
   , "indexed-monad"
