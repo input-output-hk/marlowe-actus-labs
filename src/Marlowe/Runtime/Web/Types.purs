@@ -428,6 +428,7 @@ derive instance Eq ContractsEndpoint
 derive instance Newtype ContractsEndpoint _
 derive newtype instance DecodeJson ContractsEndpoint
 
+-- FIXME: just a stub
 newtype PutContractRequest = PutContractRequest Int
 
 type GetContractResponse = ContractState
@@ -439,8 +440,10 @@ derive instance Eq ContractEndpoint
 derive instance Newtype ContractEndpoint _
 derive newtype instance DecodeJson ContractEndpoint
 
+-- FIXME: just a stub
 newtype PostTransactionsRequest = PostTransactionsRequest Int
 
+-- FIXME: just a stub
 newtype PostTransactionsResponse = PostTransactinosResponse Int
 
 type GetTransactionsResponse = TxHeader

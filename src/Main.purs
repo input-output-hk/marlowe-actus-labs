@@ -4,14 +4,18 @@ module Main
 
 import Prelude
 
+import Component.App (mkApp)
+import Component.ConnectWallet (mkConnectWallet)
 import Component.ContractList (mkContractList)
 import Component.EventList (mkEventList)
-import Component.Wallet (WalletState(..), mkWalletConnect)
 import Contrib.Data.Argonaut (JsonParser)
+import Control.Monad.Reader (runReaderT)
+import Control.Monad.Reader.Class (asks)
 import Data.Argonaut (Json, decodeJson, (.:))
 import Data.Either (Either, either)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (un)
+import Data.Tuple.Nested ((/\))
 import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
@@ -23,8 +27,10 @@ import Effect.Class.Console as Console
 import Effect.Exception (error, throw)
 import Marlowe.Runtime.Web.Client (foldMapMPages, foldMapMPages', getPage')
 import Marlowe.Runtime.Web.Types (ResourceLink(..), ServerURL(..), api)
+import React.Basic (createContext)
 import React.Basic.DOM.Client (createRoot, renderRoot)
 import React.Basic.DOM.Simplified.Generated as DOM
+import React.Basic.Hooks (component, provider, useState)
 import Wallet as Wallet
 import Web.DOM (Element)
 import Web.DOM.NonElementParentNode (getElementById)
@@ -70,12 +76,13 @@ decodeConfig json = do
   develMode <- obj .: "develMode"
   pure { marloweWebServerUrl: ServerURL marloweWebServerUrl, develMode }
 
+
 main :: Json -> Effect Unit
 main configJson = do
   config <- liftEither $ decodeConfig configJson
   let
-    log :: String -> Effect Unit
-    log =
+    logger :: String -> Effect Unit
+    logger =
       if config.develMode then Console.log
       else const (pure unit)
 
@@ -85,23 +92,17 @@ main configJson = do
     Nothing -> throw "Could not find element with id 'app-root'"
     Just container -> do
       reactRoot <- createRoot container
-      contractListComponent <- mkContractList
-      eventListComponent <- mkEventList
-      walletComponent <- mkWalletConnect
       launchAff_ do
         -- contracts <- foldMapMPages' config.marloweWebServerUrl api (pure <<< _.page) >>= liftEither >>> liftEffect
         -- FIXME: this is a temporary hack to get the first page of contracts to speed up development
         contracts <- getPage' config.marloweWebServerUrl api Nothing >>= liftEither >>> liftEffect <#> _.page
-        liftEffect $ renderRoot reactRoot
-          ( DOM.div { className: "container" } $
-              [ DOM.div { className: "row" } $
-                  [ DOM.div { className: "col" } $ "ACTUS 1"
-                  , DOM.div { className: "col" } $ "ACTUS 2"
-                  , DOM.div { className: "col" } $ walletComponent NotConnected
-                  ]
-              , DOM.div { className: "row" } $
-                  [ DOM.div { className: "col" } $ contractListComponent contracts
-                  , DOM.div { className: "col" } $ eventListComponent contracts
-                  ]
-              ]
-          )
+        walletInfoCtx <- liftEffect $ createContext Nothing
+        let
+          mkAppCtx =
+            { walletInfoCtx
+            , logger
+            , contracts
+            }
+
+        app <- liftEffect $ runReaderT mkApp mkAppCtx
+        liftEffect $ renderRoot reactRoot $ app unit

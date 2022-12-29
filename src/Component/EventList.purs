@@ -15,6 +15,8 @@ import Data.Enum (toEnum)
 import Data.Formatter.DateTime (formatDateTime)
 import Data.Map (lookup)
 import Data.Maybe (Maybe(..), fromJust)
+import Component.Types (ContractHeaderResource)
+import Data.Maybe (Maybe(..))
 import Effect (Effect)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party(..))
 import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractHeader(..), Metadata(..))
@@ -36,14 +38,7 @@ type EventListState =
   { newInput :: Maybe (CashFlow Decimal Party)
   }
 
-mkEventList
-  :: Effect
-       ( Array
-           { links :: { contract :: ContractEndpoint }
-           , resource :: ContractHeader
-           }
-         -> JSX
-       )
+mkEventList :: Effect ( Array ContractHeaderResource -> JSX)
 mkEventList = do
   modal <- mkModal
   component "EventList" \contractList -> React.do

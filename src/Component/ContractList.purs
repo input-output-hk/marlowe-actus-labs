@@ -5,6 +5,10 @@ import Prelude
 import Actus.Domain (CashFlow, ContractTerms)
 import Component.ContractForm (mkContractForm)
 import Component.Modal (mkModal)
+import Component.Types (ContractHeaderResource)
+import Component.Widgets (linkWithIcon)
+import Component.Widgets.Icons (fileEarmarkPlus)
+import Contrib.React.Bootstrap.Icons as Icons
 import Data.Decimal (Decimal)
 import Data.List (List)
 import Data.Map (keys)
@@ -12,8 +16,9 @@ import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Tuple.Nested (type (/\))
 import Effect (Effect)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party)
-import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractHeader(..), Metadata(..), TxOutRef, txOutRefToString)
+import Marlowe.Runtime.Web.Types (ContractHeader(..), Metadata(..), TxOutRef, txOutRefToString)
 import React.Basic.DOM (text)
+import React.Basic.DOM as DOOM
 import React.Basic.DOM.Events (targetValue)
 import React.Basic.DOM.Simplified.Generated as DOM
 import React.Basic.Events (EventHandler, handler, handler_)
@@ -52,16 +57,7 @@ type ContractListState =
   , metadata :: Maybe Metadata
   }
 
-mkContractList
-  :: Effect
-       ( Array
-           { links ::
-               { contract :: ContractEndpoint
-               }
-           , resource :: ContractHeader
-           }
-         -> JSX
-       )
+mkContractList :: Effect (Array ContractHeaderResource -> JSX)
 mkContractList = do
   contractForm <- mkContractForm
   modal <- mkModal
@@ -69,8 +65,7 @@ mkContractList = do
   component "ContractList" \contractList -> React.do
     ((state :: ContractListState) /\ updateState) <- useState { newContract: Nothing, metadata: Nothing }
     let
-      onAddContractClick = handler_ do
-        updateState _ { newContract = Just Creating }
+      onAddContractClick = updateState _ { newContract = Just Creating }
 
       onNewContract contractTerms = do
         updateState _ { newContract = Just (Submitting contractTerms) }
@@ -108,9 +103,10 @@ mkContractList = do
                     text ("Success or failure...")
                 }
             Nothing -> mempty
-        , DOM.button
-            { onClick: onAddContractClick, className: "btn btn-primary" }
-            "Add Contract"
+        , linkWithIcon
+            Icons.fileEarmarkPlus
+            (DOOM.text "Add contract")
+            onAddContractClick
         , case state.metadata of
             Just (Metadata metadata) -> modal $
               { body: text $ show (keys metadata) -- FIXME: Just a stub...
@@ -118,21 +114,22 @@ mkContractList = do
               , title: text "ACTUS Contract Terms"
               }
             Nothing -> mempty
-        ] <> DOM.table { className: "table table-hover" }
-        [ DOM.thead {} $
-            [ DOM.tr {}
-                [ DOM.th {} [ text "Status" ]
-                , DOM.th {} [ text "Contract ID" ]
-                , DOM.th {} [ text "View" ]
+        ] <>
+          DOM.table { className: "table table-striped table-hover" }
+            [ DOM.thead {} $
+                [ DOM.tr {}
+                    [ DOM.th {} [ text "Status" ]
+                    , DOM.th {} [ text "Contract ID" ]
+                    , DOM.th {} [ text "View" ]
+                    ]
                 ]
+            , DOM.tbody {} $ map
+                ( \{ resource: ContractHeader { contractId, status, metadata } } ->
+                    DOM.tr {}
+                      [ DOM.td {} [ text $ show status ]
+                      , DOM.td {} [ text $ txOutRefToString contractId ]
+                      , DOM.td {} [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
+                      ]
+                )
+                contractList
             ]
-        , DOM.tbody {} $ map
-            ( \{ resource: ContractHeader { contractId, status, metadata } } ->
-                DOM.tr {}
-                  [ DOM.td {} [ text $ show status ]
-                  , DOM.td {} [ text $ txOutRefToString contractId ]
-                  , DOM.td {} [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
-                  ]
-            )
-            contractList
-        ]

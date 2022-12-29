@@ -96,12 +96,8 @@ getPage serverUrl path possibleRange = runExceptT do
     Nothing ->
       getResource serverUrl path { "Range": "contractId" }
     Just (Range range) -> do
-      traceM "range"
       res <- getResource serverUrl path { "Range": range }
-      traceM "range done"
       pure res
-  traceM "STATUS:"
-  traceM status
   let
     toHeaders :: Headers -> Map CaseInsensitiveString String
     toHeaders = toArray >>> map (lmap CaseInsensitiveString) >>> fromFoldable
@@ -109,11 +105,6 @@ getPage serverUrl path possibleRange = runExceptT do
     nextRange = case status, lookup (CaseInsensitiveString "Next-Range") (toHeaders headers) of
       206, Just nr -> Just (Range nr)
       _, _ -> Nothing
-
-  traceM "HEADERS:"
-  traceM $ (toHeaders headers)
-  traceM $ (Object.fromFoldable (toArray headers) :: Object String)
-
   pure { page: payload, nextRange }
 
 data FoldPageStep = FetchPage (Maybe Range) | StopFetching
@@ -133,9 +124,7 @@ foldMapMPages serverUrl path f = do
   bs <- runExceptT $ flip unfoldrM seed case _ of
     StopFetching -> pure Nothing
     FetchPage currRange -> do
-      traceM "Fetching page"
       { page, nextRange } <- ExceptT $ liftAff $ getPage serverUrl path currRange
-      traceM "Fetching page done"
       b <- lift $ f { page, currRange }
       case nextRange of
         Just _ -> pure $ Just (b /\ FetchPage nextRange)
@@ -196,6 +185,12 @@ foldMapMPages'
      )
   -> m (Either ClientError b)
 foldMapMPages' serverUrl path = foldMapMPages serverUrl (toResourceLink path)
+
+-- mkPageEmitter serverUrl path pollingInterval = do
+--   -- reversed list of page refs
+--   rangesRef <- newRef List.Nil
+--   flip setInterval pollingInterval
+-- 
 
 post
   :: forall links postRequest postResponse getResponse extraHeaders

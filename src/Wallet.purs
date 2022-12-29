@@ -1,5 +1,6 @@
 module Wallet
   ( Address(..)
+  , Api
   , Bytes(..)
   , Cbor(..)
   , Coin
@@ -8,6 +9,7 @@ module Wallet
   , TransactionUnspentOutput
   , TransactionWitnessSet(..)
   , Value(..)
+  , Wallet
   , apiVersion
   , cardano
   , enable
@@ -102,6 +104,7 @@ _Api
      }
 _Api = mkFFI (Proxy :: Proxy Api)
 
+-- FIXME: newtype this
 type Wallet = JSObject
   ( enable :: EffectMth0 (Promise Api)
   , isEnabled :: EffectMth0 (Promise Boolean)

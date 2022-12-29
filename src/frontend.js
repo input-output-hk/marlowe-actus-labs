@@ -4,6 +4,7 @@
 
 import { main } from "../output/Main/index.js";
 import domready from 'domready';
+import "../public/style.scss";
 
 const config = {
   develMode: process.env.DEVEL_MODE,

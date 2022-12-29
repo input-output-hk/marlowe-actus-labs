@@ -33,16 +33,15 @@ data SingleChoiceField
   = RadioButtonField (ArrayAL 1 RadioFieldChoice) -- use `solo` / `solo'` to create
   | SelectField (ArrayAL 2 SelectFieldChoice) -- use `duet` / `duet'` to create
 
+type SingleChoiceFieldProps =
+  { initialValue :: String
+  , onValueChange :: String -> Effect Unit
+  , type :: SingleChoiceField
+  }
+
 -- Choice widget either radio button or checkbox which can handle
 -- multiple options.
-mkSingleChoiceField
-  :: Effect
-       ( { initialValue :: String
-         , onValueChange :: String -> Effect Unit
-         , type :: SingleChoiceField
-         }
-         -> JSX
-       )
+mkSingleChoiceField :: Effect (SingleChoiceFieldProps -> JSX)
 mkSingleChoiceField = do
   widgetPrefix <- random <#> \n -> "single-choice-widget-" <> show n <> "-"
   counterRef <- Ref.new 0
