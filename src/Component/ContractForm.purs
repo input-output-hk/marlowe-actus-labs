@@ -9,12 +9,12 @@ import Data.Argonaut (decodeJson, parseJson)
 import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (DateTime)
 import Data.Decimal (Decimal)
-import Data.Decimal as Decimal
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Newtype (unwrap)
 import Data.String as String
 import Effect (Effect)
-import Language.Marlowe.Core.V1.Semantics.Types (Party(..))
+import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId(..), Party(..))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus (RiskFactorsMarlowe, genContract, toMarlowe)
 import React.Basic (JSX)
@@ -76,18 +76,25 @@ mkContractForm = do
           let
             termsMarlowe = toMarlowe terms
 
-            role1 = Role "R1" -- FIXME
-            role2 = Role "R2" -- FIXME
+            role1 = Role "R1" -- FIXME: provided as input
+            role2 = Role "R2" -- FIXME: provided as input
+            oracle = Address "" -- FIXME: oracle address
 
-            riskFactors :: EventType -> DateTime -> RiskFactorsMarlowe
-            riskFactors _ _ = RiskFactors -- FIXME
-              { o_rf_CURS: fromInt 1
-              , o_rf_RRMO: fromInt 1
-              , o_rf_SCMO: fromInt 1
-              , pp_payoff: fromInt 0
-              }
+            o_rf_CURS = fromMaybe (fromInt 1) $ do
+              currency <- (unwrap terms).currency
+              settlementCurrency <- (unwrap terms).settlementCurrency
+              if currency == settlementCurrency then Nothing
+              else Just $ ChoiceValue' (ChoiceId (currency <> settlementCurrency) oracle)
               where
               fromInt = Constant' <<< BigInt.fromInt <<< (marloweFixedPoint * _)
+
+            riskFactors :: EventType -> DateTime -> RiskFactorsMarlowe
+            riskFactors _ _ = RiskFactors
+              { o_rf_CURS
+              , o_rf_RRMO: ChoiceValue' (ChoiceId "rrmo" oracle) -- TODO: add to oracle
+              , o_rf_SCMO: ChoiceValue' (ChoiceId "scmo" oracle) -- TODO: add to oracle
+              , pp_payoff: ChoiceValue' (ChoiceId "pp" oracle) -- TODO: add to oracle
+              }
 
             cashflowsMarlowe = genProjectedCashflows (role1 /\ role2) riskFactors termsMarlowe
             contract = genContract cashflowsMarlowe

@@ -135,7 +135,7 @@ genCashflow (party /\ counterparty) (ContractTerms { contractId, currency }) ((e
     , event
     , amount
     , notional: nt
-    , currency: fromMaybe "unknown" currency
+    , currency: fromMaybe "" currency
     }
 
 -- |Generate projected cash flows

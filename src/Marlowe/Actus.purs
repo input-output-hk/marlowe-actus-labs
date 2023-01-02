@@ -13,39 +13,56 @@ module Marlowe.Actus
 
 import Prelude
 
-import Actus.Core (genProjectedCashflows)
-import Actus.Domain (CashFlow(..), ContractState, ContractTerms(..), EventType, Observation'(..), RiskFactors, Value'(..), marloweFixedPoint)
+import Actus.Domain (CashFlow(..), ContractState, ContractTerms(..), Observation'(..), RiskFactors, Value'(..), marloweFixedPoint)
+import Control.Apply (lift2)
 import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.BigInt.Argonaut as BigInt
-import Data.DateTime (DateTime)
 import Data.DateTime.Instant (Instant, fromDateTime)
 import Data.Decimal (Decimal)
 import Data.Decimal as Decimal
 import Data.Foldable (foldl)
 import Data.List (List, reverse)
-import Data.Maybe (Maybe(..))
-import Data.Tuple.Nested (type (/\))
-import Language.Marlowe.Core.V1.Semantics as MarloweSemantics
-import Language.Marlowe.Core.V1.Semantics.Types (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), TimeInterval(..), Value(..), Token(..))
-import Language.Marlowe.Core.V1.Semantics.Types as MarloweCore
-import Marlowe.Time (unixEpoch)
+import Data.Maybe (Maybe(..), maybe)
+import Language.Marlowe.Core.V1.Semantics.Types (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), Token(..), Value(..))
 
 type CashFlowMarlowe = CashFlow Value
 type ContractStateMarlowe = ContractState Value'
 type ContractTermsMarlowe = ContractTerms Value'
 type RiskFactorsMarlowe = RiskFactors Value'
 
-evalVal :: Value -> BigInt
-evalVal d = MarloweSemantics.evalValue env state d
-  where
-  env = MarloweCore.Environment { timeInterval: TimeInterval unixEpoch unixEpoch }
-  state = MarloweSemantics.emptyState
+evalVal :: Value -> Maybe BigInt
+evalVal (AvailableMoney _ _) = Nothing
+evalVal (Constant integer) = Just integer
+evalVal (NegValue val) = negate <$> evalVal val
+evalVal (AddValue lhs rhs) = lift2 (+) (evalVal lhs) (evalVal rhs)
+evalVal (SubValue lhs rhs) = lift2 (-) (evalVal lhs) (evalVal rhs)
+evalVal (MulValue lhs rhs) = lift2 (*) (evalVal lhs) (evalVal rhs)
+evalVal (DivValue lhs rhs) = do
+  n <- evalVal lhs
+  d <- evalVal rhs
+  pure $
+    if d == fromInt 0 then fromInt 0
+    else n / d
+evalVal (ChoiceValue _) = Nothing
+evalVal (TimeIntervalStart) = Nothing
+evalVal (TimeIntervalEnd) = Nothing
+evalVal (UseValue _) = Nothing
+evalVal (Cond cond thn els) = do
+  obs <- evalObs cond
+  if obs then evalVal thn else evalVal els
 
-evalObs :: Observation -> Boolean
-evalObs d = MarloweSemantics.evalObservation env state d
-  where
-  env = MarloweCore.Environment { timeInterval: TimeInterval unixEpoch unixEpoch }
-  state = MarloweSemantics.emptyState
+evalObs :: Observation -> Maybe Boolean
+evalObs (AndObs lhs rhs) = lift2 (&&) (evalObs lhs) (evalObs rhs)
+evalObs (OrObs lhs rhs) = lift2 (||) (evalObs lhs) (evalObs rhs)
+evalObs (NotObs subObs) = not <$> evalObs subObs
+evalObs (ChoseSomething _) = Nothing
+evalObs (ValueGE lhs rhs) = lift2 (>=) (evalVal lhs) (evalVal rhs)
+evalObs (ValueGT lhs rhs) = lift2 (>) (evalVal lhs) (evalVal rhs)
+evalObs (ValueLT lhs rhs) = lift2 (<) (evalVal lhs) (evalVal rhs)
+evalObs (ValueLE lhs rhs) = lift2 (<=) (evalVal lhs) (evalVal rhs)
+evalObs (ValueEQ lhs rhs) = lift2 (==) (evalVal lhs) (evalVal rhs)
+evalObs TrueObs = Just true
+evalObs FalseObs = Just false
 
 -- | Reduce the contract representation in size, the semantics of the
 -- contract are not changed. TODO: formal verification
@@ -54,12 +71,12 @@ reduceContract Close = Close
 reduceContract (Pay a b c d e) = Pay a b c (reduceValue d) (reduceContract e)
 reduceContract (When cs t c) = When (map f cs) t (reduceContract c)
   where
+  f (Case (Deposit a p o v) x) = Case (Deposit a p o (reduceValue v)) (reduceContract x)
   f (Case a x) = Case a (reduceContract x)
-reduceContract (If obs a b) =
-  let
-    c = evalObs obs
-  in
-    reduceContract (if c then a else b)
+reduceContract c@(If obs a b) =
+  case evalObs obs of
+    Just o -> reduceContract (if o then a else b)
+    Nothing -> c
 reduceContract (Let v o c) = Let v (reduceValue o) (reduceContract c)
 reduceContract (Assert o c) = Assert (reduceObs o) (reduceContract c)
 
@@ -75,7 +92,7 @@ reduceObs (ValueEQ a b) = ValueEQ (reduceValue a) (reduceValue b)
 reduceObs x = x
 
 reduceValue :: Value -> Value
-reduceValue v = Constant $ evalVal v
+reduceValue v = maybe v Constant (evalVal v)
 
 toMarloweValue :: Value' -> Value
 toMarloweValue (Constant' n) = Constant n
@@ -83,7 +100,9 @@ toMarloweValue (NegValue' n) = NegValue $ toMarloweValue n
 toMarloweValue (AddValue' a b) = AddValue (toMarloweValue a) (toMarloweValue b)
 toMarloweValue (SubValue' a b) = SubValue (toMarloweValue a) (toMarloweValue b)
 toMarloweValue (MulValue' a b) = MulValue (toMarloweValue a) (toMarloweValue b)
+toMarloweValue (DivValue' a b) = DivValue (toMarloweValue a) (toMarloweValue b)
 toMarloweValue (Cond' o a b) = Cond (toMarloweObservation o) (toMarloweValue a) (toMarloweValue b)
+toMarloweValue (ChoiceValue' i) = ChoiceValue i
 
 toMarloweObservation :: Observation' -> Observation
 toMarloweObservation (AndObs' a b) = AndObs (toMarloweObservation a) (toMarloweObservation b)
