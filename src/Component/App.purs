@@ -3,15 +3,13 @@ module Component.App where
 import Prelude
 
 import Component.ConnectWallet (mkConnectWallet)
+import Component.ConnectWallet as ConnectWallet
 import Component.ContractList (mkContractList)
 import Component.EventList (mkEventList)
-import Component.Modal (mkModal)
-import Component.Types (MkComponentM, ContractHeaderResource)
-import Component.Widgets (linkButtonWithIcon, linkWithIcon)
-import Contrib.React.Bootstrap as Bootstrap
+import Component.Types (ContractHeaderResource, MkComponentM, WalletInfo(..))
+import Component.Widgets (link, linkWithIcon)
 import Contrib.React.Bootstrap.Icons as Icons
 import Control.Monad.Reader.Class (asks)
-import Data.Array as Array
 import Data.Maybe (Maybe(..))
 import Data.Monoid as Monoid
 import Data.Tuple.Nested ((/\))
@@ -19,17 +17,16 @@ import Effect.Class (liftEffect)
 import React.Basic (JSX)
 import React.Basic.DOM as DOOM
 import React.Basic.DOM.Simplified.Generated as DOM
-import React.Basic.Hooks (component, provider, useState, useState')
+import React.Basic.Hooks (component, provider, useState')
 import React.Basic.Hooks as React
 
 mkApp :: MkComponentM (Unit -> JSX)
 mkApp = do
-  contractListComponent <- liftEffect mkContractList
+  contractListComponent <- mkContractList
   eventListComponent <- liftEffect mkEventList
-  walletComponent <- mkConnectWallet
+  connectWallet <- mkConnectWallet
 
   walletInfoCtx <- asks _.walletInfoCtx
-  modal <- liftEffect $ mkModal
 
   -- FIXME: This gonna be replaced by a contract event emitter
   (contracts :: Array ContractHeaderResource) <- asks _.contracts
@@ -39,32 +36,62 @@ mkApp = do
     configuringWallet /\ setConfiguringWallet <- useState' false
 
     pure $ provider walletInfoCtx possibleWalletInfo
-        [ DOM.nav { className: "navbar mb-lg-4 navbar-expand-sm navbar-light" } $
-            DOM.div { className: "container-xl" }
-              [ DOM.a { href: "#", className: "navbar-brand" } "Marlowe Actus Labs"
-              , DOM.div { className: "navbar-collapse justify-content-end text-end" } $
-                  [ DOM.ul { className: "navbar-nav gap-2" }
+      [ DOM.nav { className: "navbar mb-lg-4 navbar-expand-sm navbar-light bg-light py-0" } $
+          DOM.div { className: "container-xl" }
+            [ DOM.a { href: "#", className: "navbar-brand" } "Marlowe Actus Labs"
+            , DOM.div { className: "navbar-collapse justify-content-end text-end" } $
+                [ DOM.ul { className: "navbar-nav gap-2" }
                     [ DOM.li { className: "nav-item" } $
-                        linkWithIcon Icons.infoSquare (DOOM.text "About") "nav-link" (pure unit)
+                        linkWithIcon
+                          { icon: Icons.infoSquare
+                          , label: (DOOM.text "About")
+                          , extraClassNames: "nav-link"
+                          , onClick: (pure unit)
+                          }
                     , DOM.li { className: "nav-item" } $
-                        linkWithIcon Icons.cashStack (DOOM.text "Cash flows") "nav-link" (pure unit)
+                        linkWithIcon
+                          { icon: Icons.cashStack
+                          , label: DOOM.text "Cash flows"
+                          , extraClassNames: "nav-link"
+                          , onClick: pure unit
+                          }
                     , DOM.li { className: "nav-item" } $
-                        linkWithIcon Icons.wallet2 (DOOM.text "Connect Wallet") "nav-link" (setConfiguringWallet true)
+                        case possibleWalletInfo of
+                          Just (WalletInfo wallet) -> link
+                            { label: DOOM.span_
+                                [ DOOM.img { src: wallet.icon, alt: wallet.name, className: "w-1_2rem me-1" }
+                                , DOOM.span_ [ DOOM.text $ wallet.name <> " wallet" ]
+                                ]
+                            , extraClassNames: "nav-link"
+                            , onClick: setConfiguringWallet true
+                            }
+                          Nothing -> linkWithIcon
+                            { icon: Icons.wallet2
+                            , label: DOOM.text "Connect Wallet"
+                            , extraClassNames: "nav-link"
+                            , onClick: setConfiguringWallet true
+                            }
                     ]
-                  ] <> Monoid.guard configuringWallet
-                    [ modal
-                      { onDismiss: setConfiguringWallet false
-                      , body: walletComponent
-                        { currentlyConnected: Nothing
-                        , onWalletConnected: \_ -> pure unit
-                        }
-                      , title: DOOM.text "Configuring wallet"
+                ] <> Monoid.guard configuringWallet do
+                  let
+                    jsx = connectWallet
+                      { currentlyConnected: possibleWalletInfo
+                      , onWalletConnect: \result -> do
+                          case result of
+                            ConnectWallet.Connected walletInfo -> do
+                              setWalletInfo (Just walletInfo)
+                            ConnectWallet.ConnectionError _ -> pure unit
+                            ConnectWallet.NoWallets -> pure unit
+                          setConfiguringWallet false
+
+                      , onDismiss: setConfiguringWallet false
+                      , inModal: true
                       }
-                    ]
-              ]
-        , DOM.div { className: "container-xl" } $ Array.singleton $
-              [ contractListComponent contracts
-              , DOM.div { className: "col" } $ eventListComponent contracts
-              ]
-        ]
+                  [ jsx ]
+            ]
+      , DOM.div { className: "container-xl" } $
+          [ contractListComponent { contractList: contracts, connectedWallet: possibleWalletInfo }
+          , DOM.div { className: "col" } $ eventListComponent contracts
+          ]
+      ]
 

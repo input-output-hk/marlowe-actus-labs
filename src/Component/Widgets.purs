@@ -4,6 +4,7 @@ import Prelude
 
 import Contrib.React.Bootstrap.Icons (Icon)
 import Contrib.React.Bootstrap.Icons as Icons
+import ConvertableOptions (defaults, class Defaults)
 import Data.Maybe (Maybe, fromMaybe)
 import Effect (Effect)
 import React.Basic (JSX)
@@ -18,35 +19,82 @@ spinner possibleBody = DOM.div
   , role: "status"
   }
   [ DOM.span { className: "visually-hidden" }
-    [ fromMaybe (DOOM.text "Loading...") possibleBody ]
+      [ fromMaybe (DOOM.text "Loading...") possibleBody ]
   ]
 
-link :: JSX -> JSX
-link label = DOM.button
-  { className: "btn btn-link text-decoration-none text-decoration-underline-hover text-reset"
-  , type: "button"
-  }
-  [ label ]
+type LinkOptionalProps =
+  ( extraClassNames :: String
+  , disabled :: Boolean
+  , showBorders :: Boolean
+  )
 
-linkWithIcon :: Icon -> JSX -> String -> Effect Unit -> JSX
-linkWithIcon icon label className onClick = DOM.button
-  { className: "btn btn-link text-decoration-none text-decoration-underline-hover text-reset " <> className
-  , onClick: handler preventDefault (const $ onClick)
-  , type: "button"
+defaultLinkOptionalProps :: { | LinkOptionalProps }
+defaultLinkOptionalProps =
+  { extraClassNames: ""
+  , disabled: false
+  , showBorders: false
   }
-  [ Icons.toJSX icon
-  , DOOM.text " "
-  , label
-  ]
 
-linkButtonWithIcon :: Icon -> JSX -> String -> Effect Unit -> JSX
-linkButtonWithIcon icon label className onClick = DOM.button
-  { className: "btn btn-link text-decoration-none text-reset border border-1 bg-light-hover " <> className
-  , onClick: handler preventDefault (const $ onClick)
-  , type: "button"
-  }
-  [ Icons.toJSX icon
-  , DOOM.text " "
-  , label
-  ]
+type LinkProps =
+  ( label :: JSX
+  , onClick :: Effect Unit
+  | LinkWithIconOptionalProps
+  )
+
+link
+  :: forall provided
+   . Defaults { | LinkOptionalProps } { | provided } { | LinkProps }
+  => { | provided }
+  -> JSX
+link provided = do
+  let
+    { label, extraClassNames, onClick, disabled, showBorders } =
+      defaults defaultLinkOptionalProps provided
+    borderClasses =
+      if showBorders then " border border-1 bg-light-hover"
+      else " text-decoration-underline-hover"
+    extraClassNames' = " " <> extraClassNames <> borderClasses <>
+      if disabled then " disabled"
+      else ""
+  DOM.button
+    { className: "btn btn-link text-decoration-none text-reset" <> extraClassNames'
+    , onClick: handler preventDefault (const $ onClick)
+    , type: "button"
+    }
+    [ label ]
+
+type LinkWithIconOptionalProps = LinkOptionalProps
+
+type LinkWithIconProps =
+  ( icon :: Icon
+  , label :: JSX
+  , onClick :: Effect Unit
+  | LinkWithIconOptionalProps
+  )
+
+-- FIXME: We should just call `link` here and not repeat the code
+linkWithIcon
+  :: forall provided
+   . Defaults { | LinkWithIconOptionalProps } { | provided } { | LinkWithIconProps }
+  => { | provided }
+  -> JSX
+linkWithIcon provided = do
+  let
+    { icon, label, extraClassNames, onClick, disabled, showBorders } =
+      defaults defaultLinkOptionalProps provided
+    borderClasses =
+      if showBorders then " border border-1 bg-light-hover"
+      else " text-decoration-underline-hover"
+    extraClassNames' = " " <> extraClassNames <> borderClasses <>
+      if disabled then " disabled"
+      else ""
+  DOM.button
+    { className: "btn btn-link text-decoration-none text-reset" <> extraClassNames'
+    , onClick: handler preventDefault (const $ onClick)
+    , type: "button"
+    }
+    [ Icons.toJSX icon
+    , DOOM.text " "
+    , label
+    ]
 

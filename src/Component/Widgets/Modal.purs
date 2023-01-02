@@ -2,6 +2,7 @@ module Component.Modal where
 
 import Prelude
 
+import ConvertableOptions (class Defaults, defaults)
 import Effect (Effect)
 import Effect.Console (log)
 import Foreign.Object (fromHomogeneous)
@@ -24,22 +25,55 @@ import Web.HTML.Window (document)
 
 type Props =
   { body :: JSX
+  , footer :: JSX
   , onDismiss :: Effect Unit
   , title :: JSX
+  , size :: Size
   }
+
+data Size
+  = Small
+  | Medium
+  | Large
+  | ExtraLarge
+
+type ModalOptionalProps =
+  ( footer :: JSX
+  , onDismiss :: Effect Unit
+  , size :: Size
+  )
+
+defaultModalOptionalProps :: { | ModalOptionalProps }
+defaultModalOptionalProps =
+  { footer: mempty :: JSX
+  , onDismiss: pure unit
+  , size: Medium
+  }
+
+type ModalProps =
+  ( body :: JSX
+  , title :: JSX
+  | ModalOptionalProps
+  )
 
 -- | TODO:
 -- | We could also accept something like parent container on which to render
 -- | the modal and display a backdrop.
-mkModal :: Effect (Props -> JSX)
+mkModal
+  :: forall provided
+   . Defaults { | ModalOptionalProps } { | provided } { | ModalProps }
+  => Effect ({ | provided } -> JSX)
 mkModal = do
-  component "Modal" \{ body, onDismiss, title } -> React.do
+  component "Modal" \props -> React.do
+    let
+      { body, footer, onDismiss, title, size } = defaults defaultModalOptionalProps props
     useEffectOnce do
       doc <- (window >>= document) <#> toDocument
       getElementsByTagName "body" doc >>= HTMLCollection.toArray >>= case _ of
         [ root ] -> do
           -- | FIXME: We should not override the existing classes etc.
-          setAttribute "style" "overflow: hidden; padding-right: 15px" root
+          -- setAttribute "style" "overflow: hidden; padding-right: 15px" root
+          -- setAttribute "style" "position: hidden" root
           setAttribute "class" "modal-open" root
           backdrop <- Document.createElement "div" doc
           setAttribute "class" "modal-backdrop fade show" backdrop
@@ -59,9 +93,15 @@ mkModal = do
       -- other handler.
       onModalDialogClicked = handler stopPropagation (const $ pure unit)
 
+      modalClassName = "modal-dialog" <> case size of
+        Small -> " modal-sm"
+        Medium -> " modal-md"
+        Large -> " modal-lg"
+        ExtraLarge -> " modal-xl"
+
     pure $
       DOM.div { className: "modal fade show", onClick: onModalClicked, style: css { "display": "block" }, _aria: fromHomogeneous { modal: "true" }, role: "dialog" }
-        [ DOM.div { className: "modal-dialog", onClick: onModalDialogClicked }
+        [ DOM.div { className: modalClassName, onClick: onModalDialogClicked }
             [ DOM.div { className: "modal-content" }
                 [ DOM.div { className: "modal-header" }
                     [ DOM.h5 { className: "modal-title" }
@@ -71,6 +111,8 @@ mkModal = do
                     ]
                 , DOM.div { className: "modal-body" }
                     [ (body :: JSX) ]
+                , DOM.div { className: "modal-footer" }
+                    [ footer :: JSX ]
                 ]
             ]
         ]

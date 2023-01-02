@@ -186,12 +186,6 @@ foldMapMPages'
   -> m (Either ClientError b)
 foldMapMPages' serverUrl path = foldMapMPages serverUrl (toResourceLink path)
 
--- mkPageEmitter serverUrl path pollingInterval = do
---   -- reversed list of page refs
---   rangesRef <- newRef List.Nil
---   flip setInterval pollingInterval
--- 
-
 post
   :: forall links postRequest postResponse getResponse extraHeaders
    . DecodeJson postResponse

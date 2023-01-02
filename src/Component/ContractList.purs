@@ -5,16 +5,18 @@ import Prelude
 import Actus.Domain (CashFlow, ContractTerms)
 import Component.ContractForm (mkContractForm)
 import Component.Modal (mkModal)
-import Component.Types (ContractHeaderResource)
+import Component.Types (ContractHeaderResource, WalletInfo, MkComponentM)
 import Component.Widgets (linkWithIcon)
+import Contrib.React.Bootstrap (overlayTrigger, tooltip)
 import Contrib.React.Bootstrap.Icons as Icons
+import Contrib.React.Bootstrap.Types as OverlayTrigger
 import Data.Array as Array
 import Data.Decimal (Decimal)
 import Data.List (List)
 import Data.Map (keys)
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe, isNothing)
 import Data.Tuple.Nested (type (/\))
-import Effect (Effect)
+import Effect.Class (liftEffect)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party)
 import Marlowe.Runtime.Web.Types (ContractHeader(..), Metadata(..), TxOutRef, txOutRefToString)
 import React.Basic.DOM (text)
@@ -24,8 +26,7 @@ import React.Basic.DOM.Simplified.Generated as DOM
 import React.Basic.Events (EventHandler, handler, handler_)
 import React.Basic.Hooks (Hook, JSX, UseState, component, useState, (/\))
 import React.Basic.Hooks as React
-
-type SubmissionError = String
+import Wallet as Wallet
 
 type ContractId = TxOutRef
 
@@ -46,10 +47,12 @@ useInput initialValue = React.do
   let onChange = handler targetValue (setValue <<< const <<< fromMaybe "")
   pure (value /\ onChange)
 
+type SubmissionError = String
+
 data NewContractState
   = Creating
   | Submitting (ActusTerms /\ Contract)
-  | SubmissionError ActusTerms SubmissionError
+  | SubmissionError SubmissionError -- ActusTerms SubmissionError
   | SubmissionsSuccess ActusTerms ContractId
 
 type ContractListState =
@@ -57,12 +60,17 @@ type ContractListState =
   , metadata :: Maybe Metadata
   }
 
-mkContractList :: Effect (Array ContractHeaderResource -> JSX)
+type Props =
+  { contractList :: Array ContractHeaderResource
+  , connectedWallet :: Maybe (WalletInfo Wallet.Api)
+  }
+
+mkContractList :: MkComponentM (Props -> JSX)
 mkContractList = do
   contractForm <- mkContractForm
-  modal <- mkModal
+  modal <- liftEffect $ mkModal
 
-  component "ContractList" \contractList -> React.do
+  liftEffect $ component "ContractList" \{ connectedWallet, contractList } -> React.do
     ((state :: ContractListState) /\ updateState) <- useState { newContract: Nothing, metadata: Nothing }
     let
       onAddContractClick = updateState _ { newContract = Just Creating }
@@ -76,42 +84,54 @@ mkContractList = do
     pure $
       DOOM.div_
         [ case state.newContract of
-              Just Creating ->
-                modal
-                  { title: text "Add contract"
-                  , onDismiss: updateState _ { newContract = Nothing }
-                  , body: contractForm onNewContract
+            Just Creating -> contractForm
+              { onDismiss: updateState _ { newContract = Nothing }
+              , onError: \error -> updateState _ { newContract = Just (SubmissionError error) }
+              , onSuccess: onNewContract
+              , inModal: true
+              , connectedWallet
+              }
+            Just (Submitting contract) ->
+              modal
+                { title: text "Submitting"
+                -- FIXME: Should we ignore dismisses - we are not able to cancel submission I can imagine?
+                , onDismiss: updateState _ { newContract = Nothing }
+                , body:
+                    -- FIXME: We should still present the form
+                    text ("Submitting" <> show contract)
+                }
+            -- FIXME: Just a stub...
+            Just _ ->
+              modal
+                { title: text "Success or failure"
+                , onDismiss: updateState _ { newContract = Nothing }
+                , body:
+                    text ("Success or failure...")
+                }
+            Nothing -> mempty
+        , DOM.div { className: "row justify-content-end" } $ Array.singleton $ do
+            let
+              disabled = isNothing connectedWallet
+              addContractLink = linkWithIcon
+                { icon: Icons.fileEarmarkPlus
+                , label: DOOM.text "Add contract"
+                , disabled
+                , onClick: onAddContractClick
+                }
+            DOM.div { className: "col-3 text-end" } $ Array.singleton $
+              if disabled then do
+                let
+                  tooltipJSX = tooltip {} (DOOM.text "Connect to a wallet to add a contract")
+                overlayTrigger
+                  { overlay: tooltipJSX
+                  , placement: OverlayTrigger.placement.bottom
                   }
-              -- [ DOM.title {} [ text "Add Contract" ]
-              -- , contractForm onNewContract
-              -- ]
-              Just (Submitting contract) ->
-                modal
-                  { title: text "Submitting"
-                  -- FIXME: Should we ignore dismisses - we are not able to cancel submission I can imagine?
-                  , onDismiss: updateState _ { newContract = Nothing }
-                  , body:
-                      -- FIXME: We should still present the form
-                      text ("Submitting" <> show contract)
-                  }
-              -- FIXME: Just a stub...
-              Just _ ->
-                modal
-                  { title: text "Success or failure"
-                  , onDismiss: updateState _ { newContract = Nothing }
-                  , body:
-                      text ("Success or failure...")
-                  }
-              Nothing -> mempty
-        , DOM.div {className: "row justify-content-end"} $ Array.singleton $
-            DOM.div { className: "col-3 text-end" }
-              [ linkWithIcon
-                  Icons.fileEarmarkPlus
-                  (DOOM.text "Add contract")
-                  ""
-                  onAddContractClick
-              ]
-        , DOM.div { className: "row"} $ Array.singleton $ case state.metadata of
+                  -- Disabled button doesn't trigger the hook,
+                  -- so we wrap it in a `span`
+                  (DOOM.span_ [ addContractLink ])
+              else
+                addContractLink
+        , DOM.div { className: "row" } $ Array.singleton $ case state.metadata of
             Just (Metadata metadata) -> modal $
               { body: text $ show (keys metadata) -- FIXME: Just a stub...
               , onDismiss: updateState _ { metadata = Nothing }

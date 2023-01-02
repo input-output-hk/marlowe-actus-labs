@@ -469,6 +469,14 @@ derive instance Newtype TransactionEndpoint _
 derive newtype instance DecodeJson TransactionEndpoint
 
 -- Entry point
-
 api :: ContractsEndpoint
 api = ContractsEndpoint (IndexEndpoint (ResourceLink "contracts"))
+
+newtype Runtime = Runtime
+  { root :: ContractsEndpoint
+  , serverURL :: ServerURL
+  }
+
+runtime :: ServerURL -> Runtime
+runtime serverURL = Runtime { root: api, serverURL }
+

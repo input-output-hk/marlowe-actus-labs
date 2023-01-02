@@ -5,8 +5,7 @@ module Contrib.React.Bootstrap.Icons
   , infoSquare
   , fileEarmarkPlus
   , wallet2
-  )
-  where
+  ) where
 
 import Prelude
 
@@ -17,7 +16,7 @@ unsafeIcon :: String -> Icon
 unsafeIcon name = Icon $ DOM.span
   { className: "bi-" <> name
   }
-  ([] :: Array  JSX)
+  ([] :: Array JSX)
 
 newtype Icon = Icon JSX
 

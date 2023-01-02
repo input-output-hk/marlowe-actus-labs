@@ -4,7 +4,14 @@ import Prelude
 
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain (ContractTerms, EventType, RiskFactors(..), Value'(..), marloweFixedPoint)
+import Component.Modal (mkModal)
+import Component.Modal as Modal
+import Component.Types (MkComponentM, WalletInfo(..))
+import Component.Widgets (link)
 import Component.Widgets.Form (mkBooleanField)
+import Contrib.React.Bootstrap.Form as Form
+import Contrib.React.Bootstrap.Form.Label as Form.Label
+import Control.Monad.Reader.Class (asks)
 import Data.Argonaut (decodeJson, parseJson)
 import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (DateTime)
@@ -13,24 +20,58 @@ import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (unwrap)
 import Data.String as String
+import Debug (traceM)
 import Effect (Effect)
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId(..), Party(..))
+import Effect.Aff (launchAff_)
+import Effect.Class (liftEffect)
+import Language.Marlowe.Core.V1.Semantics.Types (Party(..))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus (RiskFactorsMarlowe, genContract, toMarlowe)
 import React.Basic (JSX)
+import React.Basic as DOOM
 import React.Basic.DOM (css)
+import React.Basic.DOM as DOOM
 import React.Basic.DOM as R
 import React.Basic.DOM.Events (targetValue)
-import React.Basic.Events (EventHandler, handler)
-import React.Basic.Hooks (type (/\), Hook, UseState, component, useState, (/\))
+import React.Basic.DOM.Simplified.Generated as DOM
+import React.Basic.Events (EventHandler, handler, handler_)
+import React.Basic.Hooks (type (/\), Hook, UseState, component, useEffect, useEffectOnce, useState, (/\))
 import React.Basic.Hooks as React
+import Wallet as Wallet
 
-mkContractForm :: Effect ((ContractTerms Decimal /\ V1.Contract -> Effect Unit) -> JSX)
+-- FIXME: We should add contractId to the callback params
+
+type Result = ContractTerms Decimal /\ V1.Contract -- /\ ContractEndpoint)
+
+type Props =
+  { onSuccess :: Result -> Effect Unit
+  , onError :: String -> Effect Unit
+  , onDismiss :: Effect Unit
+  , inModal :: Boolean
+  , connectedWallet :: Maybe (WalletInfo Wallet.Api)
+  }
+
+mkContractForm :: MkComponentM (Props -> JSX)
 mkContractForm = do
-  booleanField <- mkBooleanField
+  booleanField <- liftEffect $ mkBooleanField
+  runtime <- asks _.runtime
+  modal <- liftEffect mkModal
 
-  component "Form" \onNewContract -> React.do
-    -- Let's hard code this for testing phase.
+  liftEffect $ component "ContractForm" \{ connectedWallet, onSuccess, onError, onDismiss, inModal } -> React.do
+    possibleAddress /\ setPossibleAddress <- useState Nothing
+    useEffectOnce $ do
+      case connectedWallet of
+        Nothing -> pure unit
+        Just (WalletInfo { wallet }) -> launchAff_ do
+          -- unused <- Wallet.getUsedAddresses
+          -- used <- Wallet.getUsedAddresses
+          traceM "GET CHANGE ADDRESS"
+          address <- Wallet.getChangeAddress wallet
+          liftEffect (setPossibleAddress $ const $ Just address)
+      pure (pure unit)
+
+    -- Let's hard code this for the testing phase.
     jsonString /\ onJsonStringChange <- useInput $ String.joinWith "\n"
       [ "{"
       , """  "contractType": "LAM","""
@@ -73,12 +114,15 @@ mkContractForm = do
       -- FIXME: plug in form validation
       validateForm = case parseJson jsonString >>= decodeJson of
         Right terms -> do
+
           let
             termsMarlowe = toMarlowe terms
 
             role1 = Role "R1" -- FIXME: provided as input
             role2 = Role "R2" -- FIXME: provided as input
             oracle = Address "" -- FIXME: oracle address
+            -- party = Address 
+            -- counterparty = 
 
             o_rf_CURS = fromMaybe (fromInt 1) $ do
               currency <- (unwrap terms).currency
@@ -98,29 +142,68 @@ mkContractForm = do
 
             cashflowsMarlowe = genProjectedCashflows (role1 /\ role2) riskFactors termsMarlowe
             contract = genContract cashflowsMarlowe
+
           setJsonValidation (const $ Just (Right contract))
-          onNewContract (terms /\ contract)
+          onSuccess (terms /\ contract)
         Left err -> setJsonValidation (const $ Just (Left err))
-    pure $
-      R.div
-        { className: "form-group"
-        , children:
-            [ R.textarea
-                { className: "form-control"
-                , placeholder: "Enter some JSON"
-                , value: jsonString
-                , onChange: onJsonStringChange
-                , rows: 15
-                }
-            , renderJsonValidation
-            , booleanField
-                { initialValue: false
-                , onToggle: (const $ pure unit)
-                , disabled: false
-                , label: (R.text "Pick unused address")
-                }
-            ]
+
+    pure $ do
+      let
+        formBody = DOM.div { className: "form-group" } do
+          let
+            mb3 = DOM.div { className: "mb-3" }
+          [ mb3
+              [ Form.label { htmlFor: "json" } [ R.text "Contract JSON" ]
+              , R.textarea
+                  { className: "form-control"
+                  , id: "json"
+                  , placeholder: "Please provide the contract JSON"
+                  , value: jsonString
+                  , onChange: onJsonStringChange
+                  , rows: 15
+                  }
+              -- , renderJsonValidation
+              ]
+          , mb3
+              [ DOOM.text $ show possibleAddress ]
+          , mb3
+              [ Form.label { htmlFor: "address" } [ R.text "Counterparty address" ]
+              , Form.textInput
+                  { id: "address"
+                  , placeholder: "Enter a contract ID"
+                  , value: "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
+                  }
+              ]
+
+          -- , booleanField
+          --     { initialValue: false
+          --     , onToggle: (const $ pure unit)
+          --     , disabled: false
+          --     , label: (R.text "Pick unused address")
+          --     }
+          ]
+        formActions = DOOM.fragment
+          [ link
+              { label: DOOM.text "Cancel"
+              , onClick: onDismiss
+              , showBorders: true
+              }
+          , DOM.button
+              { className: "btn btn-primary"
+              , onClick: handler_ validateForm
+              }
+              [ R.text "Submit" ]
+          ]
+
+      if inModal then modal
+        { title: R.text "Add contract"
+        , onDismiss
+        , body: formBody
+        , footer: formActions
+        , size: Modal.Large
         }
+      else
+        formBody
 
 useInput :: String -> Hook (UseState String) (String /\ EventHandler)
 useInput initialValue = React.do

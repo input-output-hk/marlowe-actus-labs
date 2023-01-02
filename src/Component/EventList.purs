@@ -5,6 +5,8 @@ import Prelude
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain (CashFlow(..), ContractTerms, EventType(..), RiskFactors(..))
 import Component.Modal (mkModal)
+import Component.Modal as Modal
+import Component.Types (ContractHeaderResource)
 import Data.Argonaut (decodeJson, fromObject)
 import Data.Array (catMaybes, fromFoldable, replicate)
 import Data.DateTime (DateTime(..), Time(..), canonicalDate)
@@ -14,9 +16,8 @@ import Data.Either (hush)
 import Data.Enum (toEnum)
 import Data.Formatter.DateTime (formatDateTime)
 import Data.Map (lookup)
-import Data.Maybe (Maybe(..), fromJust)
-import Component.Types (ContractHeaderResource)
 import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromJust)
 import Effect (Effect)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party(..))
 import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractHeader(..), Metadata(..))
@@ -38,7 +39,7 @@ type EventListState =
   { newInput :: Maybe (CashFlow Decimal Party)
   }
 
-mkEventList :: Effect ( Array ContractHeaderResource -> JSX)
+mkEventList :: Effect (Array ContractHeaderResource -> JSX)
 mkEventList = do
   modal <- mkModal
   component "EventList" \contractList -> React.do

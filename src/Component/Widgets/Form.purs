@@ -90,7 +90,7 @@ mkSingleChoiceField = do
                 let
                   id = idPrefix <> show idx
                   checked = currValue == value
-                DOM.div { className: "form-check form-switch" }
+                DOM.div { className: "form-check form-switch text-start my-3" }
                   [ R.input
                       { className: "form-check-input"
                       , type: inputType
@@ -104,7 +104,7 @@ mkSingleChoiceField = do
                       , name: "radio"
                       }
                   , DOM.label
-                      { className: "form-check-label", htmlFor: id }
+                      { className: "form-check-label text-start", htmlFor: id }
                       [ label :: JSX ]
                   ]
             Nothing -> mempty

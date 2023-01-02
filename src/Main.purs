@@ -5,7 +5,6 @@ module Main
 import Prelude
 
 import Component.App (mkApp)
-import Component.ConnectWallet (mkConnectWallet)
 import Component.ContractList (mkContractList)
 import Component.EventList (mkEventList)
 import Contrib.Data.Argonaut (JsonParser)
@@ -25,6 +24,7 @@ import Effect.Class (liftEffect)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Effect.Exception (error, throw)
+import Marlowe.Runtime.Web as Marlowe.Runtime.Web
 import Marlowe.Runtime.Web.Client (foldMapMPages, foldMapMPages', getPage')
 import Marlowe.Runtime.Web.Types (ResourceLink(..), ServerURL(..), api)
 import React.Basic (createContext)
@@ -76,7 +76,6 @@ decodeConfig json = do
   develMode <- obj .: "develMode"
   pure { marloweWebServerUrl: ServerURL marloweWebServerUrl, develMode }
 
-
 main :: Json -> Effect Unit
 main configJson = do
   config <- liftEither $ decodeConfig configJson
@@ -85,6 +84,7 @@ main configJson = do
     logger =
       if config.develMode then Console.log
       else const (pure unit)
+    runtime = Marlowe.Runtime.Web.runtime config.marloweWebServerUrl
 
   doc :: HTMLDocument <- document =<< window
   root :: Maybe Element <- getElementById "app-root" $ toNonElementParentNode doc
@@ -95,7 +95,9 @@ main configJson = do
       launchAff_ do
         -- contracts <- foldMapMPages' config.marloweWebServerUrl api (pure <<< _.page) >>= liftEither >>> liftEffect
         -- FIXME: this is a temporary hack to get the first page of contracts to speed up development
-        contracts <- getPage' config.marloweWebServerUrl api Nothing >>= liftEither >>> liftEffect <#> _.page
+        -- contracts <- getPage' config.marloweWebServerUrl api Nothing >>= liftEither >>> liftEffect <#> _.page
+        let
+          contracts = []
 
         walletInfoCtx <- liftEffect $ createContext Nothing
         let
@@ -103,6 +105,7 @@ main configJson = do
             { walletInfoCtx
             , logger
             , contracts
+            , runtime
             }
 
         app <- liftEffect $ runReaderT mkApp mkAppCtx
