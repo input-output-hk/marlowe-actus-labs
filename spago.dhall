@@ -11,6 +11,7 @@
   , "bifunctors"
   , "console"
   , "control"
+  , "convertable-options"
   , "datetime"
   , "debug"
   , "decimals"
