@@ -5,7 +5,7 @@ module Actus.Core
 
 import Prelude
 
-import Actus.Domain (class ActusFrac, class ActusOps, CT(..), CashFlow(..), ContractState(..), ContractTerms(..), DS(..), EventType(..), RiskFactors, ShiftedDay)
+import Actus.Domain (class ActusOps, CT(..), CashFlow(..), ContractState(..), ContractTerms(..), DS(..), EventType(..), RiskFactors, ShiftedDay)
 import Actus.Model.ContractSchedule (maturity, schedule)
 import Actus.Model.Payoff (CtxPOF, payoff)
 import Actus.Model.StateInitialization (initializeState)
@@ -14,6 +14,7 @@ import Control.Alt ((<|>))
 import Control.Monad.Reader (Reader, ask, runReader, withReader)
 import Data.Bounded.Generic (class GenericBottom, class GenericTop, genericBottom, genericTop)
 import Data.DateTime (DateTime)
+import Data.Decimal (Decimal)
 import Data.Enum (fromEnum)
 import Data.Enum.Generic (class GenericBoundedEnum, genericFromEnum, genericToEnum)
 import Data.Generic.Rep (class Generic)
@@ -33,7 +34,6 @@ genProjectedCashflows
   :: forall a b
    . ActusOps a
   => EuclideanRing a
-  => ActusFrac a
   => Show b
   => Eq b
   =>
@@ -44,18 +44,18 @@ genProjectedCashflows
   (EventType -> DateTime -> RiskFactors a)
   ->
   -- | Contract terms
-  ContractTerms a
+  ContractTerms
   ->
   -- | List of projected cash flows
   List (CashFlow a b)
 genProjectedCashflows parties riskFactors contractTerms =
   let
     context = buildCtx riskFactors contractTerms
-    cashFlows = runReader genProjectedPayoffs context
+    cashFlows = runReader (genProjectedPayoffs contractTerms) context
   in
     netting contractTerms $ genCashflow parties contractTerms <$> cashFlows
   where
-  netting :: ContractTerms a -> List (CashFlow a b) -> List (CashFlow a b)
+  netting :: ContractTerms -> List (CashFlow a b) -> List (CashFlow a b)
   netting (ContractTerms { deliverySettlement: Just DS_S }) = netCashflows
   netting _ = \x -> x
 
@@ -84,13 +84,12 @@ buildCtx
   :: forall a
    . ActusOps a
   => EuclideanRing a
-  => ActusFrac a
   =>
   -- | Risk factors as a function of event type and time
   (EventType -> DateTime -> RiskFactors a)
   ->
   -- | Contract terms
-  ContractTerms a
+  ContractTerms
   ->
   -- | Context
   CtxSTF a
@@ -111,14 +110,13 @@ genCashflow
   :: forall a b
    . ActusOps a
   => EuclideanRing a
-  => ActusFrac a
   => Show b
   =>
   -- | Party and Counter-party for the contract
   b /\ b
   ->
   -- | Contract terms
-  ContractTerms a
+  ContractTerms
   ->
   -- | Projected payoff
   Event /\ ContractState a /\ a
@@ -143,16 +141,15 @@ genProjectedPayoffs
   :: forall a
    . ActusOps a
   => EuclideanRing a
-  => ActusFrac a
-  => Reader (CtxSTF a) (List (Event /\ ContractState a /\ a))
-genProjectedPayoffs = (genSchedule <<< _.contractTerms <$> ask) >>= genProjectedPayoffs'
+  => ContractTerms
+  -> Reader (CtxSTF a) (List (Event /\ ContractState a /\ a))
+genProjectedPayoffs = genProjectedPayoffs' <<< genSchedule
 
 -- |Generate projected cash flows
 genProjectedPayoffs'
   :: forall a
    . ActusOps a
   => EuclideanRing a
-  => ActusFrac a
   =>
   -- | Events
   List Event
@@ -167,18 +164,14 @@ genProjectedPayoffs' events =
     payoffs <- trans $ genPayoffs eventTypes filteredStates
     pure $ zip eventTypes $ zip filteredStates payoffs
   where
-  trans :: forall b. Reader (CtxPOF a) b -> Reader (CtxSTF a) b
+  -- trans :: forall b. Reader (CtxPOF a) b -> Reader (CtxSTF a) b
   trans = withReader (\{ contractTerms, riskFactors } -> { contractTerms, riskFactors })
 
 -- |Generate schedules
 genSchedule
-  :: forall a
-   . ActusOps a
-  => EuclideanRing a
-  => ActusFrac a
-  =>
-  -- | Contract terms
-  ContractTerms a
+  ::
+     -- | Contract terms
+     ContractTerms
   ->
   -- | Schedule
   List Event
@@ -186,13 +179,9 @@ genSchedule contractTerms =
   sortBy (comparing \(ev /\ { paymentDay }) -> (paymentDay /\ ev)) $ genFixedSchedule contractTerms
 
 genFixedSchedule
-  :: forall a
-   . ActusOps a
-  => EuclideanRing a
-  => ActusFrac a
-  =>
-  -- | Contract terms
-  ContractTerms a
+  ::
+     -- | Contract terms
+     ContractTerms
   ->
   -- | Schedule
   List Event
@@ -234,7 +223,6 @@ genStates
   :: forall a
    . ActusOps a
   => EuclideanRing a
-  => ActusFrac a
   =>
   -- | Schedules
   List Event
@@ -255,7 +243,6 @@ filtersStates
   :: forall a
    . ActusOps a
   => EuclideanRing a
-  => ActusFrac a
   => ((EventType /\ ShiftedDay) /\ ContractState a)
   -> Reader (CtxSTF a) Boolean
 filtersStates ((event /\ { calculationDay }) /\ _) =
@@ -277,7 +264,6 @@ genPayoffs
   :: forall a
    . ActusOps a
   => EuclideanRing a
-  => ActusFrac a
   =>
   -- | States with schedule
   List Event

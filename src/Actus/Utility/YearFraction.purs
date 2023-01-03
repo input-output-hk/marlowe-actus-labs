@@ -8,20 +8,21 @@ import Actus.Domain.ContractTerms (DCC(..))
 import Data.Date (Date, Month(..), diff, isLeapYear, lastDayOfMonth, year)
 import Data.DateTime (DateTime(..), canonicalDate, date, day, month)
 import Data.DateTime as DateTime
+import Data.Decimal (Decimal)
 import Data.Enum (fromEnum, toEnum)
 import Data.Int (ceil)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Refined (fromInt)
 import Data.Time (Time(..))
 import Data.Time.Duration (Days(..))
+import Data.Time.Duration (Seconds(..)) as Duration
 import Effect.Exception (throw)
 import Effect.Unsafe (unsafePerformEffect)
-import Data.Time.Duration (Seconds(..)) as Duration
 
-yearFraction :: forall a. EuclideanRing a => DCC -> DateTime -> DateTime -> Maybe DateTime -> a
+yearFraction :: DCC -> DateTime -> DateTime -> Maybe DateTime -> Decimal
 yearFraction dcc x y o = yearFraction' dcc (date x) (date $ clipToMidnight y) (date <$> o)
 
-yearFraction' :: forall a. EuclideanRing a => DCC -> Date -> Date -> Maybe Date -> a
+yearFraction' :: DCC -> Date -> Date -> Maybe Date -> Decimal
 yearFraction' DCC_A_AISDA startDay endDay _
   | startDay <= endDay =
       let
@@ -41,8 +42,8 @@ yearFraction' DCC_A_AISDA startDay endDay _
             (d1YearLastDay :: Date) = canonicalDate (fromMaybe (year startDay) $ toEnum $ (fromEnum d1Year) + 1) January (fromMaybe (day startDay) $ toEnum 1)
             (d2YearLastDay :: Date) = canonicalDate d2Year January (fromMaybe (day endDay) $ toEnum 1)
 
-            (firstFractionDays :: a) = let Days s = diff d1YearLastDay startDay in fromInt $ ceil s
-            (secondFractionDays :: a) = let Days s = diff endDay d2YearLastDay in fromInt $ ceil s
+            (firstFractionDays :: Decimal) = let Days s = diff d1YearLastDay startDay in fromInt $ ceil s
+            (secondFractionDays :: Decimal) = let Days s = diff endDay d2YearLastDay in fromInt $ ceil s
           in
             (firstFractionDays / d1YearFraction)
               + (secondFractionDays / d2YearFraction)

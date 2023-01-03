@@ -6,29 +6,27 @@ module Actus.Model.ContractSchedule
 
 import Prelude
 
-import Actus.Domain (class ActusFrac, class ActusOps, CT(..), ContractTerms(..), EventType(..), IPCB(..), PPEF(..), PYTP(..), SCEF(..), ShiftedDay, _ceiling, mkShiftedDay)
+import Actus.Domain (CT(..), ContractTerms(..), EventType(..), IPCB(..), PPEF(..), PYTP(..), SCEF(..), ShiftedDay, mkShiftedDay)
 import Actus.Utility (applyBDCWithCfg, applyEOMC, generateRecurrentSchedule, inf, yearFraction, (<+>), (<->))
 import Actus.Utility.DateShift (addDays')
 import Control.Alt ((<|>))
 import Control.Apply (lift2, lift4)
 import Data.DateTime (DateTime)
+import Data.Decimal (Decimal, toNumber)
 import Data.List (List(..), delete, filter, find, head, nub, singleton, snoc, sortBy, (:))
 import Data.Maybe (Maybe(..), fromMaybe, isJust, isNothing)
+import Data.Int (ceil)
 import Data.Ord.Down (Down(..))
 import Data.Tuple.Nested ((/\))
 
 -- |Generate the schedule for a given event type
 schedule
-  :: forall a
-   . ActusOps a
-  => EuclideanRing a
-  => ActusFrac a
-  =>
-  -- | Event type
-  EventType
+  ::
+     -- | Event type
+     EventType
   ->
   -- | Contract terms
-  ContractTerms a
+  ContractTerms
   ->
   -- | Schedule
   List ShiftedDay
@@ -91,13 +89,9 @@ schedule _ _ = Nil
 
 -- |Determine the maturity of a contract
 maturity
-  :: forall a
-   . EuclideanRing a
-  => ActusOps a
-  => ActusFrac a
-  =>
-  -- | Contract terms
-  ContractTerms a
+  ::
+     -- | Contract terms
+     ContractTerms
   ->
   -- | Maturity, if available
   Maybe DateTime
@@ -131,7 +125,7 @@ maturity
     do
       endOfMonthConvention' <- endOfMonthConvention
       lastEvent' <- lastEvent
-      pure $ applyEOMC lastEvent' prcl endOfMonthConvention' $ lastEvent' <+> (prcl { n = prcl.n * _ceiling remainingPeriods })
+      pure $ applyEOMC lastEvent' prcl endOfMonthConvention' $ lastEvent' <+> (prcl { n = prcl.n * ceiling remainingPeriods })
 maturity (ContractTerms { contractType: NAM, maturityDate: md@(Just _) }) = md
 maturity
   ( ContractTerms
@@ -164,7 +158,7 @@ maturity
       lastEvent' <- lastEvent
       let yLastEventPlusPRCL = yearFraction dcc lastEvent' (lastEvent' <+> prcl) Nothing
       let redemptionPerCycle = prnxt - (yLastEventPlusPRCL * ipnr * nt)
-      let remainingPeriods = _ceiling $ (nt / redemptionPerCycle) - one
+      let remainingPeriods = ceiling $ (nt / redemptionPerCycle) - one
       pure $ applyEOMC lastEvent' prcl endOfMonthConvention' (lastEvent' <+> prcl { n = prcl.n * remainingPeriods })
 maturity
   ( ContractTerms
@@ -194,7 +188,7 @@ maturity
             fromMaybe ied $ head <<< sortBy (comparing Down) <<< map _.calculationDay <<< filter (\{ calculationDay } -> calculationDay > statusDate) $ previousEvents
     timeFromLastEventPlusOneCycle = yearFraction dcc lastEvent (lastEvent <+> prcl) Nothing
     redemptionPerCycle = prnxt - timeFromLastEventPlusOneCycle * ipnr * nt
-    remainingPeriods = _ceiling $ (nt / redemptionPerCycle) - one
+    remainingPeriods = ceiling $ (nt / redemptionPerCycle) - one
   in
     Just <<< _.calculationDay <<< applyBDCWithCfg scheduleConfig $ lastEvent <+> prcl { n = remainingPeriods }
 maturity
@@ -214,7 +208,7 @@ maturity _ = Nothing
 
 -- Principal at Maturity (PAM)
 
-_SCHED_IED_PAM :: forall a. ContractTerms a -> List ShiftedDay
+_SCHED_IED_PAM :: ContractTerms -> List ShiftedDay
 _SCHED_IED_PAM
   ( ContractTerms
       { scheduleConfig
@@ -223,7 +217,7 @@ _SCHED_IED_PAM
   ) = singleton $ applyBDCWithCfg scheduleConfig ied
 _SCHED_IED_PAM _ = Nil
 
-_SCHED_MD_PAM :: forall a. ActusOps a => EuclideanRing a => ActusFrac a => ContractTerms a -> List ShiftedDay
+_SCHED_MD_PAM :: ContractTerms -> List ShiftedDay
 _SCHED_MD_PAM
   ct@
     ( ContractTerms
@@ -234,7 +228,7 @@ _SCHED_MD_PAM
   Just m -> singleton $ let d = applyBDCWithCfg scheduleConfig m in d { paymentDay = m }
   Nothing -> Nil
 
-_SCHED_PP_PAM :: forall a. ContractTerms a -> List ShiftedDay
+_SCHED_PP_PAM :: ContractTerms -> List ShiftedDay
 _SCHED_PP_PAM
   ( ContractTerms
       { prepaymentEffect: Just PPEF_N
@@ -259,7 +253,7 @@ _SCHED_PP_PAM
   ) = generateRecurrentSchedule (ied <+> opcl) opcl md scheduleConfig
 _SCHED_PP_PAM _ = Nil
 
-_SCHED_PY_PAM :: forall a. ContractTerms a -> List ShiftedDay
+_SCHED_PY_PAM :: ContractTerms -> List ShiftedDay
 _SCHED_PY_PAM
   ( ContractTerms
       { penaltyType: Just PYTP_O
@@ -268,11 +262,7 @@ _SCHED_PY_PAM
 _SCHED_PY_PAM ct = _SCHED_PP_PAM ct
 
 _SCHED_FP_PAM
-  :: forall a
-   . ActusOps a
-  => EuclideanRing a
-  => ActusFrac a
-  => ContractTerms a
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_FP_PAM
   ( ContractTerms
@@ -304,7 +294,7 @@ _SCHED_FP_PAM
   Nothing -> Nil
 _SCHED_FP_PAM _ = Nil
 
-_SCHED_PRD_PAM :: forall a. ContractTerms a -> List ShiftedDay
+_SCHED_PRD_PAM :: ContractTerms -> List ShiftedDay
 _SCHED_PRD_PAM
   ( ContractTerms
       { scheduleConfig
@@ -313,7 +303,7 @@ _SCHED_PRD_PAM
   ) = singleton $ applyBDCWithCfg scheduleConfig prd
 _SCHED_PRD_PAM _ = Nil
 
-_SCHED_TD_PAM :: forall a. EuclideanRing a => ContractTerms a -> List ShiftedDay
+_SCHED_TD_PAM :: ContractTerms -> List ShiftedDay
 _SCHED_TD_PAM
   ( ContractTerms
       { scheduleConfig
@@ -323,11 +313,7 @@ _SCHED_TD_PAM
 _SCHED_TD_PAM _ = Nil
 
 _SCHED_IP_PAM
-  :: forall a
-   . ActusOps a
-  => EuclideanRing a
-  => ActusFrac a
-  => ContractTerms a
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_IP_PAM
   ct@
@@ -365,11 +351,7 @@ _SCHED_IP_PAM
 _SCHED_IP_PAM _ = Nil
 
 _SCHED_IPCI_PAM
-  :: forall a
-   . ActusOps a
-  => EuclideanRing a
-  => ActusFrac a
-  => ContractTerms a
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_IPCI_PAM
   ct@
@@ -407,11 +389,7 @@ _SCHED_IPCI_PAM
 _SCHED_IPCI_PAM _ = Nil
 
 _SCHED_RR_PAM
-  :: forall a
-   . ActusOps a
-  => EuclideanRing a
-  => ActusFrac a
-  => ContractTerms a
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_RR_PAM
   ct@
@@ -483,11 +461,7 @@ _SCHED_RR_PAM
 _SCHED_RR_PAM _ = Nil
 
 _SCHED_RRF_PAM
-  :: forall a
-   . ActusOps a
-  => EuclideanRing a
-  => ActusFrac a
-  => ContractTerms a
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_RRF_PAM
   ct@
@@ -527,11 +501,7 @@ _SCHED_RRF_PAM
 _SCHED_RRF_PAM _ = Nil
 
 _SCHED_SC_PAM
-  :: forall a
-   . EuclideanRing a
-  => ActusOps a
-  => ActusFrac a
-  => ContractTerms a
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_SC_PAM (ContractTerms { scalingEffect: Just SE_OOO }) = Nil
 _SCHED_SC_PAM
@@ -562,11 +532,7 @@ _SCHED_SC_PAM _ = Nil
 -- Linear Amortizer (LAM)
 
 _SCHED_PR_LAM
-  :: forall a
-   . ActusOps a
-  => EuclideanRing a
-  => ActusFrac a
-  => ContractTerms a
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_PR_LAM
   ct@
@@ -594,11 +560,7 @@ _SCHED_PR_LAM
 _SCHED_PR_LAM _ = Nil
 
 _SCHED_MD_LAM
-  :: forall a
-   . ActusOps a
-  => EuclideanRing a
-  => ActusFrac a
-  => ContractTerms a
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_MD_LAM
   ct@
@@ -611,11 +573,7 @@ _SCHED_MD_LAM
   Nothing -> Nil
 
 _SCHED_IPCB_LAM
-  :: forall a
-   . ActusOps a
-  => EuclideanRing a
-  => ActusFrac a
-  => ContractTerms a
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_IPCB_LAM (ContractTerms ct) | ct.interestCalculationBase /= Just IPCB_NTL = Nil
 _SCHED_IPCB_LAM
@@ -646,11 +604,7 @@ _SCHED_IPCB_LAM _ = Nil
 -- Negative Amortizer (NAM)
 
 _SCHED_IP_NAM
-  :: forall a
-   . ActusOps a
-  => EuclideanRing a
-  => ActusFrac a
-  => ContractTerms a
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_IP_NAM ct@(ContractTerms { maturityDate, initialExchangeDate, cycleOfPrincipalRedemption, cycleAnchorDateOfPrincipalRedemption, scheduleConfig, cycleAnchorDateOfInterestPayment, cycleOfInterestPayment, capitalizationEndDate }) =
   let
@@ -682,11 +636,7 @@ _SCHED_IP_NAM ct@(ContractTerms { maturityDate, initialExchangeDate, cycleOfPrin
     fromMaybe Nil result'
 
 _SCHED_IPCI_NAM
-  :: forall a
-   . ActusOps a
-  => EuclideanRing a
-  => ActusFrac a
-  => ContractTerms a
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_IPCI_NAM ct@(ContractTerms { maturityDate, initialExchangeDate, cycleOfPrincipalRedemption, cycleAnchorDateOfPrincipalRedemption, scheduleConfig, capitalizationEndDate, cycleOfInterestPayment, cycleAnchorDateOfInterestPayment }) =
   let
@@ -721,11 +671,7 @@ _SCHED_IPCI_NAM ct@(ContractTerms { maturityDate, initialExchangeDate, cycleOfPr
 -- Annuity (ANN)
 
 _SCHED_PRF_ANN
-  :: forall a
-   . ActusOps a
-  => EuclideanRing a
-  => ActusFrac a
-  => ContractTerms a
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_PRF_ANN
   ct@
@@ -754,3 +700,6 @@ infixl 8 append' as ++
 maybeToList :: forall a. Maybe a -> List a
 maybeToList (Just x) = singleton x
 maybeToList Nothing = mempty
+
+ceiling :: Decimal -> Int
+ceiling = ceil <<< toNumber

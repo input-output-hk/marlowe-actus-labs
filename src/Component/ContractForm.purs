@@ -27,7 +27,7 @@ import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import Language.Marlowe.Core.V1.Semantics.Types (Party(..))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
-import Marlowe.Actus (RiskFactorsMarlowe, genContract, toMarlowe)
+import Marlowe.Actus (RiskFactorsMarlowe, genContract)
 import React.Basic (JSX)
 import React.Basic as DOOM
 import React.Basic.DOM (css)
@@ -42,7 +42,7 @@ import Wallet as Wallet
 
 -- FIXME: We should add contractId to the callback params
 
-type Result = ContractTerms Decimal /\ V1.Contract -- /\ ContractEndpoint)
+type Result = ContractTerms /\ V1.Contract -- /\ ContractEndpoint)
 
 type Props =
   { onSuccess :: Result -> Effect Unit
@@ -74,29 +74,22 @@ mkContractForm = do
     -- Let's hard code this for the testing phase.
     jsonString /\ onJsonStringChange <- useInput $ String.joinWith "\n"
       [ "{"
-      , """  "contractType": "LAM","""
-      , """  "contractID": "lam01","""
-      , """  "contractRole": "RPA","""
-      , """  "contractDealDate": "2012-12-28T00:00:00","""
-      , """  "initialExchangeDate": "2013-01-01T00:00:00","""
-      , """  "statusDate": "2012-12-30T00:00:00","""
-      , """  "notionalPrincipal": " 5000","""
-      , """  "cycleAnchorDateOfPrincipalRedemption": "2013-02-01T00:00:00","""
-      , """  "nextPrincipalRedemptionPayment": " 500","""
-      , """  "dayCountConvention": "A365","""
-      , """  "nominalInterestRate": "0.08","""
-      , """  "currency": "USD","""
-      , """  "cycleOfPrincipalRedemption": "P1ML0","""
-      , """  "cycleAnchorDateOfRateReset": "2013-04-01T00:00:00","""
-      , """  "cycleOfRateReset": "P3ML1","""
-      , """  "rateMultiplier": "1","""
-      , """  "rateSpread": "0.1","""
-      , """  "fixingDays": "P0D","""
-      , """  "cycleAnchorDateOfInterestPayment": "2013-02-01T00:00:00","""
-      , """  "cycleOfInterestPayment": "P1ML0","""
-      , """  "endOfMonthConvention": "SD","""
-      , """  "interestCalculationBase": "NT","""
-      , """  "marketObjectCodeOfRateReset": "USD.SWP" """
+      , """ "contractType": "PAM", """
+      , """ "contractID": "pam01", """
+      , """ "statusDate": "2012-12-30T00:00:00", """
+      , """ "contractDealDate": "2012-12-28T00:00:00", """
+      , """ "currency": "USD", """
+      , """ "notionalPrincipal": "3000", """
+      , """ "initialExchangeDate": "2013-01-01T00:00:00", """
+      , """ "maturityDate": "2014-01-01T00:00:00", """
+      , """ "nominalInterestRate": "0.1", """
+      , """ "cycleAnchorDateOfInterestPayment": "2013-01-01T00:00:00", """
+      , """ "cycleOfInterestPayment": "P1ML0", """
+      , """ "dayCountConvention": "A365", """
+      , """ "endOfMonthConvention": "SD", """
+      , """ "premiumDiscountAtIED": "   0", """
+      , """ "rateMultiplier": "1.0", """
+      , """ "contractRole": "RPA" """
       , "}"
       ]
 
@@ -116,8 +109,6 @@ mkContractForm = do
         Right terms -> do
 
           let
-            termsMarlowe = toMarlowe terms
-
             role1 = Role "R1" -- FIXME: provided as input
             role2 = Role "R2" -- FIXME: provided as input
             oracle = Address "" -- FIXME: oracle address
@@ -140,7 +131,7 @@ mkContractForm = do
               , pp_payoff: ChoiceValue' (ChoiceId "pp" oracle) -- TODO: add to oracle
               }
 
-            cashflowsMarlowe = genProjectedCashflows (role1 /\ role2) riskFactors termsMarlowe
+            cashflowsMarlowe = genProjectedCashflows (role1 /\ role2) riskFactors terms
             contract = genContract cashflowsMarlowe
 
           setJsonValidation (const $ Just (Right contract))

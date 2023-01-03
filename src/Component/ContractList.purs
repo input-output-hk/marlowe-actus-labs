@@ -30,7 +30,6 @@ import Wallet as Wallet
 
 type ContractId = TxOutRef
 
-type ActusTerms = ContractTerms Decimal -- V1.Value
 type ProjectedCashFlows = List (CashFlow Decimal Party)
 
 type ValidationError = String
@@ -38,7 +37,7 @@ type ValidationError = String
 data FormState
   = NotValidated
   | Failure ValidationError
-  | Validated (ActusTerms /\ Contract)
+  | Validated (ContractTerms /\ Contract)
 
 -- An example of a simple "custom hook"
 useInput :: String -> Hook (UseState String) (String /\ EventHandler)
@@ -51,9 +50,9 @@ type SubmissionError = String
 
 data NewContractState
   = Creating
-  | Submitting (ActusTerms /\ Contract)
-  | SubmissionError SubmissionError -- ActusTerms SubmissionError
-  | SubmissionsSuccess ActusTerms ContractId
+  | Submitting (ContractTerms /\ Contract)
+  | SubmissionError SubmissionError
+  | SubmissionsSuccess ContractTerms ContractId
 
 type ContractListState =
   { newContract :: Maybe NewContractState

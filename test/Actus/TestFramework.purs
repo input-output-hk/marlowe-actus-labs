@@ -106,7 +106,6 @@ defaultRiskFactors = RiskFactors
 
 type TestCashFlow = CashFlow Decimal String
 type TestContractState = ContractState Decimal
-type TestContractTerms = ContractTerms Decimal
 
 data DataObserved = DataObserved
   { identifier :: String
@@ -164,7 +163,7 @@ instance DecodeJson EventObserved where
 
 type TestCase =
   { identifier :: String
-  , terms :: TestContractTerms
+  , terms :: ContractTerms
   , to :: Maybe DateTime
   , dataObserved :: Map String DataObserved
   , eventsObserved :: List EventObserved
