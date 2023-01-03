@@ -20,9 +20,10 @@ import Data.Ord.Down (Down(..))
 import Data.Tuple.Nested ((/\))
 
 -- |Generate the schedule for a given event type
-schedule ::
-  -- | Event type
-  EventType
+schedule
+  ::
+     -- | Event type
+     EventType
   ->
   -- | Contract terms
   ContractTerms
@@ -87,9 +88,10 @@ schedule PRF ct@(ContractTerms { contractType: ANN }) = _SCHED_PRF_ANN ct
 schedule _ _ = Nil
 
 -- |Determine the maturity of a contract
-maturity :: 
-  -- | Contract terms
-  ContractTerms
+maturity
+  ::
+     -- | Contract terms
+     ContractTerms
   ->
   -- | Maturity, if available
   Maybe DateTime
