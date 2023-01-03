@@ -3,19 +3,21 @@ module Actus.Model.Payoff
   , payoff
   ) where
 
-import Actus.Domain (class ActusOps, CT(..), ContractState(..), ContractTerms(..), EventType(..), FEB(..), PYTP(..), RiskFactors(..), _abs, _max, sign)
+import Prelude
+
+import Actus.Domain (class ActusOps, CT(..), ContractState(..), ContractTerms(..), EventType(..), FEB(..), PYTP(..), RiskFactors(..), _abs, _fromDecimal, _max, sign)
 import Actus.Utility.YearFraction (yearFraction)
 import Control.Monad.Reader (Reader, asks)
 import Data.Array (elem)
 import Data.DateTime (DateTime)
+import Data.Decimal (Decimal)
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\), type (/\))
-import Prelude
 
 -- |The context for payoff functions
 type CtxPOF a =
   { -- | Contract terms
-    contractTerms :: ContractTerms a
+    contractTerms :: ContractTerms Decimal
   ,
     -- | Risk factors as a function of event type and time
     riskFactors :: EventType -> DateTime -> RiskFactors a
@@ -36,12 +38,12 @@ payoff
   ->
   -- | Updated contract state
   Reader (CtxPOF a) a
-payoff (ev /\ t) st = asks $ do \ctx -> let terms@(ContractTerms ct :: ContractTerms a) = ctx.contractTerms in pof ev (ctx.riskFactors ev t) terms st
+payoff (ev /\ t) st = asks $ do \ctx -> let terms = ctx.contractTerms in pof ev (ctx.riskFactors ev t) terms st
   where
   ----------------------------
   -- Initial Exchange (IED) --
   ----------------------------
-  pof :: Semiring a => EuclideanRing a => ActusOps a => EventType -> RiskFactors a -> ContractTerms a -> ContractState a -> a
+  pof :: Semiring a => EuclideanRing a => ActusOps a => EventType -> RiskFactors a -> ContractTerms Decimal -> ContractState a -> a
   -- POF_IED_*
   pof
     IED
@@ -55,7 +57,7 @@ payoff (ev /\ t) st = asks $ do \ctx -> let terms@(ContractTerms ct :: ContractT
         , contractRole
         }
     )
-    _ = negate $ o_rf_CURS * sign contractRole * (nt + pdied)
+    _ = negate $ o_rf_CURS * sign contractRole * (_fromDecimal $ nt + pdied)
   -- POF_IED_*
   pof
     IED
@@ -68,7 +70,7 @@ payoff (ev /\ t) st = asks $ do \ctx -> let terms@(ContractTerms ct :: ContractT
         , contractRole
         }
     )
-    _ = negate $ o_rf_CURS * sign contractRole * nt
+    _ = negate $ o_rf_CURS * sign contractRole * (_fromDecimal nt)
   -------------------------------
   -- Principal Redemption (PR) --
   -------------------------------
@@ -121,7 +123,7 @@ payoff (ev /\ t) st = asks $ do \ctx -> let terms@(ContractTerms ct :: ContractT
     )
     | contractType `elem` [ NAM, ANN ] =
         let
-          timeFromLastEvent = yearFraction dcc sd t maturityDate
+          timeFromLastEvent = _fromDecimal $ yearFraction dcc sd t maturityDate
           ra = prnxt - sign contractRole * (ipac + timeFromLastEvent * ipnr * ipcb)
           r = ra - _max zero (ra - _abs nt)
         in
@@ -184,13 +186,13 @@ payoff (ev /\ t) st = asks $ do \ctx -> let terms@(ContractTerms ct :: ContractT
         }
     ) =
     let
-      timeFromLastEvent = yearFraction dcc sd t maturityDate
+      timeFromLastEvent = _fromDecimal $ yearFraction dcc sd t maturityDate
     in
       case pytp of
-        PYTP_A -> o_rf_CURS * sign contractRole * pyrt
-        PYTP_N -> let c = o_rf_CURS * sign contractRole * timeFromLastEvent * nt in c * pyrt
+        PYTP_A -> o_rf_CURS * sign contractRole * (_fromDecimal pyrt)
+        PYTP_N -> let c = o_rf_CURS * sign contractRole * timeFromLastEvent * nt in c * (_fromDecimal pyrt)
         PYTP_I -> let c = o_rf_CURS * sign contractRole * timeFromLastEvent * nt in c * _max zero (ipnr - o_rf_RRMO)
-        PYTP_O -> o_rf_CURS * sign contractRole * pyrt
+        PYTP_O -> o_rf_CURS * sign contractRole * (_fromDecimal pyrt)
   -- Fee Payment (FP) --
   ----------------------
   -- POF_FP_*
@@ -215,11 +217,11 @@ payoff (ev /\ t) st = asks $ do \ctx -> let terms@(ContractTerms ct :: ContractT
         }
     ) =
     let
-      timeFromLastEvent = yearFraction dcc sd t maturityDate
+      timeFromLastEvent = _fromDecimal $ yearFraction dcc sd t maturityDate
     in
       case feb of
-        FEB_A -> sign contractRole * o_rf_CURS * fer
-        FEB_N -> o_rf_CURS * fer * timeFromLastEvent * nt * feac
+        FEB_A -> sign contractRole * o_rf_CURS * (_fromDecimal fer)
+        FEB_N -> o_rf_CURS * (_fromDecimal fer) * timeFromLastEvent * nt * feac
   --------------------
   -- Purchase (PRD) --
   --------------------
@@ -246,9 +248,9 @@ payoff (ev /\ t) st = asks $ do \ctx -> let terms@(ContractTerms ct :: ContractT
         }
     ) =
     let
-      timeFromLastEvent = yearFraction dcc sd t maturityDate
+      timeFromLastEvent = _fromDecimal $ yearFraction dcc sd t maturityDate
     in
-      negate $ o_rf_CURS * sign contractRole * (pprd + ipac + timeFromLastEvent * ipnr * nt)
+      negate $ o_rf_CURS * sign contractRole * ((_fromDecimal pprd) + ipac + timeFromLastEvent * ipnr * nt)
   -- POF_PRD_LAM
   -- POF_PRD_NAM
   -- POF_PRD_ANN
@@ -273,9 +275,9 @@ payoff (ev /\ t) st = asks $ do \ctx -> let terms@(ContractTerms ct :: ContractT
         }
     ) =
     let
-      timeFromLastEvent = yearFraction dcc sd t maturityDate
+      timeFromLastEvent = _fromDecimal $ yearFraction dcc sd t maturityDate
     in
-      negate $ o_rf_CURS * sign contractRole * (pprd + ipac + timeFromLastEvent * ipnr * ipcb)
+      negate $ o_rf_CURS * sign contractRole * ((_fromDecimal pprd) + ipac + timeFromLastEvent * ipnr * ipcb)
   ----------------------
   -- Termination (TD) --
   ----------------------
@@ -302,9 +304,9 @@ payoff (ev /\ t) st = asks $ do \ctx -> let terms@(ContractTerms ct :: ContractT
         }
     ) =
     let
-      timeFromLastEvent = yearFraction dcc sd t maturityDate
+      timeFromLastEvent = _fromDecimal $ yearFraction dcc sd t maturityDate
     in
-      o_rf_CURS * sign contractRole * (ptd + ipac + timeFromLastEvent * ipnr * nt)
+      o_rf_CURS * sign contractRole * ((_fromDecimal ptd) + ipac + timeFromLastEvent * ipnr * nt)
   -- POF_TD_*
   pof
     TD
@@ -327,9 +329,9 @@ payoff (ev /\ t) st = asks $ do \ctx -> let terms@(ContractTerms ct :: ContractT
         }
     ) =
     let
-      timeFromLastEvent = yearFraction dcc sd t maturityDate
+      timeFromLastEvent = _fromDecimal $ yearFraction dcc sd t maturityDate
     in
-      o_rf_CURS * sign contractRole * (ptd + ipac + timeFromLastEvent * ipnr * ipcb)
+      o_rf_CURS * sign contractRole * ((_fromDecimal ptd) + ipac + timeFromLastEvent * ipnr * ipcb)
   ---------------------------
   -- Interest Payment (IP) --
   ---------------------------
@@ -355,7 +357,7 @@ payoff (ev /\ t) st = asks $ do \ctx -> let terms@(ContractTerms ct :: ContractT
         }
     ) =
     let
-      timeFromLastEvent = yearFraction dcc sd t maturityDate
+      timeFromLastEvent = _fromDecimal $ yearFraction dcc sd t maturityDate
     in
       o_rf_CURS * isc * (ipac + timeFromLastEvent * ipnr * nt)
   -- POF_IP_*
@@ -379,7 +381,7 @@ payoff (ev /\ t) st = asks $ do \ctx -> let terms@(ContractTerms ct :: ContractT
         }
     ) =
     let
-      timeFromLastEvent = yearFraction dcc sd t maturityDate
+      timeFromLastEvent = _fromDecimal $ yearFraction dcc sd t maturityDate
     in
       o_rf_CURS * isc * (ipac + timeFromLastEvent * ipnr * ipcb)
   -------------

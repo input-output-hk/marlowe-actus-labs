@@ -27,7 +27,7 @@ import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import Language.Marlowe.Core.V1.Semantics.Types (Party(..))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
-import Marlowe.Actus (RiskFactorsMarlowe, genContract, toMarlowe)
+import Marlowe.Actus (RiskFactorsMarlowe, genContract)
 import React.Basic (JSX)
 import React.Basic as DOOM
 import React.Basic.DOM (css)
@@ -116,8 +116,6 @@ mkContractForm = do
         Right terms -> do
 
           let
-            termsMarlowe = toMarlowe terms
-
             role1 = Role "R1" -- FIXME: provided as input
             role2 = Role "R2" -- FIXME: provided as input
             oracle = Address "" -- FIXME: oracle address
@@ -140,7 +138,7 @@ mkContractForm = do
               , pp_payoff: ChoiceValue' (ChoiceId "pp" oracle) -- TODO: add to oracle
               }
 
-            cashflowsMarlowe = genProjectedCashflows (role1 /\ role2) riskFactors termsMarlowe
+            cashflowsMarlowe = genProjectedCashflows (role1 /\ role2) riskFactors terms
             contract = genContract cashflowsMarlowe
 
           setJsonValidation (const $ Just (Right contract))

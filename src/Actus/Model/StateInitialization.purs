@@ -7,7 +7,7 @@ module Actus.Model.StateInitialization
 
 import Prelude
 
-import Actus.Domain (CT(..), ContractState(..), ContractTerms(..), FEB(..), IPCB(..), PRF(..), SCEF(..), sign)
+import Actus.Domain (class ActusOps, CT(..), ContractState(..), ContractTerms(..), FEB(..), IPCB(..), PRF(..), SCEF(..), _fromDecimal, sign)
 import Actus.Model.StateTransition (CtxSTF)
 import Actus.Utility (annuity, generateRecurrentSchedule, inf, sup, yearFraction)
 import Control.Monad.Reader (Reader, asks)
@@ -17,10 +17,10 @@ import Data.Refined (fromInt)
 
 -- |'initializeState' initializes the state variables at t0 based on the
 -- provided context
-initializeState :: forall a. EuclideanRing a => Reader (CtxSTF a) (ContractState a)
+initializeState :: forall a. ActusOps a => EuclideanRing a => Reader (CtxSTF a) (ContractState a)
 initializeState = asks initializeState'
   where
-  initializeState' :: EuclideanRing a => CtxSTF a -> ContractState a
+  initializeState' :: ActusOps a => EuclideanRing a => CtxSTF a -> ContractState a
   initializeState' ctx =
     ContractState
       { sd: t0
@@ -63,7 +63,7 @@ initializeState = asks initializeState'
           { scalingEffect: Just scef
           , interestScalingMultiplier: Just scip
           }
-      ) | scalingEffect_Ixx scef = scip
+      ) | scalingEffect_Ixx scef = _fromDecimal scip
     interestScaling _ = one
 
     notionalScaling
@@ -71,7 +71,7 @@ initializeState = asks initializeState'
           { scalingEffect: Just scef
           , notionalScalingMultiplier: Just scnt
           }
-      ) | scalingEffect_xNx scef = scnt
+      ) | scalingEffect_xNx scef = _fromDecimal scnt
     notionalScaling _ = one
 
     notionalPrincipal
@@ -84,7 +84,7 @@ initializeState = asks initializeState'
           { notionalPrincipal: Just nt
           , contractRole
           }
-      ) = sign contractRole * nt
+      ) = sign contractRole * (_fromDecimal nt)
     notionalPrincipal _ = zero
 
     nominalInterestRate
@@ -97,7 +97,7 @@ initializeState = asks initializeState'
           { nominalInterestRate: Just ipnr
           }
       ) =
-      ipnr
+      _fromDecimal ipnr
     nominalInterestRate _ = zero
 
     interestAccrued
@@ -109,7 +109,7 @@ initializeState = asks initializeState'
       ( ContractTerms
           { accruedInterest: Just ipac
           }
-      ) = ipac
+      ) = _fromDecimal ipac
     interestAccrued
       ( ContractTerms
           { dayCountConvention: Just dcc
@@ -119,11 +119,11 @@ initializeState = asks initializeState'
         nt = notionalPrincipal ctx.contractTerms
         ipnr = nominalInterestRate ctx.contractTerms
       in
-        yearFraction dcc tMinusIP t0 ctx.maturity * nt * ipnr
+        (_fromDecimal $ yearFraction dcc tMinusIP t0 ctx.maturity) * nt * ipnr
     interestAccrued _ = zero
 
     nextPrincipalRedemptionPayment (ContractTerms { contractType: PAM }) = zero
-    nextPrincipalRedemptionPayment (ContractTerms { nextPrincipalRedemptionPayment: Just prnxt }) = prnxt
+    nextPrincipalRedemptionPayment (ContractTerms { nextPrincipalRedemptionPayment: Just prnxt }) = _fromDecimal prnxt
     nextPrincipalRedemptionPayment
       ( ContractTerms
           { contractType: LAM
@@ -134,7 +134,7 @@ initializeState = asks initializeState'
           , cycleAnchorDateOfPrincipalRedemption: Just pranx
           , scheduleConfig
           }
-      ) = nt / (fromInt $ length $ generateRecurrentSchedule pranx (prcl { includeEndDay = true }) md scheduleConfig)
+      ) = (_fromDecimal nt) / (fromInt $ length $ generateRecurrentSchedule pranx (prcl { includeEndDay = true }) md scheduleConfig)
     nextPrincipalRedemptionPayment
       ( ContractTerms
           { contractType: ANN
@@ -147,13 +147,13 @@ initializeState = asks initializeState'
           }
       ) =
       let
-        scale = nt + ipac
-        frac = annuity ipnr ti
+        scale = (_fromDecimal nt) + (_fromDecimal ipac)
+        frac = annuity (_fromDecimal ipnr) ti
       in
         frac * scale
       where
       prDates = ctx.prSchedule ++ maybeToList ctx.maturity
-      ti = zipWith (\tn tm -> yearFraction dcc tn tm md) prDates (fromMaybe Nil $ tail prDates)
+      ti = zipWith (\tn tm -> _fromDecimal $ yearFraction dcc tn tm md) prDates (fromMaybe Nil $ tail prDates)
     nextPrincipalRedemptionPayment _ = zero
 
     interestPaymentCalculationBase
@@ -168,13 +168,13 @@ initializeState = asks initializeState'
           , interestCalculationBase: Just ipcb
           , contractRole
           }
-      ) | ipcb == IPCB_NT = sign contractRole * nt
+      ) | ipcb == IPCB_NT = sign contractRole * (_fromDecimal nt)
     interestPaymentCalculationBase
       ( ContractTerms
           { interestCalculationBaseAmount: Just ipcba
           , contractRole
           }
-      ) = sign contractRole * ipcba
+      ) = sign contractRole * (_fromDecimal ipcba)
     interestPaymentCalculationBase _ = zero
 
     feeAccrued
@@ -186,7 +186,7 @@ initializeState = asks initializeState'
       ( ContractTerms
           { feeAccrued: Just feac
           }
-      ) = feac
+      ) = _fromDecimal feac
     feeAccrued
       ( ContractTerms
           { feeBasis: Just FEB_N
@@ -195,14 +195,14 @@ initializeState = asks initializeState'
           , notionalPrincipal: Just nt
           , maturityDate: md
           }
-      ) = yearFraction dcc tMinusFP t0 md * nt * fer
+      ) = (_fromDecimal $ yearFraction dcc tMinusFP t0 md) * (_fromDecimal nt) * (_fromDecimal fer)
     feeAccrued
       ( ContractTerms
           { dayCountConvention: Just dcc
           , feeRate: Just fer
           , maturityDate: md
           }
-      ) = yearFraction dcc tMinusFP t0 md / yearFraction dcc tMinusFP tPlusFP md * fer
+      ) = (_fromDecimal $ yearFraction dcc tMinusFP t0 md) / (_fromDecimal $ yearFraction dcc tMinusFP tPlusFP md) * (_fromDecimal fer)
     feeAccrued _ = zero
 
     contractPerformance (ContractTerms { contractPerformance: Just prf }) = prf

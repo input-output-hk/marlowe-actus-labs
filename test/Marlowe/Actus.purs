@@ -19,7 +19,7 @@ import Data.Tuple.Nested ((/\))
 import Effect.Exception (error)
 import Language.Marlowe.Core.V1.Semantics (isClose, playTrace)
 import Language.Marlowe.Core.V1.Semantics.Types (Input(..), Party(..), Payee(..), Payment(..), TimeInterval(..), Token(..), TransactionInput(..), TransactionOutput(..))
-import Marlowe.Actus (genContract, toMarlowe)
+import Marlowe.Actus (genContract)
 import Marlowe.Time (unixEpoch)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff (readTextFile)
@@ -43,7 +43,7 @@ spec = do
           let
             party = Role "party"
             counterparty = Role "counterparty"
-            cashFlows = genProjectedCashflows (party /\ counterparty) riskFactors $ toMarlowe contract
+            cashFlows = genProjectedCashflows (party /\ counterparty) riskFactors $ contract
             marloweContract = genContract cashFlows
 
             payin = IDeposit party party (Token "" "") $ unsafePartial $ fromJust $ fromString "10000000000"

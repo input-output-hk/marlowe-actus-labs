@@ -3,11 +3,10 @@ module Actus.Domain
   , module Actus.Domain.ContractState
   , module Actus.Domain.ContractTerms
   , module Actus.Domain.Schedule
-  , class ActusFrac
-  , _ceiling
   , _abs
   , _max
   , _min
+  , _fromDecimal
   , class ActusOps
   , CashFlow(..)
   , RiskFactors(..)
@@ -28,30 +27,25 @@ import Control.Alt ((<|>))
 import Data.BigInt.Argonaut (BigInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (DateTime)
-import Data.Decimal (Decimal, ceil, fromNumber, toNumber)
+import Data.Decimal (Decimal, fromNumber)
 import Data.Decimal as Decimal
 import Data.Generic.Rep (class Generic)
-import Data.Int as Int
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromJust)
 import Data.Show.Generic (genericShow)
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId)
-import Partial.Unsafe (unsafeCrashWith)
-
-class ActusOps a <= ActusFrac a where
-  _ceiling :: a -> Int
+import Partial.Unsafe (unsafeCrashWith, unsafePartial)
 
 class ActusOps a where
   _min :: a -> a -> a
   _max :: a -> a -> a
   _abs :: a -> a
+  _fromDecimal :: Decimal -> a
 
 instance ActusOps Decimal where
   _min = min
   _max = max
   _abs = Decimal.abs
-
-instance ActusFrac Decimal where
-  _ceiling = Int.ceil <<< toNumber <<< ceil
+  _fromDecimal x = x
 
 data Value'
   = Constant' BigInt
@@ -97,9 +91,10 @@ instance ActusOps Value' where
   _abs a = _max a (NegValue' a)
     where
     _max x y = Cond' (ValueGT' x y) x y
-
-instance ActusFrac Value' where
-  _ceiling _ = 0 -- FIXME: unsafeCrashWith "Partial implemenation of ActusFrac for Value'" -- TODO: complete implementation
+  _fromDecimal n = Constant' $ toMarloweFixedPoint n
+    where
+    toMarloweFixedPoint :: Decimal -> BigInt
+    toMarloweFixedPoint i = unsafePartial (fromJust <<< BigInt.fromString <<< Decimal.toString <<< Decimal.floor $ (Decimal.fromInt marloweFixedPoint) * i)
 
 derive instance Generic Value' _
 derive instance Generic Observation' _
