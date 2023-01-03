@@ -99,7 +99,7 @@ instance ActusOps Value' where
     _max x y = Cond' (ValueGT' x y) x y
 
 instance ActusFrac Value' where
-  _ceiling _ = unsafeCrashWith "Partial implemenation of ActusFrac for Value'" -- TODO: complete implementation
+  _ceiling _ = 0 -- FIXME: unsafeCrashWith "Partial implemenation of ActusFrac for Value'" -- TODO: complete implementation
 
 derive instance Generic Value' _
 derive instance Generic Observation' _
