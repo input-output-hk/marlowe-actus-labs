@@ -44,7 +44,7 @@ genProjectedCashflows
   (EventType -> DateTime -> RiskFactors a)
   ->
   -- | Contract terms
-  ContractTerms Decimal
+  ContractTerms
   ->
   -- | List of projected cash flows
   List (CashFlow a b)
@@ -55,7 +55,7 @@ genProjectedCashflows parties riskFactors contractTerms =
   in
     netting contractTerms $ genCashflow parties contractTerms <$> cashFlows
   where
-  netting :: ContractTerms Decimal -> List (CashFlow a b) -> List (CashFlow a b)
+  netting :: ContractTerms -> List (CashFlow a b) -> List (CashFlow a b)
   netting (ContractTerms { deliverySettlement: Just DS_S }) = netCashflows
   netting _ = \x -> x
 
@@ -89,7 +89,7 @@ buildCtx
   (EventType -> DateTime -> RiskFactors a)
   ->
   -- | Contract terms
-  ContractTerms Decimal
+  ContractTerms
   ->
   -- | Context
   CtxSTF a
@@ -116,7 +116,7 @@ genCashflow
   b /\ b
   ->
   -- | Contract terms
-  ContractTerms Decimal
+  ContractTerms
   ->
   -- | Projected payoff
   Event /\ ContractState a /\ a
@@ -141,7 +141,7 @@ genProjectedPayoffs
   :: forall a
    . ActusOps a
   => EuclideanRing a
-  => ContractTerms Decimal
+  => ContractTerms
   -> Reader (CtxSTF a) (List (Event /\ ContractState a /\ a))
 genProjectedPayoffs = genProjectedPayoffs' <<< genSchedule
 
@@ -171,7 +171,7 @@ genProjectedPayoffs' events =
 genSchedule
   ::
      -- | Contract terms
-     ContractTerms Decimal
+     ContractTerms
   ->
   -- | Schedule
   List Event
@@ -181,7 +181,7 @@ genSchedule contractTerms =
 genFixedSchedule
   ::
      -- | Contract terms
-     ContractTerms Decimal
+     ContractTerms
   ->
   -- | Schedule
   List Event

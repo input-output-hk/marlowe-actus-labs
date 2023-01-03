@@ -145,6 +145,6 @@ actusContract
   :: { links :: { contract :: ContractEndpoint }
      , resource :: ContractHeader
      }
-  -> Maybe (ContractTerms Decimal)
+  -> Maybe ContractTerms
 actusContract { resource: ContractHeader { metadata: Metadata md } } =
   lookup 0 md >>= hush <<< decodeJson <<< fromObject -- FIXME: metadata key for ACTUS

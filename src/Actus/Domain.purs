@@ -142,9 +142,9 @@ sign CR_PFL = negate one
 sign CR_RF = one
 sign CR_PF = negate one
 
--- == Default instance (Decimal)
+-- == Default instance
 
-setDefaultContractTermValues :: ContractTerms Decimal -> ContractTerms Decimal
+setDefaultContractTermValues :: ContractTerms -> ContractTerms
 setDefaultContractTermValues (ContractTerms ct) = ContractTerms $
   ct
     { scheduleConfig =

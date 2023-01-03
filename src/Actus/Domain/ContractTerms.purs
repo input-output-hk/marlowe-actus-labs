@@ -705,8 +705,8 @@ instance Show TermValidationError where
 {-| ACTUS contract terms and attributes are defined in
     https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-terms.json
 -}
-newtype ContractTerms :: Type -> Type
-newtype ContractTerms a = ContractTerms
+newtype ContractTerms :: Type
+newtype ContractTerms = ContractTerms
   { -- General
     contractId :: String
   , contractType :: CT
@@ -725,28 +725,28 @@ newtype ContractTerms a = ContractTerms
   -- -- Counterparty
   , contractPerformance :: Maybe PRF -- ^ Contract Performance
   , creditEventTypeCovered :: Maybe CETC -- ^ Credit Event Type Covered
-  , coverageOfCreditEnhancement :: Maybe a -- ^ Coverage Of Credit Enhancement
+  , coverageOfCreditEnhancement :: Maybe Decimal -- ^ Coverage Of Credit Enhancement
   , guaranteedExposure :: Maybe CEGE -- ^ Guaranteed Exposure
 
   -- -- Fees
   , cycleOfFee :: Maybe Cycle -- ^ Cycle Of Fee
   , cycleAnchorDateOfFee :: Maybe DateTime -- ^ Cycle Anchor Date Of Fee
-  , feeAccrued :: Maybe a -- ^ Fee Accrued
+  , feeAccrued :: Maybe Decimal -- ^ Fee Accrued
   , feeBasis :: Maybe FEB -- ^ Fee Basis
-  , feeRate :: Maybe a -- ^ Fee Rate
+  , feeRate :: Maybe Decimal -- ^ Fee Rate
 
   -- Interest
   , cycleAnchorDateOfInterestPayment :: Maybe DateTime -- ^ Cycle Anchor Date Of Interest Payment
   , cycleOfInterestPayment :: Maybe Cycle -- ^ Cycle Of Interest Payment
-  , accruedInterest :: Maybe a -- ^ Accrued Interest
+  , accruedInterest :: Maybe Decimal -- ^ Accrued Interest
   , capitalizationEndDate :: Maybe DateTime -- ^ Capitalization End Date
   , cycleAnchorDateOfInterestCalculationBase :: Maybe DateTime -- ^ Cycle Anchor Date Of Interest Calculation Base
   , cycleOfInterestCalculationBase :: Maybe Cycle -- ^ Cycle Of Interest Calculation Base
   , interestCalculationBase :: Maybe IPCB -- ^ Interest Calculation Base
-  , interestCalculationBaseAmount :: Maybe a -- ^ Interest Calculation Base Amount
-  , nominalInterestRate :: Maybe a -- ^ Nominal Interest Rate
-  , nominalInterestRate2 :: Maybe a -- ^ Nominal Interest Rate (Second Leg in Plain Vanilla Swap)
-  , interestScalingMultiplier :: Maybe a -- ^ Interest Scaling Multiplier
+  , interestCalculationBaseAmount :: Maybe Decimal -- ^ Interest Calculation Base Amount
+  , nominalInterestRate :: Maybe Decimal -- ^ Nominal Interest Rate
+  , nominalInterestRate2 :: Maybe Decimal -- ^ Nominal Interest Rate (Second Leg in Plain Vanilla Swap)
+  , interestScalingMultiplier :: Maybe Decimal -- ^ Interest Scaling Multiplier
 
   -- Dates
   , maturityDate :: Maybe DateTime -- ^ Maturity Date
@@ -754,68 +754,68 @@ newtype ContractTerms a = ContractTerms
   , exerciseDate :: Maybe DateTime -- ^ Exercise Date
 
   -- -- Notional Principal
-  , notionalPrincipal :: Maybe a -- ^ Notional Principal
-  , premiumDiscountAtIED :: Maybe a -- ^ Premium Discount At IED
+  , notionalPrincipal :: Maybe Decimal -- ^ Notional Principal
+  , premiumDiscountAtIED :: Maybe Decimal -- ^ Premium Discount At IED
   , cycleAnchorDateOfPrincipalRedemption :: Maybe DateTime -- ^ Cycle Anchor Date Of Principal Redemption
   , cycleOfPrincipalRedemption :: Maybe Cycle -- ^ Cycle Of Principal Redemption
-  , nextPrincipalRedemptionPayment :: Maybe a -- ^ Next Principal Redemption Payment
+  , nextPrincipalRedemptionPayment :: Maybe Decimal -- ^ Next Principal Redemption Payment
   , purchaseDate :: Maybe DateTime -- ^ Purchase Date
-  , priceAtPurchaseDate :: Maybe a -- ^ Price At Purchase Date
+  , priceAtPurchaseDate :: Maybe Decimal -- ^ Price At Purchase Date
   , terminationDate :: Maybe DateTime -- ^ Termination Date
-  , priceAtTerminationDate :: Maybe a -- ^ Price At Termination Date
-  , quantity :: Maybe a -- ^ Quantity
+  , priceAtTerminationDate :: Maybe Decimal -- ^ Price At Termination Date
+  , quantity :: Maybe Decimal -- ^ Quantity
   , currency :: Maybe String -- ^ The currency of the cash flows
   , currency2 :: Maybe String -- ^ The currency of the cash flows of the second leg
 
   -- Scaling Index
-  , scalingIndexAtStatusDate :: Maybe a -- ^ Scaling Index At Status Date
+  , scalingIndexAtStatusDate :: Maybe Decimal -- ^ Scaling Index At Status Date
   , cycleAnchorDateOfScalingIndex :: Maybe DateTime -- ^ Cycle Anchor Date Of Scaling Index
   , cycleOfScalingIndex :: Maybe Cycle -- ^ Cycle Of Scaling Index
   , scalingEffect :: Maybe SCEF -- ^ Scaling Effect
-  , scalingIndexAtContractDealDate :: Maybe a -- ^ Scaling Index At Contract Deal Date
+  , scalingIndexAtContractDealDate :: Maybe Decimal -- ^ Scaling Index At Contract Deal Date
   , marketObjectCodeOfScalingIndex :: Maybe String -- ^ Market Object Code Of Scaling Index
-  , notionalScalingMultiplier :: Maybe a -- ^ Notional Scaling Multiplier
+  , notionalScalingMultiplier :: Maybe Decimal -- ^ Notional Scaling Multiplier
 
   -- Optionality
   , cycleOfOptionality :: Maybe Cycle -- ^ Cycle Of Optionality
   , cycleAnchorDateOfOptionality :: Maybe DateTime -- ^ Cycle Anchor Date Of Optionality
   , optionType :: Maybe OPTP -- ^ Option Type
-  , optionStrike1 :: Maybe a -- ^ Option Strike 1
+  , optionStrike1 :: Maybe Decimal -- ^ Option Strike 1
   , optionExerciseType :: Maybe OPXT -- ^ Option Exercise Type
 
   -- Settlement
   , settlementPeriod :: Maybe Cycle -- ^ Settlement Period
   , deliverySettlement :: Maybe DS -- ^ Delivery Settlement
-  , exerciseAmount :: Maybe a -- ^ Exercise Amount
-  , futuresPrice :: Maybe a -- ^ Futures Price
+  , exerciseAmount :: Maybe Decimal -- ^ Exercise Amount
+  , futuresPrice :: Maybe Decimal -- ^ Futures Price
 
   -- Penalty
-  , penaltyRate :: Maybe a -- ^ Penalty Rate
+  , penaltyRate :: Maybe Decimal -- ^ Penalty Rate
   , penaltyType :: Maybe PYTP -- ^ Penalty Type
   , prepaymentEffect :: Maybe PPEF -- ^ Prepayment Effect
 
   -- Rate Reset
   , cycleOfRateReset :: Maybe Cycle -- ^ Cycle Of Rate Reset
   , cycleAnchorDateOfRateReset :: Maybe DateTime -- ^ Cycle Anchor Date Of Rate Reset
-  , nextResetRate :: Maybe a -- ^ Next Reset Rate
-  , rateSpread :: Maybe a -- ^ Rate Spread
-  , rateMultiplier :: Maybe a -- ^ Rate Multiplier
-  , periodFloor :: Maybe a -- ^ Period Floor
-  , periodCap :: Maybe a -- ^ Period Cap
-  , lifeCap :: Maybe a -- ^ Life Cap
-  , lifeFloor :: Maybe a -- ^ Life Floor
+  , nextResetRate :: Maybe Decimal -- ^ Next Reset Rate
+  , rateSpread :: Maybe Decimal -- ^ Rate Spread
+  , rateMultiplier :: Maybe Decimal -- ^ Rate Multiplier
+  , periodFloor :: Maybe Decimal -- ^ Period Floor
+  , periodCap :: Maybe Decimal -- ^ Period Cap
+  , lifeCap :: Maybe Decimal -- ^ Life Cap
+  , lifeFloor :: Maybe Decimal -- ^ Life Floor
   , marketObjectCodeOfRateReset :: Maybe String -- ^ Market Object Code Of Rate Reset
 
   -- Dividend
   , cycleOfDividendPayment :: Maybe Cycle -- ^ Cycle Of Dividend
   , cycleAnchorDateOfDividendPayment :: Maybe DateTime -- ^ Cycle Anchor Date Of Dividend
-  , nextDividendPaymentAmount :: Maybe a -- ^ Next Dividend Payment Amount
+  , nextDividendPaymentAmount :: Maybe Decimal -- ^ Next Dividend Payment Amount
   }
 
-derive instance Newtype (ContractTerms a) _
-derive instance Generic (ContractTerms a) _
-derive instance Eq a => Eq (ContractTerms a)
-instance Show a => Show (ContractTerms a) where
+derive instance Newtype ContractTerms _
+derive instance Generic ContractTerms _
+derive instance Eq ContractTerms
+instance Show ContractTerms where
   show = genericShow
 
 decodeDecimal :: Json -> Either JsonDecodeError Decimal
@@ -833,7 +833,7 @@ decodeDateTime json = do
     jsDate = unsafePerformEffect $ JSDate.parse $ str <> "Z"
   note (UnexpectedValue json) $ JSDate.toDateTime jsDate
 
-instance DecodeJson (ContractTerms Decimal) where
+instance DecodeJson ContractTerms where
   decodeJson json = do
     ContractTerms <$> execRecordBuilderM json Ix.do
 

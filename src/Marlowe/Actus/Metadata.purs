@@ -15,10 +15,10 @@ import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe)
 import Marlowe.Time (instantFromJson, instantToJson)
 
-newtype Metadata value = Metadata (ContractTerms value)
+newtype Metadata = Metadata ContractTerms
 
-derive instance Eq a => Eq (Metadata a)
-derive instance Generic (Metadata value) _
+derive instance Eq Metadata
+derive instance Generic Metadata _
 
 encodeDateTime :: DateTime -> Json
 encodeDateTime = instantToJson <<< fromDateTime
@@ -28,7 +28,7 @@ decodeDateTime json = rmap toDateTime (instantFromJson json)
 
 -- Using acronyms from `actus-dictionary-terms.json` for encoding/decoding
 -- https://github.com/actusfrf/actus-dictionary
-instance EncodeJson (Metadata Decimal) where
+instance EncodeJson Metadata where
   encodeJson (Metadata (ContractTerms ct)) =
     "cid" := ct.contractId
       ~> "ct" := ct.contractType
@@ -110,7 +110,7 @@ instance EncodeJson (Metadata Decimal) where
       ~>? "dvnxt" :=? (encodeDecimal <$> ct.nextDividendPaymentAmount)
       ~>? jsonEmptyObject
 
-instance DecodeJson (Metadata Decimal) where
+instance DecodeJson Metadata where
   decodeJson json = Metadata <$> do
     obj <- decodeJson json
     contractId <- obj .: "cid"

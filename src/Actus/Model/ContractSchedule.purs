@@ -25,7 +25,7 @@ schedule ::
   EventType
   ->
   -- | Contract terms
-  ContractTerms Decimal
+  ContractTerms
   ->
   -- | Schedule
   List ShiftedDay
@@ -89,7 +89,7 @@ schedule _ _ = Nil
 -- |Determine the maturity of a contract
 maturity :: 
   -- | Contract terms
-  ContractTerms Decimal
+  ContractTerms
   ->
   -- | Maturity, if available
   Maybe DateTime
@@ -206,7 +206,7 @@ maturity _ = Nothing
 
 -- Principal at Maturity (PAM)
 
-_SCHED_IED_PAM :: ContractTerms Decimal -> List ShiftedDay
+_SCHED_IED_PAM :: ContractTerms -> List ShiftedDay
 _SCHED_IED_PAM
   ( ContractTerms
       { scheduleConfig
@@ -215,7 +215,7 @@ _SCHED_IED_PAM
   ) = singleton $ applyBDCWithCfg scheduleConfig ied
 _SCHED_IED_PAM _ = Nil
 
-_SCHED_MD_PAM :: ContractTerms Decimal -> List ShiftedDay
+_SCHED_MD_PAM :: ContractTerms -> List ShiftedDay
 _SCHED_MD_PAM
   ct@
     ( ContractTerms
@@ -226,7 +226,7 @@ _SCHED_MD_PAM
   Just m -> singleton $ let d = applyBDCWithCfg scheduleConfig m in d { paymentDay = m }
   Nothing -> Nil
 
-_SCHED_PP_PAM :: ContractTerms Decimal -> List ShiftedDay
+_SCHED_PP_PAM :: ContractTerms -> List ShiftedDay
 _SCHED_PP_PAM
   ( ContractTerms
       { prepaymentEffect: Just PPEF_N
@@ -251,7 +251,7 @@ _SCHED_PP_PAM
   ) = generateRecurrentSchedule (ied <+> opcl) opcl md scheduleConfig
 _SCHED_PP_PAM _ = Nil
 
-_SCHED_PY_PAM :: ContractTerms Decimal -> List ShiftedDay
+_SCHED_PY_PAM :: ContractTerms -> List ShiftedDay
 _SCHED_PY_PAM
   ( ContractTerms
       { penaltyType: Just PYTP_O
@@ -260,7 +260,7 @@ _SCHED_PY_PAM
 _SCHED_PY_PAM ct = _SCHED_PP_PAM ct
 
 _SCHED_FP_PAM
-  :: ContractTerms Decimal
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_FP_PAM
   ( ContractTerms
@@ -292,7 +292,7 @@ _SCHED_FP_PAM
   Nothing -> Nil
 _SCHED_FP_PAM _ = Nil
 
-_SCHED_PRD_PAM :: ContractTerms Decimal -> List ShiftedDay
+_SCHED_PRD_PAM :: ContractTerms -> List ShiftedDay
 _SCHED_PRD_PAM
   ( ContractTerms
       { scheduleConfig
@@ -301,7 +301,7 @@ _SCHED_PRD_PAM
   ) = singleton $ applyBDCWithCfg scheduleConfig prd
 _SCHED_PRD_PAM _ = Nil
 
-_SCHED_TD_PAM :: ContractTerms Decimal -> List ShiftedDay
+_SCHED_TD_PAM :: ContractTerms -> List ShiftedDay
 _SCHED_TD_PAM
   ( ContractTerms
       { scheduleConfig
@@ -311,7 +311,7 @@ _SCHED_TD_PAM
 _SCHED_TD_PAM _ = Nil
 
 _SCHED_IP_PAM
-  :: ContractTerms Decimal
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_IP_PAM
   ct@
@@ -349,7 +349,7 @@ _SCHED_IP_PAM
 _SCHED_IP_PAM _ = Nil
 
 _SCHED_IPCI_PAM
-  :: ContractTerms Decimal
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_IPCI_PAM
   ct@
@@ -387,7 +387,7 @@ _SCHED_IPCI_PAM
 _SCHED_IPCI_PAM _ = Nil
 
 _SCHED_RR_PAM
-  :: ContractTerms Decimal
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_RR_PAM
   ct@
@@ -459,7 +459,7 @@ _SCHED_RR_PAM
 _SCHED_RR_PAM _ = Nil
 
 _SCHED_RRF_PAM
-  :: ContractTerms Decimal
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_RRF_PAM
   ct@
@@ -499,7 +499,7 @@ _SCHED_RRF_PAM
 _SCHED_RRF_PAM _ = Nil
 
 _SCHED_SC_PAM
-  :: ContractTerms Decimal
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_SC_PAM (ContractTerms { scalingEffect: Just SE_OOO }) = Nil
 _SCHED_SC_PAM
@@ -530,7 +530,7 @@ _SCHED_SC_PAM _ = Nil
 -- Linear Amortizer (LAM)
 
 _SCHED_PR_LAM
-  :: ContractTerms Decimal
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_PR_LAM
   ct@
@@ -558,7 +558,7 @@ _SCHED_PR_LAM
 _SCHED_PR_LAM _ = Nil
 
 _SCHED_MD_LAM
-  :: ContractTerms Decimal
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_MD_LAM
   ct@
@@ -571,7 +571,7 @@ _SCHED_MD_LAM
   Nothing -> Nil
 
 _SCHED_IPCB_LAM
-  :: ContractTerms Decimal
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_IPCB_LAM (ContractTerms ct) | ct.interestCalculationBase /= Just IPCB_NTL = Nil
 _SCHED_IPCB_LAM
@@ -602,7 +602,7 @@ _SCHED_IPCB_LAM _ = Nil
 -- Negative Amortizer (NAM)
 
 _SCHED_IP_NAM
-  :: ContractTerms Decimal
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_IP_NAM ct@(ContractTerms { maturityDate, initialExchangeDate, cycleOfPrincipalRedemption, cycleAnchorDateOfPrincipalRedemption, scheduleConfig, cycleAnchorDateOfInterestPayment, cycleOfInterestPayment, capitalizationEndDate }) =
   let
@@ -634,7 +634,7 @@ _SCHED_IP_NAM ct@(ContractTerms { maturityDate, initialExchangeDate, cycleOfPrin
     fromMaybe Nil result'
 
 _SCHED_IPCI_NAM
-  :: ContractTerms Decimal
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_IPCI_NAM ct@(ContractTerms { maturityDate, initialExchangeDate, cycleOfPrincipalRedemption, cycleAnchorDateOfPrincipalRedemption, scheduleConfig, capitalizationEndDate, cycleOfInterestPayment, cycleAnchorDateOfInterestPayment }) =
   let
@@ -669,7 +669,7 @@ _SCHED_IPCI_NAM ct@(ContractTerms { maturityDate, initialExchangeDate, cycleOfPr
 -- Annuity (ANN)
 
 _SCHED_PRF_ANN
-  :: ContractTerms Decimal
+  :: ContractTerms
   -> List ShiftedDay
 _SCHED_PRF_ANN
   ct@

@@ -42,7 +42,7 @@ import Wallet as Wallet
 
 -- FIXME: We should add contractId to the callback params
 
-type Result = ContractTerms Decimal /\ V1.Contract -- /\ ContractEndpoint)
+type Result = ContractTerms /\ V1.Contract -- /\ ContractEndpoint)
 
 type Props =
   { onSuccess :: Result -> Effect Unit

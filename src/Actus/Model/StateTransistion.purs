@@ -23,7 +23,7 @@ import Data.String (Pattern(..), contains)
 -- risk factors is available.
 type CtxSTF a =
   { -- | Contract terms
-    contractTerms :: ContractTerms Decimal
+    contractTerms :: ContractTerms
   ,
     -- | Fee payment schedule
     fpSchedule :: List DateTime
@@ -165,7 +165,7 @@ thisOr0 = fromMaybe zero
 -- Monitoring (AD) --
 ---------------------
 
-_STF_AD_ALL :: forall a. EuclideanRing a => ActusOps a => ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_AD_ALL :: forall a. EuclideanRing a => ActusOps a => ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_AD_ALL
   ( ContractTerms
       { dayCountConvention: Just dcc
@@ -186,7 +186,7 @@ _STF_AD_ALL _ s _ = s
 -- Initial Exchange (IED) --
 ----------------------------
 
-_STF_IED_PAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_IED_PAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_IED_PAM
   ( ContractTerms
       { nominalInterestRate
@@ -238,7 +238,7 @@ _STF_IED_PAM
     # L.statusDate .~ t
 _STF_IED_PAM _ s _ = s
 
-_STF_IED_LAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_IED_LAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_IED_LAM
   ct@
     ( ContractTerms
@@ -281,7 +281,7 @@ _STF_IED_LAM _ s _ = s
 -- Principal Redemption (PR) --
 -------------------------------
 
-_STF_PR_LAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_PR_LAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_PR_LAM
   ct@
     ( ContractTerms
@@ -313,7 +313,7 @@ _STF_PR_LAM
         # L.statusDate .~ t
 _STF_PR_LAM _ s _ = s
 
-_STF_PR_NAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_PR_NAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_PR_NAM
   ct@
     ( ContractTerms
@@ -349,7 +349,7 @@ _STF_PR_NAM _ s _ = s
 -- Maturity (MD) --
 -------------------
 
-_STF_MD_ALL :: forall a. Ring a => ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_MD_ALL :: forall a. Ring a => ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_MD_ALL _ (ContractState s) t = ContractState $
   s # L.notionalPrincipal .~ zero
     # L.accruedInterest .~ zero
@@ -360,7 +360,7 @@ _STF_MD_ALL _ (ContractState s) t = ContractState $
 -- Principal Prepayment (PP) --
 -------------------------------
 
-_STF_PP_PAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_PP_PAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_PP_PAM
   fs
   ( RiskFactors
@@ -375,7 +375,7 @@ _STF_PP_PAM
   in
     ContractState $ s' # L.notionalPrincipal -~ pp_payoff
 
-_STF_PP_LAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_PP_LAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_PP_LAM
   fs
   ( RiskFactors
@@ -414,7 +414,7 @@ _STF_PP_LAM
 -- Penalty Payment (PY) --
 --------------------------
 
-_STF_PY_PAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_PY_PAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_PY_PAM
   _
   ( ContractTerms
@@ -456,7 +456,7 @@ _STF_PY_PAM
         # L.statusDate .~ t
 _STF_PY_PAM _ _ s _ = s
 
-_STF_PY_LAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_PY_LAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_PY_LAM
   (FeeSchedule fs)
   ct@
@@ -510,7 +510,7 @@ _STF_PY_LAM _ _ s _ = s
 -- Fee Payment (FP) --
 ----------------------
 
-_STF_FP_PAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_FP_PAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_FP_PAM
   ( ContractTerms
       { dayCountConvention: Just dcc
@@ -528,7 +528,7 @@ _STF_FP_PAM
         # L.statusDate .~ t
 _STF_FP_PAM _ s _ = s
 
-_STF_FP_LAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_FP_LAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_FP_LAM
   ( ContractTerms
       { dayCountConvention: Just dcc
@@ -564,7 +564,7 @@ _STF_TD_ALL
 -- Interest Payment (IP) --
 ---------------------------
 
-_STF_IP_PAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_IP_PAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_IP_PAM
   ( ContractTerms
       { dayCountConvention: Just dcc
@@ -587,7 +587,7 @@ _STF_IP_PAM _ s _ = s
 -- Interest Capitalization (IPCI) --
 ------------------------------------
 
-_STF_IPCI_PAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_IPCI_PAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_IPCI_PAM
   ct@
     ( ContractTerms
@@ -606,7 +606,7 @@ _STF_IPCI_PAM
       ContractState $ s'' # L.notionalPrincipal .~ (s ^. L.notionalPrincipal) + (s ^. L.accruedInterest) + timeFromLastEvent * (s ^. L.nominalInterest) * (s ^. L.notionalPrincipal)
 _STF_IPCI_PAM _ s _ = s
 
-_STF_IPCI_LAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_IPCI_LAM :: forall a. EuclideanRing a => ActusOps a => ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_IPCI_LAM
   ct@
     ( ContractTerms
@@ -635,7 +635,7 @@ _STF_IPCI_LAM _ s _ = s
 -- Interest Calculation Base Fixing (IPCB) --
 ---------------------------------------------
 
-_STF_IPCB_LAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_IPCB_LAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_IPCB_LAM fs ct s'@(ContractState s) t =
   let
     (ContractState s'') = _STF_PY_LAM fs ct s' t
@@ -646,7 +646,7 @@ _STF_IPCB_LAM fs ct s'@(ContractState s) t =
 -- Rate Reset (RR) --
 -------------------------------
 
-_STF_RR_PAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_RR_PAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_RR_PAM
   fs
   ( RiskFactors
@@ -721,7 +721,7 @@ _STF_RR_PAM
         # L.statusDate .~ t
 _STF_RR_PAM _ _ _ s _ = s
 
-_STF_RR_LAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_RR_LAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_RR_LAM
   fs
   ( RiskFactors
@@ -752,7 +752,7 @@ _STF_RR_LAM
         # L.statusDate .~ t
 _STF_RR_LAM _ _ _ s _ = s
 
-_STF_RR_ANN :: forall a. EuclideanRing a => ActusOps a => PrincipalRedemptionSchedule -> FeeSchedule -> RiskFactors a -> ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_RR_ANN :: forall a. EuclideanRing a => ActusOps a => PrincipalRedemptionSchedule -> FeeSchedule -> RiskFactors a -> ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_RR_ANN
   (PrincipalRedemptionSchedule prs)
   (FeeSchedule fs)
@@ -806,7 +806,7 @@ _STF_RR_ANN _ _ _ _ s _ = s
 -- Rate Reset Fixing (RRF) --
 -----------------------------
 
-_STF_RRF_PAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_RRF_PAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_RRF_PAM
   fs
   _
@@ -822,7 +822,7 @@ _STF_RRF_PAM
   in
     ContractState $ s' # L.nominalInterest .~ thisOr0 (_fromDecimal <$> rrnxt)
 
-_STF_RRF_LAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_RRF_LAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_RRF_LAM
   fs
   _
@@ -838,7 +838,7 @@ _STF_RRF_LAM
   in
     ContractState $ s' # L.nominalInterest .~ thisOr0 (_fromDecimal <$> rrnxt)
 
-_STF_RRF_ANN :: forall a. ActusOps a => EuclideanRing a => PrincipalRedemptionSchedule -> FeeSchedule -> RiskFactors a -> ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_RRF_ANN :: forall a. ActusOps a => EuclideanRing a => PrincipalRedemptionSchedule -> FeeSchedule -> RiskFactors a -> ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_RRF_ANN
   (PrincipalRedemptionSchedule prs)
   (FeeSchedule fs)
@@ -881,7 +881,7 @@ _STF_RRF_ANN _ _ _ _ s _ = s
 -- Principal Payment Amount Fixing (PRF) --
 -------------------------------------------
 
-_STF_PRF_ANN :: forall a. EuclideanRing a => ActusOps a => PrincipalRedemptionSchedule -> FeeSchedule -> ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_PRF_ANN :: forall a. EuclideanRing a => ActusOps a => PrincipalRedemptionSchedule -> FeeSchedule -> ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_PRF_ANN
   (PrincipalRedemptionSchedule prs)
   (FeeSchedule fs)
@@ -924,7 +924,7 @@ _STF_PRF_ANN _ _ _ s _ = s
 -- Scaling Index Fixing (SC) --
 -------------------------------
 
-_STF_SC_PAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_SC_PAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_SC_PAM
   fs
   ( RiskFactors
@@ -958,7 +958,7 @@ _STF_SC_PAM
         # L.interestScalingMultiplier .~ isc'
 _STF_SC_PAM _ _ _ s _ = s
 
-_STF_SC_LAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms Decimal -> ContractState a -> DateTime -> ContractState a
+_STF_SC_LAM :: forall a. EuclideanRing a => ActusOps a => FeeSchedule -> RiskFactors a -> ContractTerms -> ContractState a -> DateTime -> ContractState a
 _STF_SC_LAM
   fs
   ( RiskFactors

@@ -17,7 +17,7 @@ import Data.Tuple.Nested ((/\), type (/\))
 -- |The context for payoff functions
 type CtxPOF a =
   { -- | Contract terms
-    contractTerms :: ContractTerms Decimal
+    contractTerms :: ContractTerms
   ,
     -- | Risk factors as a function of event type and time
     riskFactors :: EventType -> DateTime -> RiskFactors a
@@ -43,7 +43,7 @@ payoff (ev /\ t) st = asks $ do \ctx -> let terms = ctx.contractTerms in pof ev 
   ----------------------------
   -- Initial Exchange (IED) --
   ----------------------------
-  pof :: Semiring a => EuclideanRing a => ActusOps a => EventType -> RiskFactors a -> ContractTerms Decimal -> ContractState a -> a
+  pof :: Semiring a => EuclideanRing a => ActusOps a => EventType -> RiskFactors a -> ContractTerms -> ContractState a -> a
   -- POF_IED_*
   pof
     IED

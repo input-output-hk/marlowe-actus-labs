@@ -2,14 +2,13 @@
 -- Given ACTUS contract terms a Marlowe contract is generated.
 module Marlowe.Actus
   ( CashFlowMarlowe
-  , ContractTermsMarlowe
   , RiskFactorsMarlowe
   , genContract
   ) where
 
 import Prelude
 
-import Actus.Domain (CashFlow(..), ContractState, ContractTerms, Observation'(..), RiskFactors, Value'(..))
+import Actus.Domain (CashFlow(..), ContractState, Observation'(..), RiskFactors, Value'(..))
 import Control.Apply (lift2)
 import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.DateTime.Instant (Instant, fromDateTime)
@@ -20,7 +19,6 @@ import Language.Marlowe.Core.V1.Semantics.Types (Action(..), Bound(..), Case(..)
 
 type CashFlowMarlowe = CashFlow Value
 type ContractStateMarlowe = ContractState Value'
-type ContractTermsMarlowe = ContractTerms Value'
 type RiskFactorsMarlowe = RiskFactors Value'
 
 evalVal :: Value -> Maybe BigInt

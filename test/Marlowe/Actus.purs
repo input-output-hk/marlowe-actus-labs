@@ -36,7 +36,7 @@ spec = do
       json <- either (throwError <<< error) pure $ jsonParser jsonStr
 
       let
-        (terms :: Either JsonDecodeError (ContractTerms Decimal)) = decodeJson json
+        (terms :: Either JsonDecodeError ContractTerms) = decodeJson json
       case terms of
         Left err -> fail (show err)
         Right contract -> do

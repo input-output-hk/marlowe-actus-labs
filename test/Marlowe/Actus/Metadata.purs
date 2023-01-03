@@ -33,7 +33,7 @@ spec = do
 
         forWithIndex_ fixtures \lamId termsJson -> do
           let
-            (terms :: Either JsonDecodeError (ContractTerms Decimal)) = decodeJson termsJson
+            (terms :: Either JsonDecodeError ContractTerms) = decodeJson termsJson
           case terms of
             Left err -> fail (lamId <> ": " <> show err)
             Right contract -> do
