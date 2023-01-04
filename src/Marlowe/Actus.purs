@@ -228,7 +228,7 @@ oracle :: Party
 oracle = Address "" -- FIXME: oracle address
 
 defaultRiskFactors :: ContractTerms -> EventType -> DateTime -> RiskFactorsMarlowe
-defaultRiskFactors (ContractTerms {currency, settlementCurrency}) _ _ = -- FIXME: just a stub
+defaultRiskFactors (ContractTerms { currency, settlementCurrency }) _ _ = -- FIXME: just a stub
   let
     o_rf_CURS = fromMaybe (fromInt' 1) $ do
       cur <- currency

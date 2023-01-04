@@ -1,8 +1,7 @@
 module CardanoMultiplatformLib
   ( importLib
   , module Exports
-  )
-  where
+  ) where
 
 import Prelude
 
@@ -21,7 +20,7 @@ foreign import importLibImpl :: Effect (Nullable (Promise Lib))
 
 importLib :: Aff (Maybe Lib)
 importLib = liftEffect importLibImpl >>= Nullable.toMaybe >>> case _ of
-    Nothing -> pure Nothing
-    Just promise ->
-      (Just <$> toAff promise) `catchError` const (pure Nothing)
+  Nothing -> pure Nothing
+  Just promise ->
+    (Just <$> toAff promise) `catchError` const (pure Nothing)
 
