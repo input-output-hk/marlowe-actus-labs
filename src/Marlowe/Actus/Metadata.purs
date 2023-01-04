@@ -9,16 +9,25 @@ import Data.Argonaut.Encode.Class (class EncodeJson)
 import Data.Bifunctor (rmap)
 import Data.DateTime (DateTime)
 import Data.DateTime.Instant (fromDateTime, toDateTime)
-import Data.Decimal (Decimal)
 import Data.Either (Either)
 import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe)
+import Data.Newtype (class Newtype)
+import Language.Marlowe.Core.V1.Semantics.Types (Party)
 import Marlowe.Time (instantFromJson, instantToJson)
 
-newtype Metadata = Metadata ContractTerms
+actusMetadataKey :: Int
+actusMetadataKey = 123 -- FIXME: define a proper key
+
+newtype Metadata = Metadata
+  { contractTerms :: ContractTerms
+  , party :: Party -- TODO: really need in metadata?
+  , counterParty :: Party -- TODO: really need in metadata?
+  }
 
 derive instance Eq Metadata
 derive instance Generic Metadata _
+derive instance Newtype Metadata _
 
 encodeDateTime :: DateTime -> Json
 encodeDateTime = instantToJson <<< fromDateTime
@@ -29,7 +38,7 @@ decodeDateTime json = rmap toDateTime (instantFromJson json)
 -- Using acronyms from `actus-dictionary-terms.json` for encoding/decoding
 -- https://github.com/actusfrf/actus-dictionary
 instance EncodeJson Metadata where
-  encodeJson (Metadata (ContractTerms ct)) =
+  encodeJson (Metadata { contractTerms: ContractTerms ct, party, counterParty }) =
     "cid" := ct.contractId
       ~> "ct" := ct.contractType
       ~> "cntrl" := ct.contractRole
@@ -108,7 +117,9 @@ instance EncodeJson Metadata where
       ~>? "dvcl" :=? (encodeCycle <$> ct.cycleOfDividendPayment)
       ~>? "dvanx" :=? (encodeDateTime <$> ct.cycleAnchorDateOfDividendPayment)
       ~>? "dvnxt" :=? (encodeDecimal <$> ct.nextDividendPaymentAmount)
-      ~>? jsonEmptyObject
+      ~>? "pa" := party
+      ~> "cp" := counterParty
+      ~> jsonEmptyObject
 
 instance DecodeJson Metadata where
   decodeJson json = Metadata <$> do
@@ -191,81 +202,87 @@ instance DecodeJson Metadata where
     cycleOfDividendPayment <- rmap (_ >>= decodeCycle) (obj .:? "dvcl")
     cycleAnchorDateOfDividendPayment <- Decoders.getFieldOptional' decodeDateTime obj "dvanx"
     nextDividendPaymentAmount <- Decoders.getFieldOptional' decodeDecimal obj "dvnxt"
-    pure $ ContractTerms
-      { contractId
-      , contractType
-      , contractRole
-      , settlementCurrency
-      , initialExchangeDate
-      , dayCountConvention
-      , scheduleConfig: { calendar, endOfMonthConvention, businessDayConvention }
-      , statusDate
-      , marketObjectCode
-      , contractPerformance
-      , creditEventTypeCovered
-      , coverageOfCreditEnhancement
-      , guaranteedExposure
-      , cycleOfFee
-      , cycleAnchorDateOfFee
-      , feeAccrued
-      , feeBasis
-      , feeRate
-      , cycleAnchorDateOfInterestPayment
-      , cycleOfInterestPayment
-      , accruedInterest
-      , capitalizationEndDate
-      , cycleAnchorDateOfInterestCalculationBase
-      , cycleOfInterestCalculationBase
-      , interestCalculationBase
-      , interestCalculationBaseAmount
-      , nominalInterestRate
-      , nominalInterestRate2
-      , interestScalingMultiplier
-      , maturityDate
-      , amortizationDate
-      , exerciseDate
-      , notionalPrincipal
-      , premiumDiscountAtIED
-      , cycleAnchorDateOfPrincipalRedemption
-      , cycleOfPrincipalRedemption
-      , nextPrincipalRedemptionPayment
-      , purchaseDate
-      , priceAtPurchaseDate
-      , terminationDate
-      , priceAtTerminationDate
-      , quantity
-      , currency
-      , currency2
-      , scalingIndexAtStatusDate
-      , cycleAnchorDateOfScalingIndex
-      , cycleOfScalingIndex
-      , scalingEffect
-      , scalingIndexAtContractDealDate
-      , marketObjectCodeOfScalingIndex
-      , notionalScalingMultiplier
-      , cycleOfOptionality
-      , cycleAnchorDateOfOptionality
-      , optionType
-      , optionStrike1
-      , optionExerciseType
-      , settlementPeriod
-      , deliverySettlement
-      , exerciseAmount
-      , futuresPrice
-      , penaltyRate
-      , penaltyType
-      , prepaymentEffect
-      , cycleOfRateReset
-      , cycleAnchorDateOfRateReset
-      , nextResetRate
-      , rateSpread
-      , rateMultiplier
-      , periodFloor
-      , periodCap
-      , lifeCap
-      , lifeFloor
-      , marketObjectCodeOfRateReset
-      , cycleOfDividendPayment
-      , cycleAnchorDateOfDividendPayment
-      , nextDividendPaymentAmount
+    party <- obj .: "pa"
+    counterParty <- obj .: "cp"
+    pure $
+      { contractTerms: ContractTerms
+          { contractId
+          , contractType
+          , contractRole
+          , settlementCurrency
+          , initialExchangeDate
+          , dayCountConvention
+          , scheduleConfig: { calendar, endOfMonthConvention, businessDayConvention }
+          , statusDate
+          , marketObjectCode
+          , contractPerformance
+          , creditEventTypeCovered
+          , coverageOfCreditEnhancement
+          , guaranteedExposure
+          , cycleOfFee
+          , cycleAnchorDateOfFee
+          , feeAccrued
+          , feeBasis
+          , feeRate
+          , cycleAnchorDateOfInterestPayment
+          , cycleOfInterestPayment
+          , accruedInterest
+          , capitalizationEndDate
+          , cycleAnchorDateOfInterestCalculationBase
+          , cycleOfInterestCalculationBase
+          , interestCalculationBase
+          , interestCalculationBaseAmount
+          , nominalInterestRate
+          , nominalInterestRate2
+          , interestScalingMultiplier
+          , maturityDate
+          , amortizationDate
+          , exerciseDate
+          , notionalPrincipal
+          , premiumDiscountAtIED
+          , cycleAnchorDateOfPrincipalRedemption
+          , cycleOfPrincipalRedemption
+          , nextPrincipalRedemptionPayment
+          , purchaseDate
+          , priceAtPurchaseDate
+          , terminationDate
+          , priceAtTerminationDate
+          , quantity
+          , currency
+          , currency2
+          , scalingIndexAtStatusDate
+          , cycleAnchorDateOfScalingIndex
+          , cycleOfScalingIndex
+          , scalingEffect
+          , scalingIndexAtContractDealDate
+          , marketObjectCodeOfScalingIndex
+          , notionalScalingMultiplier
+          , cycleOfOptionality
+          , cycleAnchorDateOfOptionality
+          , optionType
+          , optionStrike1
+          , optionExerciseType
+          , settlementPeriod
+          , deliverySettlement
+          , exerciseAmount
+          , futuresPrice
+          , penaltyRate
+          , penaltyType
+          , prepaymentEffect
+          , cycleOfRateReset
+          , cycleAnchorDateOfRateReset
+          , nextResetRate
+          , rateSpread
+          , rateMultiplier
+          , periodFloor
+          , periodCap
+          , lifeCap
+          , lifeFloor
+          , marketObjectCodeOfRateReset
+          , cycleOfDividendPayment
+          , cycleAnchorDateOfDividendPayment
+          , nextDividendPaymentAmount
+          }
+      , party
+      , counterParty
       }

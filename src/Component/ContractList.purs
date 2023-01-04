@@ -2,8 +2,10 @@ module Component.ContractList where
 
 import Prelude
 
-import Actus.Domain (CashFlow, ContractTerms)
+import Actus.Domain (CashFlow)
+import Actus.Domain.ContractTerms (ContractTerms)
 import Component.ContractForm (mkContractForm)
+import Component.EventList (decodeMetadata)
 import Component.Modal (mkModal)
 import Component.Types (ContractHeaderResource, WalletInfo, MkComponentM)
 import Component.Widgets (linkWithIcon)
@@ -13,12 +15,12 @@ import Contrib.React.Bootstrap.Types as OverlayTrigger
 import Data.Array as Array
 import Data.Decimal (Decimal)
 import Data.List (List)
-import Data.Map (keys)
-import Data.Maybe (Maybe(..), fromMaybe, isNothing)
+import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
+import Data.Newtype (unwrap)
 import Data.Tuple.Nested (type (/\))
 import Effect.Class (liftEffect)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party)
-import Marlowe.Runtime.Web.Types (ContractHeader(..), Metadata(..), TxOutRef, txOutRefToString)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party(..))
+import Marlowe.Runtime.Web.Types (ContractHeader(..), Metadata, TxOutRef, txOutRefToString)
 import React.Basic.DOM (text)
 import React.Basic.DOM as DOOM
 import React.Basic.DOM.Events (targetValue)
@@ -131,8 +133,8 @@ mkContractList = do
               else
                 addContractLink
         , DOM.div { className: "row" } $ Array.singleton $ case state.metadata of
-            Just (Metadata metadata) -> modal $
-              { body: text $ show (keys metadata) -- FIXME: Just a stub...
+            Just (metadata) -> modal $
+              { body: text $ maybe "Empty Metadata" (show <<< _.contractTerms <<< unwrap) $ decodeMetadata metadata
               , onDismiss: updateState _ { metadata = Nothing }
               , title: text "ACTUS Contract Terms"
               }
@@ -143,17 +145,30 @@ mkContractList = do
                   [ DOM.tr {}
                       [ DOM.th {} [ text "Status" ]
                       , DOM.th {} [ text "Contract ID" ]
-                      , DOM.th {} [ text "View" ]
+                      , DOM.th {} [ text "ACTUS Contract ID" ]
+                      , DOM.th {} [ text "Party" ]
+                      , DOM.th {} [ text "Counter Party" ]
+                      , DOM.th {} [ text "Contract Terms" ]
                       ]
                   ]
               , DOM.tbody {} $ map
                   ( \{ resource: ContractHeader { contractId, status, metadata } } ->
-                      DOM.tr {}
-                        [ DOM.td {} [ text $ show status ]
-                        , DOM.td {} [ text $ txOutRefToString contractId ]
-                        , DOM.td {} [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
-                        ]
+                      let
+                        md = decodeMetadata metadata
+                      in
+                        DOM.tr {}
+                          [ DOM.td {} [ text $ show status ]
+                          , DOM.td {} [ text $ txOutRefToString contractId ]
+                          , DOM.td {} [ text $ maybe "" (_.contractId <<< unwrap <<< _.contractTerms <<< unwrap) md ]
+                          , DOM.td {} [ text $ maybe "" (displayParty <<< _.party <<< unwrap) md ]
+                          , DOM.td {} [ text $ maybe "" (displayParty <<< _.counterParty <<< unwrap) md ]
+                          , DOM.td {} [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
+                          ]
                   )
                   contractList
               ]
         ]
+  where
+  displayParty :: Party -> String
+  displayParty (Role role) = role
+  displayParty (Address address) = address

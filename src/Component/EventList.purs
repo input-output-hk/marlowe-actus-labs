@@ -3,25 +3,23 @@ module Component.EventList where
 import Prelude
 
 import Actus.Core (genProjectedCashflows)
-import Actus.Domain (CashFlow(..), ContractTerms, EventType(..), RiskFactors(..))
+import Actus.Domain (CashFlow(..), ContractTerms, RiskFactors(..))
 import Component.Modal (mkModal)
-import Component.Modal as Modal
 import Component.Types (ContractHeaderResource)
 import Data.Argonaut (decodeJson, fromObject)
-import Data.Array (catMaybes, fromFoldable, replicate)
-import Data.DateTime (DateTime(..), Time(..), canonicalDate)
+import Data.Array (catMaybes, concat, fromFoldable)
 import Data.Decimal (Decimal, toString)
 import Data.Decimal as Decimal
 import Data.Either (hush)
-import Data.Enum (toEnum)
 import Data.Formatter.DateTime (formatDateTime)
 import Data.Map (lookup)
 import Data.Maybe (Maybe(..))
-import Data.Maybe (Maybe(..), fromJust)
+import Data.Newtype (unwrap)
 import Effect (Effect)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party(..))
+import Marlowe.Actus.Metadata (actusMetadataKey)
+import Marlowe.Actus.Metadata as M
 import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractHeader(..), Metadata(..))
-import Partial.Unsafe (unsafePartial)
 import React.Basic.DOM (text)
 import React.Basic.DOM as R
 import React.Basic.DOM.Simplified.Generated as DOM
@@ -45,10 +43,11 @@ mkEventList = do
   component "EventList" \contractList -> React.do
 
     let
-      termsList = catMaybes $ map actusContract contractList
+      termsList = catMaybes $ map actusTerms contractList
       role1 = Role "R1"
       role2 = Role "R2"
 
+      -- FIXME: remove hardcoded values
       projectedCashFlows terms = fromFoldable $ genProjectedCashflows (role1 /\ role2)
         ( \_ _ ->
             RiskFactors
@@ -60,21 +59,7 @@ mkEventList = do
         )
         terms
 
-      --cashFlows = concat $ map projectedCashFlows termsList
-      -- FIXME: remove test data
-      cashFlows = replicate 10 $
-        ( CashFlow
-            { contractId: "pam01"
-            , party: role1
-            , counterparty: role2
-            , paymentDay: DateTime (canonicalDate (unsafePartial $ fromJust $ toEnum 2022) (unsafePartial $ fromJust $ toEnum 12) (unsafePartial $ fromJust $ toEnum 22)) (Time (unsafePartial $ fromJust $ toEnum 0) (unsafePartial $ fromJust $ toEnum 0) (unsafePartial $ fromJust $ toEnum 0) (unsafePartial $ fromJust $ toEnum 0))
-            , calculationDay: DateTime (canonicalDate (unsafePartial $ fromJust $ toEnum 2022) (unsafePartial $ fromJust $ toEnum 12) (unsafePartial $ fromJust $ toEnum 22)) (Time (unsafePartial $ fromJust $ toEnum 0) (unsafePartial $ fromJust $ toEnum 0) (unsafePartial $ fromJust $ toEnum 0) (unsafePartial $ fromJust $ toEnum 0))
-            , event: IP
-            , amount: Decimal.fromInt 1000
-            , notional: Decimal.fromInt 10000
-            , currency: "DjedUSD"
-            } :: CashFlow Decimal Party
-        )
+      cashFlows = concat $ map projectedCashFlows termsList
 
     ((state :: EventListState) /\ updateState) <- useState { newInput: Nothing }
 
@@ -141,10 +126,12 @@ mkEventList = do
             ]
         ]
 
-actusContract
+actusTerms
   :: { links :: { contract :: ContractEndpoint }
      , resource :: ContractHeader
      }
   -> Maybe ContractTerms
-actusContract { resource: ContractHeader { metadata: Metadata md } } =
-  lookup 0 md >>= hush <<< decodeJson <<< fromObject -- FIXME: metadata key for ACTUS
+actusTerms { resource: ContractHeader { metadata } } = (_.contractTerms <<< unwrap) <$> decodeMetadata metadata
+
+decodeMetadata :: Metadata -> Maybe M.Metadata
+decodeMetadata (Metadata md) = lookup actusMetadataKey md >>= hush <<< decodeJson <<< fromObject
