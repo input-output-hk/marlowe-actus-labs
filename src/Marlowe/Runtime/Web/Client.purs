@@ -119,9 +119,9 @@ foldMapMPages serverUrl path f = do
     FetchPage currRange -> do
       { page, nextRange } <- ExceptT $ liftAff $ getPage serverUrl path currRange
       b <- lift $ f { page, currRange }
-      case nextRange of
-        Just _ -> pure $ Just (b /\ FetchPage nextRange)
-        Nothing -> pure $ Just (b /\ StopFetching)
+      pure $ Just case nextRange of
+        Just _ -> b /\ FetchPage nextRange
+        Nothing -> b /\ StopFetching
   pure (fold <$> bs)
 
 getPages
