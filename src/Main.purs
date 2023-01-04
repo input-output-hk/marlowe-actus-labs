@@ -4,6 +4,7 @@ module Main
 
 import Prelude
 
+import CardanoMultiplatformLib as CardanoMultiplatformLib
 import Component.App (mkApp)
 import Component.ContractList (mkContractList)
 import Component.EventList (mkEventList)
@@ -99,14 +100,18 @@ main configJson = do
         let
           contracts = []
 
-        walletInfoCtx <- liftEffect $ createContext Nothing
-        let
-          mkAppCtx =
-            { walletInfoCtx
-            , logger
-            , contracts
-            , runtime
-            }
+        CardanoMultiplatformLib.importLib >>= case _ of
+          Nothing -> liftEffect $ logger "Cardano serialization lib loading failed"
+          Just cardanoMultiplatformLib -> do
+            walletInfoCtx <- liftEffect $ createContext Nothing
+            let
+              mkAppCtx =
+                { cardanoMultiplatformLib
+                , walletInfoCtx
+                , logger
+                , contracts
+                , runtime
+                }
 
-        app <- liftEffect $ runReaderT mkApp mkAppCtx
-        liftEffect $ renderRoot reactRoot $ app unit
+            app <- liftEffect $ runReaderT mkApp mkAppCtx
+            liftEffect $ renderRoot reactRoot $ app unit

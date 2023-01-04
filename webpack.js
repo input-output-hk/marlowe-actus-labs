@@ -21,6 +21,9 @@ module.exports = (env, argv) => {
   const webServerUrl = process.env.MARLOWE_WEB_SERVER_URL;
 
   return {
+    experiments: {
+      asyncWebAssembly: true
+    },
     entry: {
        app: './src/frontend.js',
     },
@@ -31,6 +34,10 @@ module.exports = (env, argv) => {
       port: 8080
     },
     plugins: [
+      new webpack.NormalModuleReplacementPlugin(
+        /@dcspark\/cardano-multiplatform-lib-nodejs/,
+        '@dcspark/cardano-multiplatform-lib-browser'
+      ),
       new webpack.EnvironmentPlugin({
         MARLOWE_WEB_SERVER_URL: process.env.MARLOWE_WEB_SERVER_URL,
         DEVEL_MODE: develMode,

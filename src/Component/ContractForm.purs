@@ -4,10 +4,12 @@ import Prelude
 
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain (ContractTerms, EventType, RiskFactors(..), Value'(..), marloweFixedPoint)
+import CardanoMultiplatformLib.Address (bech32FromHex)
+import CardanoMultiplatformLib.Address as Address
 import Component.Modal (mkModal)
 import Component.Modal as Modal
 import Component.Types (MkComponentM, WalletInfo(..))
-import Component.Widgets (link)
+import Component.Widgets (link, spinner)
 import Component.Widgets.Form (mkBooleanField)
 import Contrib.React.Bootstrap.Form as Form
 import Contrib.React.Bootstrap.Form.Label as Form.Label
@@ -22,9 +24,10 @@ import Data.Newtype (unwrap)
 import Data.String as String
 import Debug (traceM)
 import Effect (Effect)
-import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId(..), Party(..))
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
+import HexString as HexString
+import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId(..), Party(..))
 import Language.Marlowe.Core.V1.Semantics.Types (Party(..))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus (RiskFactorsMarlowe, genContract)
@@ -57,6 +60,7 @@ mkContractForm = do
   booleanField <- liftEffect $ mkBooleanField
   runtime <- asks _.runtime
   modal <- liftEffect mkModal
+  cardanoMultiplatformLib <- asks _.cardanoMultiplatformLib
 
   liftEffect $ component "ContractForm" \{ connectedWallet, onSuccess, onError, onDismiss, inModal } -> React.do
     possibleAddress /\ setPossibleAddress <- useState Nothing
@@ -66,9 +70,12 @@ mkContractForm = do
         Just (WalletInfo { wallet }) -> launchAff_ do
           -- unused <- Wallet.getUsedAddresses
           -- used <- Wallet.getUsedAddresses
-          traceM "GET CHANGE ADDRESS"
-          address <- Wallet.getChangeAddress wallet
-          liftEffect (setPossibleAddress $ const $ Just address)
+          address@(Wallet.Address addressStr) <- Wallet.getChangeAddress wallet
+          liftEffect $ bech32FromHex cardanoMultiplatformLib addressStr >>= case _ of
+            Just addr -> setPossibleAddress $ const $ Just addr
+            Nothing -> do
+               -- FIXME: Notify about the error.
+               pure unit
       pure (pure unit)
 
     -- Let's hard code this for the testing phase.
@@ -156,7 +163,11 @@ mkContractForm = do
               -- , renderJsonValidation
               ]
           , mb3
-              [ DOOM.text $ show possibleAddress ]
+              [ Form.label {} [ R.text "Your address" ]
+              , DOM.div { className: "text-truncate" } case possibleAddress of
+                Just address -> [ DOOM.text $ Address.bech32ToString address ]
+                Nothing -> [ spinner Nothing ]
+              ]
           , mb3
               [ Form.label { htmlFor: "address" } [ R.text "Counterparty address" ]
               , Form.textInput
@@ -165,13 +176,6 @@ mkContractForm = do
                   , value: "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
                   }
               ]
-
-          -- , booleanField
-          --     { initialValue: false
-          --     , onToggle: (const $ pure unit)
-          --     , disabled: false
-          --     , label: (R.text "Pick unused address")
-          --     }
           ]
         formActions = DOOM.fragment
           [ link
