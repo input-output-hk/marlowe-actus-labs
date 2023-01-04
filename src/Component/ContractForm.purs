@@ -30,7 +30,7 @@ import HexString as HexString
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId(..), Party(..))
 import Language.Marlowe.Core.V1.Semantics.Types (Party(..))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
-import Marlowe.Actus (RiskFactorsMarlowe, genContract)
+import Marlowe.Actus (RiskFactorsMarlowe, defaultRiskFactors, genContract)
 import React.Basic (JSX)
 import React.Basic as DOOM
 import React.Basic.DOM (css)
@@ -74,8 +74,8 @@ mkContractForm = do
           liftEffect $ bech32FromHex cardanoMultiplatformLib addressStr >>= case _ of
             Just addr -> setPossibleAddress $ const $ Just addr
             Nothing -> do
-               -- FIXME: Notify about the error.
-               pure unit
+              -- FIXME: Notify about the error.
+              pure unit
       pure (pure unit)
 
     -- Let's hard code this for the testing phase.
@@ -118,27 +118,8 @@ mkContractForm = do
           let
             role1 = Role "R1" -- FIXME: provided as input
             role2 = Role "R2" -- FIXME: provided as input
-            oracle = Address "" -- FIXME: oracle address
-            -- party = Address 
-            -- counterparty = 
 
-            o_rf_CURS = fromMaybe (fromInt 1) $ do
-              currency <- (unwrap terms).currency
-              settlementCurrency <- (unwrap terms).settlementCurrency
-              if currency == settlementCurrency then Nothing
-              else Just $ ChoiceValue' (ChoiceId (currency <> settlementCurrency) oracle)
-              where
-              fromInt = Constant' <<< BigInt.fromInt <<< (marloweFixedPoint * _)
-
-            riskFactors :: EventType -> DateTime -> RiskFactorsMarlowe
-            riskFactors _ _ = RiskFactors
-              { o_rf_CURS
-              , o_rf_RRMO: ChoiceValue' (ChoiceId "rrmo" oracle) -- TODO: add to oracle
-              , o_rf_SCMO: ChoiceValue' (ChoiceId "scmo" oracle) -- TODO: add to oracle
-              , pp_payoff: ChoiceValue' (ChoiceId "pp" oracle) -- TODO: add to oracle
-              }
-
-            cashflowsMarlowe = genProjectedCashflows (role1 /\ role2) riskFactors terms
+            cashflowsMarlowe = genProjectedCashflows (role1 /\ role2) (defaultRiskFactors terms) terms
             contract = genContract cashflowsMarlowe
 
           setJsonValidation (const $ Just (Right contract))
@@ -165,8 +146,8 @@ mkContractForm = do
           , mb3
               [ Form.label {} [ R.text "Your address" ]
               , DOM.div { className: "text-truncate" } case possibleAddress of
-                Just address -> [ DOOM.text $ Address.bech32ToString address ]
-                Nothing -> [ spinner Nothing ]
+                  Just address -> [ DOOM.text $ Address.bech32ToString address ]
+                  Nothing -> [ spinner Nothing ]
               ]
           , mb3
               [ Form.label { htmlFor: "address" } [ R.text "Counterparty address" ]

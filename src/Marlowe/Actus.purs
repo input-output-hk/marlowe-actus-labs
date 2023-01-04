@@ -4,17 +4,21 @@ module Marlowe.Actus
   ( CashFlowMarlowe
   , RiskFactorsMarlowe
   , genContract
+  , defaultRiskFactors
+  , toMarloweCashflow
+  , evalVal
   ) where
 
 import Prelude
 
-import Actus.Domain (CashFlow(..), ContractState, Observation'(..), RiskFactors, Value'(..))
+import Actus.Domain (CashFlow(..), ContractState, ContractTerms(..), EventType, Observation'(..), RiskFactors(..), Value'(..), marloweFixedPoint)
 import Control.Apply (lift2)
 import Data.BigInt.Argonaut (BigInt, fromInt)
+import Data.DateTime (DateTime)
 import Data.DateTime.Instant (Instant, fromDateTime)
 import Data.Foldable (foldl)
 import Data.List (List, reverse)
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Language.Marlowe.Core.V1.Semantics.Types (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), Token(..), Value(..))
 
 type CashFlowMarlowe = CashFlow Value
@@ -219,3 +223,24 @@ hasRiskFactor cf@(CashFlow { amount }) = hasRiskFactor' amount
   hasRiskFactor' TimeIntervalStart = false
   hasRiskFactor' TimeIntervalEnd = false
   hasRiskFactor' (Cond _ a b) = hasRiskFactor' a || hasRiskFactor' b
+
+oracle :: Party
+oracle = Address "" -- FIXME: oracle address
+
+defaultRiskFactors :: ContractTerms -> EventType -> DateTime -> RiskFactorsMarlowe
+defaultRiskFactors (ContractTerms {currency, settlementCurrency}) _ _ = -- FIXME: just a stub
+  let
+    o_rf_CURS = fromMaybe (fromInt' 1) $ do
+      cur <- currency
+      settlementCur <- settlementCurrency
+      if cur == settlementCur then Nothing
+      else Just $ ChoiceValue' (ChoiceId (cur <> settlementCur) oracle)
+  in
+    RiskFactors
+      { o_rf_CURS
+      , o_rf_RRMO: ChoiceValue' (ChoiceId "rrmo" oracle) -- TODO: add to oracle
+      , o_rf_SCMO: ChoiceValue' (ChoiceId "scmo" oracle) -- TODO: add to oracle
+      , pp_payoff: ChoiceValue' (ChoiceId "pp" oracle) -- TODO: add to oracle
+      }
+  where
+  fromInt' = Constant' <<< fromInt <<< (marloweFixedPoint * _)

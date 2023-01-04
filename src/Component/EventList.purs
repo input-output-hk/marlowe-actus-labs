@@ -3,20 +3,21 @@ module Component.EventList where
 import Prelude
 
 import Actus.Core (genProjectedCashflows)
-import Actus.Domain (CashFlow(..), ContractTerms, RiskFactors(..))
+import Actus.Domain (CashFlow(..), ContractTerms, Value')
 import Component.Modal (mkModal)
 import Component.Types (ContractHeaderResource)
 import Data.Argonaut (decodeJson, fromObject)
 import Data.Array (catMaybes, concat, fromFoldable)
-import Data.Decimal (Decimal, toString)
-import Data.Decimal as Decimal
+import Data.BigInt.Argonaut as BigInt
 import Data.Either (hush)
 import Data.Formatter.DateTime (formatDateTime)
 import Data.Map (lookup)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (unwrap)
+import Data.Tuple.Nested (type (/\))
 import Effect (Effect)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party(..))
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party, Value)
+import Marlowe.Actus (defaultRiskFactors, evalVal, toMarloweCashflow)
 import Marlowe.Actus.Metadata (actusMetadataKey)
 import Marlowe.Actus.Metadata as M
 import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractHeader(..), Metadata(..))
@@ -34,32 +35,17 @@ data NewInput
   | SubmissionsSuccess
 
 type EventListState =
-  { newInput :: Maybe (CashFlow Decimal Party)
+  { newInput :: Maybe (CashFlow Value Party)
   }
 
 mkEventList :: Effect (Array ContractHeaderResource -> JSX)
 mkEventList = do
   modal <- mkModal
   component "EventList" \contractList -> React.do
-
     let
-      termsList = catMaybes $ map actusTerms contractList
-      role1 = Role "R1"
-      role2 = Role "R2"
-
-      -- FIXME: remove hardcoded values
-      projectedCashFlows terms = fromFoldable $ genProjectedCashflows (role1 /\ role2)
-        ( \_ _ ->
-            RiskFactors
-              { o_rf_CURS: Decimal.fromInt 1
-              , o_rf_RRMO: Decimal.fromInt 1
-              , o_rf_SCMO: Decimal.fromInt 1
-              , pp_payoff: Decimal.fromInt 0
-              }
-        )
-        terms
-
-      cashFlows = concat $ map projectedCashFlows termsList
+      termsList = catMaybes $ map actusTermsAndParties contractList
+      projectedCashFlows (terms /\ parties) = fromFoldable $ genProjectedCashflows parties (defaultRiskFactors terms) terms
+      (cashFlows :: Array (CashFlow Value' Party)) = concat $ map projectedCashFlows termsList
 
     ((state :: EventListState) /\ updateState) <- useState { newInput: Nothing }
 
@@ -80,7 +66,7 @@ mkEventList = do
                         , R.input
                             { className: "form-control"
                             , type: "text"
-                            , value: toString amount
+                            , value: fromMaybe "" $ BigInt.toString <$> evalVal amount
                             }
                         ]
                     , DOM.div { className: "form-group" }
@@ -111,27 +97,38 @@ mkEventList = do
                     ]
                 ]
             , DOM.tbody {} $ map
-                ( \cashflow@(CashFlow cf) ->
-                    [ DOM.tr {}
-                        [ DOM.td {} [ text $ show cf.event ]
-                        , DOM.td {} [ text <$> hush (formatDateTime "YYYY-DD-MM HH:mm:ss:SSS" cf.paymentDay) ]
-                        , DOM.td {} [ text $ toString cf.amount ]
-                        , DOM.td {} [ text $ cf.currency ]
-                        , DOM.td {} [ text cf.contractId ]
-                        , DOM.td {} [ DOM.button { onClick: onEdit cashflow, className: "btn btn-secondary btn-sm" } "Add" ]
-                        ]
-                    ]
+                ( ( \cashflow@(CashFlow cf) ->
+                      [ DOM.tr {}
+                          [ DOM.td {} [ text $ show cf.event ]
+                          , DOM.td {} [ text <$> hush (formatDateTime "YYYY-DD-MM HH:mm:ss:SSS" cf.paymentDay) ]
+                          , DOM.td {} [ text $ fromMaybe "" $ BigInt.toString <$> evalVal cf.amount ]
+                          , DOM.td {} [ text $ cf.currency ]
+                          , DOM.td {} [ text cf.contractId ]
+                          , DOM.td {} [ DOM.button { onClick: onEdit cashflow, className: "btn btn-secondary btn-sm" } "Add" ]
+                          ]
+                      ]
+                  )
+                    <<< toMarloweCashflow
                 )
                 cashFlows
             ]
         ]
 
-actusTerms
+actusMetadata
   :: { links :: { contract :: ContractEndpoint }
      , resource :: ContractHeader
      }
-  -> Maybe ContractTerms
-actusTerms { resource: ContractHeader { metadata } } = (_.contractTerms <<< unwrap) <$> decodeMetadata metadata
+  -> Maybe M.Metadata
+actusMetadata { resource: ContractHeader { metadata } } = decodeMetadata metadata
+
+actusTermsAndParties
+  :: { links :: { contract :: ContractEndpoint }
+     , resource :: ContractHeader
+     }
+  -> Maybe (ContractTerms /\ (Party /\ Party))
+actusTermsAndParties { resource: ContractHeader { metadata } } = do
+  md <- unwrap <$> decodeMetadata metadata
+  pure (_.contractTerms md /\ (_.party md /\ _.counterParty md))
 
 decodeMetadata :: Metadata -> Maybe M.Metadata
 decodeMetadata (Metadata md) = lookup actusMetadataKey md >>= hush <<< decodeJson <<< fromObject
