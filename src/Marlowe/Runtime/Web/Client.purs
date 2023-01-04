@@ -13,25 +13,21 @@ import Data.Argonaut.Decode ((.:))
 import Data.Array (fold)
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
-import Data.Foldable (length)
 import Data.Generic.Rep (class Generic)
 import Data.HTTP.Method (Method(..))
 import Data.List (List)
 import Data.List as List
-import Data.Map (Map, fromFoldable, lookup)
+import Data.Map (fromFoldable, lookup)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.String.CaseInsensitive (CaseInsensitiveString(..))
 import Data.Tuple.Nested ((/\))
-import Debug (traceM)
-import Effect.Aff (Aff, Error)
+import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Fetch (RequestMode(..))
 import Fetch.Core.Headers (Headers, toArray)
-import Foreign.Object (Object)
-import Foreign.Object as Object
-import Marlowe.Runtime.Web.Types (class EncodeHeaders, class EncodeJsonBody, class ToResourceLink, IndexEndpoint(..), ResourceEndpoint(..), ResourceLink(..), ResourceWithLinks, ServerURL(..), ResourceWithLinksRow, decodeResourceWithLink, encodeHeaders, encodeJsonBody, toResourceLink)
+import Marlowe.Runtime.Web.Types (class EncodeHeaders, class EncodeJsonBody, class ToResourceLink, ContractEndpoint, GetContractsResponse, IndexEndpoint(..), ResourceEndpoint(..), ResourceLink(..), ResourceWithLinks, ResourceWithLinksRow, ServerURL(..), decodeResourceWithLink, encodeHeaders, encodeJsonBody, toResourceLink)
 import Prim.Row (class Lacks) as Row
 import Record as R
 import Type.Prelude (Proxy(..))
@@ -92,20 +88,19 @@ getPage
   -> Maybe Range
   -> Aff (GetResourceResponse ({ page :: a, nextRange :: Maybe Range }))
 getPage serverUrl path possibleRange = runExceptT do
-  { headers, payload, status } <- ExceptT case possibleRange of
-    Nothing ->
-      getResource serverUrl path { "Range": "contractId" }
-    Just (Range range) -> do
-      res <- getResource serverUrl path { "Range": range }
-      pure res
-  let
-    toHeaders :: Headers -> Map CaseInsensitiveString String
-    toHeaders = toArray >>> map (lmap CaseInsensitiveString) >>> fromFoldable
-
-    nextRange = case status, lookup (CaseInsensitiveString "Next-Range") (toHeaders headers) of
-      206, Just nr -> Just (Range nr)
-      _, _ -> Nothing
-  pure { page: payload, nextRange }
+  { headers, payload, status } <- ExceptT $
+    getResource serverUrl path case possibleRange of
+      Nothing -> { "Range": "contractId" }
+      Just (Range range) -> { "Range": range }
+  pure
+    { page: payload
+    , nextRange:
+        if status == 206 then map Range $ lookup (CaseInsensitiveString "Next-Range")
+          $ fromFoldable
+          $ map (lmap CaseInsensitiveString)
+          $ toArray headers
+        else Nothing
+    }
 
 data FoldPageStep = FetchPage (Maybe Range) | StopFetching
 
@@ -119,9 +114,7 @@ foldMapMPages
   -> ({ page :: a, currRange :: Maybe Range } -> m b)
   -> m (GetResourceResponse b)
 foldMapMPages serverUrl path f = do
-  let
-    seed = FetchPage Nothing
-  bs <- runExceptT $ flip unfoldrM seed case _ of
+  bs <- runExceptT $ flip unfoldrM (FetchPage Nothing) case _ of
     StopFetching -> pure Nothing
     FetchPage currRange -> do
       { page, nextRange } <- ExceptT $ liftAff $ getPage serverUrl path currRange
@@ -137,14 +130,7 @@ getPages
   => MonadAff m
   => ServerURL
   -> ResourceLink a
-  -> m
-       ( GetResourceResponse
-           ( List
-               { page :: a
-               , currRange :: Maybe Range
-               }
-           )
-       )
+  -> m (GetResourceResponse (List { page :: a, currRange :: Maybe Range }))
 getPages serverUrl path = foldMapMPages serverUrl path (pure <<< List.singleton)
 
 getResource'
@@ -178,11 +164,7 @@ foldMapMPages'
   => ToResourceLink t a
   => ServerURL
   -> t
-  -> ( { currRange :: Maybe Range
-       , page :: a
-       }
-       -> m b
-     )
+  -> ({ currRange :: Maybe Range, page :: a } -> m b)
   -> m (Either ClientError b)
 foldMapMPages' serverUrl path = foldMapMPages serverUrl (toResourceLink path)
 
