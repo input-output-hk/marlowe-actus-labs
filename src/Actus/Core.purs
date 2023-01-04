@@ -11,10 +11,9 @@ import Actus.Model.Payoff (CtxPOF, payoff)
 import Actus.Model.StateInitialization (initializeState)
 import Actus.Model.StateTransition (CtxSTF, stateTransition)
 import Control.Alt ((<|>))
-import Control.Monad.Reader (Reader, ask, runReader, withReader)
+import Control.Monad.Reader (Reader, ask, runReader)
 import Data.Bounded.Generic (class GenericBottom, class GenericTop, genericBottom, genericTop)
 import Data.DateTime (DateTime)
-import Data.Decimal (Decimal)
 import Data.Enum (fromEnum)
 import Data.Enum.Generic (class GenericBoundedEnum, genericFromEnum, genericToEnum)
 import Data.Generic.Rep (class Generic)
@@ -161,11 +160,8 @@ genProjectedPayoffs' events =
     states <- initializeState >>= genStates events
     (eventTypes /\ filteredStates) <- unzip <$> filterM filtersStates (zip (fromMaybe Nil $ tail events) states)
 
-    payoffs <- trans $ genPayoffs eventTypes filteredStates
+    payoffs <- genPayoffs eventTypes filteredStates
     pure $ zip eventTypes $ zip filteredStates payoffs
-  where
-  -- trans :: forall b. Reader (CtxPOF a) b -> Reader (CtxSTF a) b
-  trans = withReader (\{ contractTerms, riskFactors } -> { contractTerms, riskFactors })
 
 -- |Generate schedules
 genSchedule
@@ -261,7 +257,7 @@ filtersStates ((event /\ { calculationDay }) /\ _) =
 
 -- |Generate payoffs
 genPayoffs
-  :: forall a
+  :: forall a r
    . ActusOps a
   => EuclideanRing a
   =>
@@ -272,7 +268,7 @@ genPayoffs
   List (ContractState a)
   ->
   -- | Payoffs
-  Reader (CtxPOF a) (List a)
+  Reader (CtxPOF a r) (List a)
 genPayoffs events states = traverse calculatePayoff $ zip events states
   where
   calculatePayoff ((event /\ { calculationDay }) /\ state) = payoff (event /\ calculationDay) state

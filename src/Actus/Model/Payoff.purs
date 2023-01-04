@@ -10,22 +10,22 @@ import Actus.Utility.YearFraction (yearFraction)
 import Control.Monad.Reader (Reader, asks)
 import Data.Array (elem)
 import Data.DateTime (DateTime)
-import Data.Decimal (Decimal)
 import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested ((/\), type (/\))
 
 -- |The context for payoff functions
-type CtxPOF a =
+type CtxPOF a r =
   { -- | Contract terms
     contractTerms :: ContractTerms
   ,
     -- | Risk factors as a function of event type and time
     riskFactors :: EventType -> DateTime -> RiskFactors a
+  | r
   }
 
 -- | The payoff function
 payoff
-  :: forall a
+  :: forall a r
    . Semiring a
   => EuclideanRing a
   => ActusOps a
@@ -37,7 +37,7 @@ payoff
   ContractState a
   ->
   -- | Updated contract state
-  Reader (CtxPOF a) a
+  Reader (CtxPOF a r) a
 payoff (ev /\ t) st = asks $ do \ctx -> let terms = ctx.contractTerms in pof ev (ctx.riskFactors ev t) terms st
   where
   ----------------------------
