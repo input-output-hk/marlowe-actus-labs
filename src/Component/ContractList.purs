@@ -136,14 +136,15 @@ mkContractList = do
             Just (metadata) -> modal $
               { body: text $ maybe "Empty Metadata" (show <<< _.contractTerms <<< unwrap) $ decodeMetadata metadata -- TODO: encode contractTerms as JSON
               , onDismiss: updateState _ { metadata = Nothing }
-              , title: text "ACTUS Contract Terms"
+              , title: text "Contract Terms"
               }
             Nothing -> mempty
         , DOM.div { className: "row" } $ Array.singleton $
             DOM.table { className: "table table-striped table-hover" }
               [ DOM.thead {} $
                   [ DOM.tr {}
-                      [ DOM.th {} [ text "ACTUS Contract ID" ]
+                      [ DOM.th {} [ text "Contract ID" ]
+                      , DOM.th {} [ text "Type" ]
                       , DOM.th {} [ text "Party" ]
                       , DOM.th {} [ text "Counter Party" ]
                       , DOM.th {} [ text "Contract Terms" ]
@@ -157,6 +158,7 @@ mkContractList = do
                       in
                         DOM.tr {}
                           [ DOM.td {} [ text $ maybe "" (_.contractId <<< unwrap <<< _.contractTerms <<< unwrap) md ]
+                          , DOM.td {} [ text $ maybe "" (show <<< _.contractType <<< unwrap <<< _.contractTerms <<< unwrap) md ]
                           , DOM.td {} [ text $ maybe "" (displayParty <<< _.party <<< unwrap) md ]
                           , DOM.td {} [ text $ maybe "" (displayParty <<< _.counterParty <<< unwrap) md ]
                           , DOM.td {} [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
