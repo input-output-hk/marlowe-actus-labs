@@ -134,7 +134,7 @@ mkContractList = do
                 addContractLink
         , DOM.div { className: "row" } $ Array.singleton $ case state.metadata of
             Just (metadata) -> modal $
-              { body: text $ maybe "Empty Metadata" (show <<< _.contractTerms <<< unwrap) $ decodeMetadata metadata
+              { body: text $ maybe "Empty Metadata" (show <<< _.contractTerms <<< unwrap) $ decodeMetadata metadata -- TODO: encode contractTerms as JSON
               , onDismiss: updateState _ { metadata = Nothing }
               , title: text "ACTUS Contract Terms"
               }
@@ -143,12 +143,11 @@ mkContractList = do
             DOM.table { className: "table table-striped table-hover" }
               [ DOM.thead {} $
                   [ DOM.tr {}
-                      [ DOM.th {} [ text "Status" ]
-                      , DOM.th {} [ text "Contract ID" ]
-                      , DOM.th {} [ text "ACTUS Contract ID" ]
+                      [ DOM.th {} [ text "ACTUS Contract ID" ]
                       , DOM.th {} [ text "Party" ]
                       , DOM.th {} [ text "Counter Party" ]
                       , DOM.th {} [ text "Contract Terms" ]
+                      , DOM.th {} [ text "Status" ]
                       ]
                   ]
               , DOM.tbody {} $ map
@@ -157,12 +156,17 @@ mkContractList = do
                         md = decodeMetadata metadata
                       in
                         DOM.tr {}
-                          [ DOM.td {} [ text $ show status ]
-                          , DOM.td {} [ text $ txOutRefToString contractId ]
-                          , DOM.td {} [ text $ maybe "" (_.contractId <<< unwrap <<< _.contractTerms <<< unwrap) md ]
+                          [ DOM.td {} [ text $ maybe "" (_.contractId <<< unwrap <<< _.contractTerms <<< unwrap) md ]
                           , DOM.td {} [ text $ maybe "" (displayParty <<< _.party <<< unwrap) md ]
                           , DOM.td {} [ text $ maybe "" (displayParty <<< _.counterParty <<< unwrap) md ]
                           , DOM.td {} [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
+                          , DOM.td {} $ do
+                              let
+                                tooltipJSX = tooltip {} (DOOM.text $ txOutRefToString contractId)
+                              overlayTrigger
+                                { overlay: tooltipJSX
+                                , placement: OverlayTrigger.placement.bottom
+                                } $ DOM.td {} [ show status ]
                           ]
                   )
                   contractList
