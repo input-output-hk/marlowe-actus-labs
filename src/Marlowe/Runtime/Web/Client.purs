@@ -88,10 +88,9 @@ getPage
   -> Maybe Range
   -> Aff (GetResourceResponse ({ page :: a, nextRange :: Maybe Range }))
 getPage serverUrl path possibleRange = runExceptT do
-  { headers, payload, status } <- ExceptT $
-    getResource serverUrl path case possibleRange of
-      Nothing -> { "Range": "contractId" }
-      Just (Range range) -> { "Range": range }
+  { headers, payload, status } <- ExceptT
+    $ getResource serverUrl path
+    $ maybe { "Range": "contractId" } ({ "Range": _ } <<< coerce) possibleRange
   pure
     { page: payload
     , nextRange:
