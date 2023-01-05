@@ -63,3 +63,23 @@ textInput props = element _internalcontrol props'
   where
   props' :: { | attrs' }
   props' = Record.merge { "type": "text" } props
+
+
+-- There is a bug in react-bootstrap type definitions because
+-- types miss the "rows" and "cols" attributes.
+type Props_textArea = BaseProps String ("type" :: String, as :: String, rows :: Int, cols :: Int)
+
+_internalTextArea :: forall attrs attrs_. Row.Union attrs attrs_ Props_textArea => ReactComponent { | attrs }
+_internalTextArea = unsafeCoerce _Control
+
+textArea
+  :: forall attrs attrs' attrs_
+   . Row.Union attrs' attrs_ Props_textArea
+  => Row.Nub (type :: String, as :: String | attrs) attrs'
+  => Record attrs
+  -> JSX
+textArea props = element _internalTextArea props'
+  where
+  props' :: { | attrs' }
+  props' = Record.merge { "type": "text", "as": "textarea" } props
+

@@ -87,7 +87,6 @@ mkContractList = do
         [ case state.newContract of
             Just Creating -> contractForm
               { onDismiss: updateState _ { newContract = Nothing }
-              , onError: \error -> updateState _ { newContract = Just (SubmissionError error) }
               , onSuccess: onNewContract
               , inModal: true
               , connectedWallet

@@ -8,7 +8,6 @@ import Control.Monad.Error.Class (catchError)
 import Data.Argonaut (Json)
 import Data.ArrayBuffer.Types (Uint8Array)
 import Data.Maybe (Maybe(..))
-import Debug (traceM)
 import Effect (Effect)
 import Effect.Uncurried (EffectFn1, EffectFn2, runEffectFn1, runEffectFn2)
 import HexString as HexString
@@ -21,6 +20,11 @@ foreign import fromBytesImpl :: EffectFn2 Lib Uint8Array Address
 
 fromBytes :: Lib -> Uint8Array -> Effect Address
 fromBytes lib bytes = runEffectFn2 fromBytesImpl lib bytes
+
+foreign import fromBech32Impl :: EffectFn2 Lib String Address
+
+fromBech32 :: Lib -> Bech32 -> Effect Address
+fromBech32 lib (Bech32 bech32) = runEffectFn2 fromBech32Impl lib bech32
 
 newtype Bech32 = Bech32 String
 
@@ -53,4 +57,9 @@ bech32FromHex :: Lib -> String -> Effect (Maybe Bech32)
 bech32FromHex lib str = case HexString.hex str <#> HexString.decode of
   Just bytes -> bech32FromBytes lib bytes
   Nothing -> pure Nothing
+
+foreign import isValidBech32Impl :: EffectFn2 Lib String Boolean
+
+isValidBech32 :: Lib -> String -> Effect Boolean
+isValidBech32 lib str = runEffectFn2 isValidBech32Impl lib str
 
