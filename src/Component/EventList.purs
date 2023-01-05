@@ -88,22 +88,22 @@ mkEventList = do
         , DOM.table { className: "table table-hover" } $
             [ DOM.thead {} $
                 [ DOM.tr {}
-                    [ DOM.th {} [ text "Type" ]
+                    [ DOM.th {} [ text "Contract Id" ]
+                    , DOM.th {} [ text "Type" ]
                     , DOM.th {} [ text "Date" ]
                     , DOM.th {} [ text "Amount" ]
                     , DOM.th {} [ text "Currency" ]
-                    , DOM.th {} [ text "Contract ID" ]
                     , DOM.th {} [ text "Add" ]
                     ]
                 ]
             , DOM.tbody {} $ map
                 ( ( \cashflow@(CashFlow cf) ->
                       [ DOM.tr {}
-                          [ DOM.td {} [ text $ show cf.event ]
+                          [ DOM.td {} [ text cf.contractId ]
+                          , DOM.td {} [ text $ show cf.event ]
                           , DOM.td {} [ text <$> hush (formatDateTime "YYYY-DD-MM HH:mm:ss:SSS" cf.paymentDay) ]
                           , DOM.td {} [ text $ fromMaybe "" $ BigInt.toString <$> evalVal cf.amount ]
                           , DOM.td {} [ text $ cf.currency ]
-                          , DOM.td {} [ text cf.contractId ]
                           , DOM.td {} [ DOM.button { onClick: onEdit cashflow, className: "btn btn-secondary btn-sm" } "Add" ]
                           ]
                       ]

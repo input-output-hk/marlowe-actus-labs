@@ -143,11 +143,11 @@ mkContractList = do
             DOM.table { className: "table table-striped table-hover" }
               [ DOM.thead {} $
                   [ DOM.tr {}
-                      [ DOM.th {} [ text "Contract ID" ]
+                      [ DOM.th {} [ text "Id" ]
                       , DOM.th {} [ text "Type" ]
                       , DOM.th {} [ text "Party" ]
                       , DOM.th {} [ text "Counter Party" ]
-                      , DOM.th {} [ text "Contract Terms" ]
+                      , DOM.th {} [ text "Terms" ]
                       , DOM.th {} [ text "Status" ]
                       ]
                   ]
