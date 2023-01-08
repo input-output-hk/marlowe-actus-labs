@@ -305,6 +305,9 @@ derive instance Newtype Address _
 addressToString :: Address -> String
 addressToString = un Address
 
+addressToParty :: Address -> V1.Party
+addressToParty (Address address) = V1.Address address
+
 instance EncodeJson Address where
   encodeJson = encodeJson <<< addressToString
 

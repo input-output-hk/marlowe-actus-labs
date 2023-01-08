@@ -9,21 +9,19 @@ import CardanoMultiplatformLib.Address (Bech32(..), bech32FromHex, isValidBech32
 import Component.Modal (mkModal)
 import Component.Modal as Modal
 import Component.Types (MkComponentM, WalletInfo(..))
-import Component.Widgets (link, spinner)
-import Component.Widgets.Form (FormSpec, useForm)
-import Component.Widgets.Form (input) as Form
-import Contrib.React.Bootstrap.Form (label) as Form
-import Contrib.React.Bootstrap.Form.Control (textArea, textInput) as Form
+import Component.Widgets (link)
+import Contrib.React.Basic.Hooks.UseForm (useForm)
+import Contrib.React.Basic.Hooks.UseForm as UseForm
+import Contrib.React.Bootstrap.FormBuilder (FormBuilder, BootstrapForm)
+import Contrib.React.Bootstrap.FormBuilder as FormBuilder
 import Control.Monad.Reader.Class (asks)
 import Data.Argonaut (decodeJson, parseJson)
 import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
-import Data.Foldable (null)
 import Data.FormURLEncoded.Query (FieldId(..), Query)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe, maybe)
-import Data.Monoid.Disj (Disj(..))
+import Data.Maybe (Maybe(..))
 import Data.String as String
 import Data.Time.Duration (Seconds(..))
 import Data.Validation.Semigroup (V(..))
@@ -33,6 +31,8 @@ import Effect.Class (liftEffect)
 import Language.Marlowe.Core.V1.Semantics.Types (Party)
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus (defaultRiskFactors, genContract)
+import Marlowe.Runtime.Web.Types (Address)
+import Marlowe.Runtime.Web.Types (Address(..), addressToParty) as RT
 import Polyform.Batteries (rawError)
 import Polyform.Batteries as Batteries
 import Polyform.Validator (liftFnEither, liftFnMEither) as Validator
@@ -40,14 +40,22 @@ import React.Basic (JSX)
 import React.Basic (fragment) as DOOM
 import React.Basic.DOM (text) as DOOM
 import React.Basic.DOM as R
-import React.Basic.DOM.Events (targetValue)
 import React.Basic.DOM.Simplified.Generated as DOM
-import React.Basic.Events (EventHandler, handler)
-import React.Basic.Hooks (type (/\), Hook, UseState, component, useEffectOnce, useState, (/\))
+import React.Basic.Hooks (component, useEffectOnce, (/\))
 import React.Basic.Hooks as React
 import Wallet as Wallet
 
-type Result = ContractTerms /\ V1.Contract
+type FormSpec m = UseForm.Form m Unit -- JSX
+
+type Result =
+  { contractTerms :: ContractTerms
+  , contract :: V1.Contract
+  , counterParty :: V1.Party
+  , party :: V1.Party
+
+  , changeAddress :: Address
+  , usedAddresses :: Array Address
+  }
 
 type Props =
   { onSuccess :: Result -> Effect Unit
@@ -94,21 +102,46 @@ initialAddress = "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g
 error :: forall errs. String -> Batteries.Errors' (raw :: Array String | errs)
 error = Array.singleton <<< rawError
 
-addressInput :: CardanoMultiplatformLib.Lib -> String -> String -> FormSpec Effect Query Party
-addressInput cardanoMultiplatformLib name initial = Form.input (FieldId name) initial $ Validator.liftFnMEither \str -> do
-  isValidBech32 cardanoMultiplatformLib str <#> if _
-    then Right (V1.Address str)
-    else Left $ error "Invalid address"
+addressInput :: CardanoMultiplatformLib.Lib -> String -> Maybe String -> FormBuilder Effect Address
+addressInput cardanoMultiplatformLib initial name = do
+  let
+    props =
+      { initial
+      , label: Just $ DOOM.text "Address"
+      , name
+      , validator: Validator.liftFnMEither \str -> do
+          isValidBech32 cardanoMultiplatformLib str <#>
+            if _ then Right (RT.Address str)
+            else Left [ "Invalid address" ]
+      }
+  FormBuilder.textInput props
 
-mkFormSpec :: CardanoMultiplatformLib.Lib -> FormSpec Effect Query Result
-mkFormSpec cardanoMultiplatformLib = ado
-  contractTerms <- Form.input (FieldId "contract-terms") initialJson $ Validator.liftFnEither \jsonString -> do
-    json <- lmap (const $ error "Invalid JSON") $ parseJson jsonString
-    lmap (error <<< show) (decodeJson json)
-  party <- addressInput cardanoMultiplatformLib "party" ""
-  counterParty <- addressInput cardanoMultiplatformLib "counter-party" initialAddress
+mkForm :: CardanoMultiplatformLib.Lib -> BootstrapForm Effect Query Result
+mkForm cardanoMultiplatformLib = FormBuilder.evalBuilder ado
+  contractTerms <- FormBuilder.textArea
+    { missingError: "Please provide contract terms JSON value"
+    , initial: initialJson
+    , validator: Validator.liftFnEither \jsonString -> do
+        json <- lmap (const $ [ "Invalid JSON" ]) $ parseJson jsonString
+        lmap (Array.singleton <<< show) (decodeJson json)
+    , rows: 15
+    , name: (Just $ "contract-terms")
+    }
+  partyAddress <- addressInput cardanoMultiplatformLib "" $ Just "party"
+  counterPartyAddress <- addressInput cardanoMultiplatformLib initialAddress $ Just "counter-party"
+  let
+    counterParty = RT.addressToParty counterPartyAddress
+    party = RT.addressToParty partyAddress
+    contract = createContract party counterParty contractTerms
   in
-    contractTerms /\ createContract party counterParty contractTerms
+    { contractTerms
+    , contract
+    , counterParty
+    , party
+
+    , changeAddress: partyAddress
+    , usedAddresses: Array.singleton partyAddress
+    }
 
 mkContractForm :: MkComponentM (Props -> JSX)
 mkContractForm = do
@@ -116,78 +149,36 @@ mkContractForm = do
   cardanoMultiplatformLib <- asks _.cardanoMultiplatformLib
 
   let
-    formSpec = mkFormSpec cardanoMultiplatformLib
+    form = mkForm cardanoMultiplatformLib
 
   liftEffect $ component "ContractForm" \{ connectedWallet, onSuccess, onDismiss, inModal } -> React.do
     let
       onSubmit = _.result >>> case _ of
-        Just (V( Right result)) -> onSuccess result
+        Just (V (Right result)) -> onSuccess result
         _ -> do
           -- Rather improbable path because we disable submit button if the form is invalid
           pure unit
 
-    { fields, onSubmit: onSubmit', result } <- useForm { spec: formSpec, onSubmit, validationDebounce: Seconds 0.5 }
+    { formState, onSubmit: onSubmit', result } <- useForm { spec: form, onSubmit, validationDebounce: Seconds 0.5 }
 
     useEffectOnce $ do
       case connectedWallet of
         Nothing -> pure unit
         Just (WalletInfo { wallet }) -> launchAff_ do
           Wallet.Address addressStr <- Wallet.getChangeAddress wallet
-          liftEffect $ bech32FromHex cardanoMultiplatformLib addressStr >>= case _, Map.lookup (FieldId "party") fields of
+          liftEffect $ bech32FromHex cardanoMultiplatformLib addressStr >>= case _, Map.lookup (FieldId "party") formState.fields of
             Just (Bech32 addr), Just { onChange } ->
-              onChange [addr]
+              onChange [ addr ]
             _, _ -> do
-               pure unit
+              pure unit
       pure (pure unit)
     pure $ do
       let
         formBody = DOM.div { className: "form-group" } do
           let
             mb3 = DOM.div { className: "mb-3" }
-          [ mb3
-              [ Form.label { htmlFor: "json" } [ R.text "Contract JSON" ]
-              , Form.textArea do
-                  let
-                    { value, errors, onChange } = fromMaybe mempty (Map.lookup (FieldId "contract-terms") fields)
-                  { className: "form-control"
-                  , id: "json"
-                  , placeholder: "Please provide the contract JSON"
-                  , value: fromMaybe "" $ Array.head value
-                  , onChange: handler targetValue (onChange <<< Array.fromFoldable)
-                  , isValid: maybe false null errors
-                  , isInvalid: maybe false (not <<< null) errors
-                  , rows: 15
-                  }
-              ]
-          , mb3
-              [ Form.label {} [ R.text "Your address" ]
-              , do
-                  let
-                    { value, errors } = fromMaybe mempty (Map.lookup (FieldId "party") fields)
-                  case value of
-                    [] -> DOM.div { className: "text-truncate" } (spinner Nothing)
-                    _ -> Form.textInput do
-                      { id: "party"
-                      , value: fromMaybe "" $ Array.head value
-                      , isValid: maybe false null errors
-                      , isInvalid: maybe false (not <<< null) errors
-                      , disabled: true
-                      }
-              ]
-          , mb3
-              [ Form.label { htmlFor: "counter-party" } [ R.text "Counterparty address" ]
-              , Form.textInput do
-                  let
-                    { value, errors, onChange, touched: Disj touched } = fromMaybe mempty (Map.lookup (FieldId "counter-party") fields)
-                  { id: "counter-party"
-                  , placeholder: "Enter counter party address"
-                  , onChange: handler targetValue (onChange <<< Array.fromFoldable)
-                  , value: fromMaybe "" $ Array.head value
-                  , isValid: maybe false null errors
-                  , isInvalid: touched && maybe false (not <<< null) errors
-                  }
-              ]
-          ]
+            fields = UseForm.renderForm form formState
+          fields <#> \field -> mb3 field
         formActions = DOOM.fragment
           [ link
               { label: DOOM.text "Cancel"
@@ -195,16 +186,16 @@ mkContractForm = do
               , showBorders: true
               }
           , DOM.button
-            do
-              let
-                disabled = case result of
-                  Just (V (Right _)) -> false
-                  _ -> true
-              { className: "btn btn-primary"
-              , onClick: onSubmit'
-              , disabled
-              }
-            [ R.text "Submit" ]
+              do
+                let
+                  disabled = case result of
+                    Just (V (Right _)) -> false
+                    _ -> true
+                { className: "btn btn-primary"
+                , onClick: onSubmit'
+                , disabled
+                }
+              [ R.text "Submit" ]
           ]
 
       if inModal then modal
@@ -217,9 +208,9 @@ mkContractForm = do
       else
         formBody
 
-useInput :: String -> Hook (UseState String) (String /\ EventHandler)
-useInput initialValue = React.do
-  value /\ setValue <- useState initialValue
-  let onChange = handler targetValue (setValue <<< const <<< fromMaybe "")
-  pure (value /\ onChange)
-
+-- useInput :: String -> Hook (UseState String) (String /\ EventHandler)
+-- useInput initialValue = React.do
+--   value /\ setValue <- useState initialValue
+--   let onChange = handler targetValue (setValue <<< const <<< fromMaybe "")
+--   pure (value /\ onChange)
+-- 

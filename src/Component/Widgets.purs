@@ -22,13 +22,13 @@ spinner possibleBody = DOM.div
       [ fromMaybe (DOOM.text "Loading...") possibleBody ]
   ]
 
-type LinkOptionalProps =
+type LinkOptionalPropsRow =
   ( extraClassNames :: String
   , disabled :: Boolean
   , showBorders :: Boolean
   )
 
-defaultLinkOptionalProps :: { | LinkOptionalProps }
+defaultLinkOptionalProps :: { | LinkOptionalPropsRow }
 defaultLinkOptionalProps =
   { extraClassNames: ""
   , disabled: false
@@ -43,7 +43,7 @@ type LinkProps =
 
 link
   :: forall provided
-   . Defaults { | LinkOptionalProps } { | provided } { | LinkProps }
+   . Defaults { | LinkOptionalPropsRow } { | provided } { | LinkProps }
   => { | provided }
   -> JSX
 link provided = do
@@ -63,7 +63,7 @@ link provided = do
     }
     [ label ]
 
-type LinkWithIconOptionalProps = LinkOptionalProps
+type LinkWithIconOptionalProps = LinkOptionalPropsRow
 
 type LinkWithIconProps =
   ( icon :: Icon

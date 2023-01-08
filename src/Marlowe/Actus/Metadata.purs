@@ -3,16 +3,18 @@ module Marlowe.Actus.Metadata where
 import Prelude
 
 import Actus.Domain.ContractTerms (ContractTerms(..), decodeCycle, decodeDecimal, encodeCycle, encodeDecimal)
-import Data.Argonaut (class DecodeJson, Json, JsonDecodeError, decodeJson, jsonEmptyObject, (.:), (.:?), (:=), (:=?), (~>), (~>?))
+import Data.Argonaut (class DecodeJson, Json, JsonDecodeError, decodeJson, encodeJson, jsonEmptyObject, (.:), (.:?), (:=), (:=?), (~>), (~>?))
 import Data.Argonaut.Decode.Decoders as Decoders
 import Data.Argonaut.Encode.Class (class EncodeJson)
 import Data.Bifunctor (rmap)
 import Data.DateTime (DateTime)
 import Data.DateTime.Instant (fromDateTime, toDateTime)
-import Data.Either (Either)
+import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
+import Foreign.Object (Object)
+import Foreign.Object as Object
 import Language.Marlowe.Core.V1.Semantics.Types (Party)
 import Marlowe.Time (instantFromJson, instantToJson)
 
@@ -34,6 +36,14 @@ encodeDateTime = instantToJson <<< fromDateTime
 
 decodeDateTime :: Json -> Either JsonDecodeError DateTime
 decodeDateTime json = rmap toDateTime (instantFromJson json)
+
+encodeMetadataObject :: Metadata -> Object Json
+encodeMetadataObject metadata = do
+  let
+    json = encodeJson metadata
+  case decodeJson json of
+    Left _ -> Object.empty
+    Right obj -> obj
 
 -- Using acronyms from `actus-dictionary-terms.json` for encoding/decoding
 -- https://github.com/actusfrf/actus-dictionary

@@ -54,7 +54,17 @@ option value label = value /\ label /\ false
 
 data SingleChoiceField
   = RadioButtonField (ArrayAL 1 RadioFieldChoice) -- use `solo` / `solo'` to create
-  | SelectField (ArrayAL 2 SelectFieldChoice) -- use `duet` / `duet'` to create
+  | SelectField (ArrayAL 1 SelectFieldChoice) -- use `duet` / `duet'` to create
+
+data MultiChoiceField
+  = SelectMultipleField (ArrayAL 1 SelectFieldChoice) -- use `solo` / `solo'` to create
+  | CheckboxField (ArrayAL 1 SelectFieldChoice) -- use `duet` / `duet'` to create
+
+data Field
+  = SingleChoiceField SingleChoiceField
+  | MultiChoiceField MultiChoiceField
+  | InputField
+  | TextArea
 
 type SingleChoiceFieldProps =
   { initialValue :: String
@@ -153,129 +163,4 @@ mkBooleanField = do
         onToggle (value == "on")
     , type: RadioButtonField $ ArrayAL.solo ("on" /\ label /\ disabled)
     }
-
-type FieldInitial =
-  { name :: FieldId
-  , value :: Array String
-  }
-
-newtype FormSpec m i o = FormSpec
-  { fields :: Array FieldInitial
-  , validator :: UrlEncoded.Validator m String i o
-  }
-
-derive instance Applicative m => Functor (FormSpec m i)
-
-instance Monad m => Apply (FormSpec m i) where
-  apply (FormSpec { fields: fields1, validator: validator1 }) (FormSpec { fields: fields2, validator: validator2 }) =
-    FormSpec
-      { fields: fields1 <> fields2
-      , validator: apply validator1 validator2
-      }
-
-instance Monad m => Semigroupoid (FormSpec m) where
-  compose (FormSpec { fields: fields1, validator: validator1 }) (FormSpec { fields: fields2, validator: validator2 }) =
-    FormSpec
-      { fields: fields1 <> fields2
-      , validator: compose validator1 validator2
-      }
-
-instance Monad m => Category (FormSpec m) where
-  identity = FormSpec { fields: mempty, validator: identity }
-
-hoistFormSpec :: forall m m' i o. Functor m => (m ~> m') -> FormSpec m i o -> FormSpec m' i o
-hoistFormSpec f (FormSpec { fields, validator }) =
-  FormSpec { fields, validator: Validator.hoist f validator }
-
-input
-  :: forall a errs m
-   . Monad m
-  => FieldId
-  -> String
-  -> Validators.SingleValueFieldValidator m (MissingValue + errs) a
-  -> FormSpec m Query a
-input name value validator = FormSpec
-  { fields: [ { name, value: [ value ] } ]
-  , validator: stringifyValidator $ Validators.required name $ validator
-  }
-
-type FormSpec' m = FormSpec m Query
-
-type Props o =
-  { onSubmit ::
-    { payload :: Query
-    , result :: Maybe (V (UrlEncoded.Errors String) o)
-    }
-    -> Effect Unit
-  , spec :: FormSpec Effect Query o
-  , validationDebounce :: Seconds
-  }
-
-newtype UseForm o hooks = UseForm
-  ( UseState (Set FieldId) hooks
-      & UseState (Maybe (V (UrleEncoded.Errors String) o))
-      & UseMemo (Array { name :: FieldId , value :: Array String }) Query
-      & UseState Query
-      & UseState Query
-      & UseEffect (Query /\ Seconds)
-      & UseEffect Query
-  )
-
-derive instance Newtype (UseForm o hooks) _
-
-type FieldState =
-   { errors :: Maybe (Array String)
-   , onChange :: Array String -> Effect Unit
-   , touched :: Disj Boolean
-   , value :: Array String
-   }
-
-type FieldsState = Map FieldId FieldState
-
-type Result o =
-  { fields :: FieldsState
-  , onSubmit :: EffectFn1 SyntheticEvent Unit
-  , result :: Maybe (V (UrlEncoded.Errors String) o)
-  }
-
-useForm :: forall o. Props o -> Hook (UseForm o) (Result o)
-useForm ({ spec: FormSpec { fields, validator }, onSubmit, validationDebounce }) = React.coerceHook React.do
-  touched /\ updateTouched <- useState (mempty :: Set FieldId)
-  validationResult /\ setValidationResult <- useState' Nothing
-
-  initialPayload <- useMemo fields \_ -> do
-    let
-      payload = fields <#> \{ name, value } -> name /\ value
-    Query.fromFoldable payload
-
-  currPayload /\ updatePayload <- useState initialPayload
-
-  debouncedPayload <- useDebounce currPayload validationDebounce
-
-  useEffect debouncedPayload do
-    when (not <<< null $ touched) do
-      result <- runValidator validator debouncedPayload
-      setValidationResult $ Just result
-    pure $ pure unit
-
-  let
-    updateField :: FieldId -> Array String -> Effect Unit
-    updateField name value = do
-      updatePayload $ Query.insert name value
-      updateTouched (Set.insert name)
-
-    onSubmit' :: EventHandler
-    onSubmit' = handler_ do
-      onSubmit { payload: currPayload, result: validationResult }
-
-    fields' = Map.fromFoldable $ fields <#> \{ name } -> do
-      let
-        value = fromMaybe [] $ Query.lookup name currPayload
-        fieldErrors = do
-          V res <- validationResult
-          case res of
-            Left errs -> pure $ Errors.lookup (coerce name) errs
-            Right _ -> pure []
-      (name /\ { value: value, errors: fieldErrors, touched: Disj (name `Set.member` touched), onChange: updateField name })
-  pure { fields: fields', onSubmit: onSubmit', result: validationResult }
 

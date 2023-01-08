@@ -98,7 +98,7 @@ in upstream
     js-unsafe-stringify = mkPackage
       ([] : List Text)
       "https://github.com/paluh/purescript-js-unsafe-stringify.git"
-      "v0.2.0"
+      "v0.2.1"
   with
     js-object = mkPackage
       [ "aff", "effect", "heterogeneous", "prelude", "typelevel-prelude", "contravariant", "newtype", "record", "unsafe-coerce" ]
@@ -129,10 +129,10 @@ in upstream
       "https://github.com/purescript-polyform/batteries-core.git"
       "v0.3.0"
   with
-    polyform-batteries-urlencoded =
-      mkPackage
-        [ "argonaut" , "console" , "debug" , "effect" , "form-urlencoded"
-        , "polyform-batteries-core" , "psci-support" , "spec"
-        ]
-        "https://github.com/purescript-polyform/batteries-urlencoded.git"
-        "v0.4.0"
+    polyform-batteries-urlencoded = ../batteries-urlencoded/spago.dhall as Location
+      -- mkPackage
+      --   [ "argonaut" , "console" , "debug" , "effect" , "form-urlencoded"
+      --   , "polyform-batteries-core" , "psci-support" , "spec"
+      --   ]
+      --   "https://github.com/purescript-polyform/batteries-urlencoded.git"
+      --   "v0.4.0"

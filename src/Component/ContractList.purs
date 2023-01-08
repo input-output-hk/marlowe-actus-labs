@@ -4,29 +4,38 @@ import Prelude
 
 import Actus.Domain (CashFlow)
 import Actus.Domain.ContractTerms (ContractTerms)
-import Component.ContractForm (mkContractForm)
+import Component.ContractForm (initialJson, mkContractForm, mkForm)
+import Component.ContractForm as ContractForm
 import Component.EventList (decodeMetadata)
 import Component.Modal (mkModal)
+import Component.SubmitContract (mkSubmitContract)
 import Component.Types (ContractHeaderResource, WalletInfo, MkComponentM)
 import Component.Widgets (linkWithIcon)
+import Contrib.React.Basic.Hooks.UseForm as UseForm
 import Contrib.React.Bootstrap (overlayTrigger, tooltip)
 import Contrib.React.Bootstrap.Icons as Icons
 import Contrib.React.Bootstrap.Types as OverlayTrigger
+import Control.Monad.Reader.Class (asks)
 import Data.Array as Array
 import Data.Decimal (Decimal)
+import Data.Either (Either(..))
+import Data.FormURLEncoded.Query as Query
 import Data.List (List)
 import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
 import Data.Newtype (unwrap)
 import Data.Tuple.Nested (type (/\))
+import Data.Validation.Semigroup (V(..))
 import Effect.Class (liftEffect)
+import JS.Unsafe.Stringify (unsafeStringify)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party(..))
 import Marlowe.Runtime.Web.Types (ContractHeader(..), Metadata, TxOutRef, txOutRefToString)
+import Polyform.Validator (runValidator)
 import React.Basic.DOM (text)
 import React.Basic.DOM as DOOM
 import React.Basic.DOM.Events (targetValue)
 import React.Basic.DOM.Simplified.Generated as DOM
 import React.Basic.Events (EventHandler, handler, handler_)
-import React.Basic.Hooks (Hook, JSX, UseState, component, useState, (/\))
+import React.Basic.Hooks (Hook, JSX, UseState, component, useEffectOnce, useState, (/\))
 import React.Basic.Hooks as React
 import Wallet as Wallet
 
@@ -52,7 +61,7 @@ type SubmissionError = String
 
 data NewContractState
   = Creating
-  | Submitting (ContractTerms /\ Contract)
+  | Submitting ContractForm.Result
   | SubmissionError SubmissionError
   | SubmissionsSuccess ContractTerms ContractId
 
@@ -66,13 +75,41 @@ type Props =
   , connectedWallet :: Maybe (WalletInfo Wallet.Api)
   }
 
+testingSubmit = false
+
 mkContractList :: MkComponentM (Props -> JSX)
 mkContractList = do
   contractForm <- mkContractForm
+  submitContract <- mkSubmitContract
   modal <- liftEffect $ mkModal
+  cardanoMultiplatformLib <- asks _.cardanoMultiplatformLib
+  logger <- asks _.logger
 
   liftEffect $ component "ContractList" \{ connectedWallet, contractList } -> React.do
     ((state :: ContractListState) /\ updateState) <- useState { newContract: Nothing, metadata: Nothing }
+
+    useEffectOnce $ do
+      when testingSubmit do
+        let
+          -- yoroi
+          myAddress = "addr_test1qrwl8cukwn7tazx5aee4ynzgj0edp6un878htr5fpgmjk3yhwefmaav7gfzuuck7c27y6fdp4vzgezrmmts3x3jp989se3tc7f"
+          -- nami
+          counterPartyAddress = "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
+          UseForm.Form { validator } = mkForm cardanoMultiplatformLib
+
+          query = Query.fromHomogeneous
+            { "party": [ myAddress ]
+            , "counter-party": [ counterPartyAddress ]
+            , "contract-terms": [ initialJson ]
+            }
+        runValidator validator query >>= case _ of
+          V (Right result) -> do
+            updateState _ { newContract = Just $ Submitting result }
+          V (Left err) -> do
+            logger $ unsafeStringify err
+            pure unit
+      pure (pure unit)
+
     let
       onAddContractClick = updateState _ { newContract = Just Creating }
 
@@ -91,16 +128,12 @@ mkContractList = do
               , inModal: true
               , connectedWallet
               }
-            Just (Submitting contract) ->
-              modal
-                { title: text "Submitting"
-                -- FIXME: Should we ignore dismisses - we are not able to cancel submission I can imagine?
-                , onDismiss: updateState _ { newContract = Nothing }
-                , body:
-                    -- FIXME: We should still present the form
-                    text ("Submitting" <> show contract)
-                }
-            -- FIXME: Just a stub...
+            Just (Submitting contractData) -> submitContract
+              { onDismiss: updateState _ { newContract = Nothing }
+              , onSuccess: const $ pure unit
+              , inModal: true
+              , contractData
+              }
             Just _ ->
               modal
                 { title: text "Success or failure"
