@@ -11,17 +11,20 @@ import Data.Argonaut (decodeJson, fromObject)
 import Data.Array (concat, fromFoldable, singleton)
 import Data.BigInt.Argonaut as BigInt
 import Data.DateTime.Instant (toDateTime)
-import Data.Either (hush)
+import Data.Either (Either(..), hush)
 import Data.Formatter.DateTime (formatDateTime)
 import Data.Map (lookup)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (unwrap)
+import Debug (traceM)
 import Effect (Effect)
+import Effect.Aff (launchAff_)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input(..), Party, Token(..), Value)
 import Marlowe.Actus (defaultRiskFactors, evalVal, toMarloweCashflow)
 import Marlowe.Actus.Metadata (actusMetadataKey)
 import Marlowe.Actus.Metadata as M
-import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), Metadata(..), PostTransactionsRequest(..), ResourceEndpoint(..), Runtime(..))
+import Marlowe.Runtime.Web (post')
+import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), IndexEndpoint(..), Metadata(..), PostTransactionsRequest(..), PostTransactionsResponse(..), ResourceEndpoint(..), ResourceLink(..), Runtime(..), TransactionsEndpoint(..))
 import Marlowe.Runtime.Web.Types as RT
 import Marlowe.Time (unixEpoch)
 import React.Basic (fragment) as DOOM
@@ -62,7 +65,7 @@ mkEventList (Runtime runtime) = do
       onEdit { party, token, value, endpoint } = handler_ do
         updateState _ { newInput = Just { party, token, value, endpoint } }
 
-      onApplyInputs { party, token, value, endpoint: ContractEndpoint (ResourceEndpoint resourceLink) } = handler_ do
+      onApplyInputs { party, token, value, endpoint: ContractEndpoint (ResourceEndpoint (ResourceLink link)) } = handler_ do
 
         let
           -- FIXME: just a stub
@@ -76,7 +79,7 @@ mkEventList (Runtime runtime) = do
 
           metadata = mempty
 
-          postTransactionRequest = PostTransactionsRequest
+          req = PostTransactionsRequest
             { inputs
             , invalidBefore
             , invalidHereafter
@@ -86,23 +89,25 @@ mkEventList (Runtime runtime) = do
             , collateralUTxOs
             }
 
-        {-
         launchAff_ $
-          post' runtime.serverURL resourceLink postTransactionRequest
-                    >>= case _ of
-                           Right ({ resource: PostTransactionsResponse res }) -> do
-                             traceM res
-                             pure unit
-                           Left _ -> do
-                             traceM "error"
-                             pure unit
-        -}
+          let
+            ep = TransactionsEndpoint (IndexEndpoint (ResourceLink link))
+          in
+            post' runtime.serverURL ep req
+              >>= case _ of
+                Right ({ resource: PostTransactionsResponse res }) -> do
+                  traceM res
+                  pure unit
+                Left _ -> do
+                  traceM "error"
+                  pure unit
+
         updateState _ { newInput = Nothing }
 
     pure $
       DOM.div {}
         [ case state.newInput of
-            Just input@{ party, token, value, endpoint } -> modal $
+            Just input@{ token, value } -> modal $
               { body:
                   DOM.form {} $
                     [ DOM.div { className: "form-group" }
@@ -173,7 +178,9 @@ mkEventList (Runtime runtime) = do
             ]
         ]
 
-endpointAndMetadata :: { links :: { contract :: ContractEndpoint }, resource :: ContractHeader } -> Array { cashflow :: CashFlow Value Party, party :: Party, token :: Token, value :: BigInt.BigInt, endpoint :: ContractEndpoint }
+endpointAndMetadata
+  :: { links :: { contract :: ContractEndpoint }, resource :: ContractHeader }
+  -> Array { cashflow :: CashFlow Value Party, party :: Party, token :: Token, value :: BigInt.BigInt, endpoint :: ContractEndpoint }
 endpointAndMetadata { resource: ContractHeader { metadata }, links } = fromMaybe [] $ do
   M.Metadata { contractTerms, party, counterParty } <- decodeMetadata metadata
   let
