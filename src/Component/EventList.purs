@@ -3,12 +3,12 @@ module Component.EventList where
 import Prelude
 
 import Actus.Core (genProjectedCashflows)
-import Actus.Domain (CashFlow(..), evalVal')
+import Actus.Domain (CashFlow(..), _abs, evalVal')
 import Component.Modal (mkModal)
 import Component.Types (ContractHeaderResource)
 import Component.Widgets (link)
 import Data.Argonaut (decodeJson, fromObject)
-import Data.Array (concat, fromFoldable, singleton)
+import Data.Array (catMaybes, concat, fromFoldable, singleton)
 import Data.BigInt.Argonaut as BigInt
 import Data.DateTime.Instant (toDateTime)
 import Data.Either (Either(..), hush)
@@ -20,6 +20,7 @@ import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input(..), Party, Token(..), Value)
+import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus (defaultRiskFactors, evalVal, toMarloweCashflow)
 import Marlowe.Actus.Metadata (actusMetadataKey)
 import Marlowe.Actus.Metadata as M
@@ -107,7 +108,7 @@ mkEventList (Runtime runtime) = do
     pure $
       DOM.div {}
         [ case state.newInput of
-            Just input@{ token, value } -> modal $
+            Just input@{ token, value, party } -> modal $
               { body:
                   DOM.form {} $
                     [ DOM.div { className: "form-group" }
@@ -117,7 +118,7 @@ mkEventList (Runtime runtime) = do
                         , R.input
                             { className: "form-control"
                             , type: "text"
-                            , value: show value
+                            , value: show (BigInt.abs value)
                             }
                         ]
                     , DOM.div { className: "form-group" }
@@ -128,6 +129,16 @@ mkEventList (Runtime runtime) = do
                             { className: "form-control"
                             , type: "text"
                             , value: show token
+                            }
+                        ]
+                    , DOM.div { className: "form-group" }
+                        [ DOM.label
+                            { className: "form-control-label" }
+                            "Party"
+                        , R.input
+                            { className: "form-control"
+                            , type: "text"
+                            , value: partyToString party
                             }
                         ]
                     ]
@@ -142,7 +153,7 @@ mkEventList (Runtime runtime) = do
                       }
                   , DOM.button
                       { className: "btn btn-primary"
-                      , onClick: onApplyInputs input
+                      , onClick: onApplyInputs input { value = BigInt.abs value }
                       }
                       [ R.text "Submit" ]
                   ]
@@ -185,21 +196,28 @@ endpointAndMetadata { resource: ContractHeader { metadata }, links } = fromMaybe
   M.Metadata { contractTerms, party, counterParty } <- decodeMetadata metadata
   let
     projectedCashFlows = fromFoldable $ genProjectedCashflows (party /\ counterParty) (defaultRiskFactors contractTerms) contractTerms
-  pure $
+  pure $ catMaybes $
     map
-      ( \cf@(CashFlow{currency, amount}) ->
-          { cashflow: toMarloweCashflow cf
-          , party
-          , token: currencyToToken currency
-          , value: fromMaybe (BigInt.fromInt 0) $ evalVal' amount
-          , endpoint: links.contract
-          }
+      ( \cf@(CashFlow { currency, amount }) -> do
+          value <- evalVal' amount
+          if value == (BigInt.fromInt 0) then Nothing
+          else pure $
+            { cashflow: toMarloweCashflow cf
+            , party: if value < (BigInt.fromInt 0) then party else counterParty
+            , token: currencyToToken currency
+            , value
+            , endpoint: links.contract
+            }
       )
       projectedCashFlows
 
 -- FIXME: proper mapping
 currencyToToken :: String -> Token
 currencyToToken = Token ""
+
+partyToString :: Party -> String
+partyToString (V1.Address addr) = addr
+partyToString (V1.Role role) = role
 
 actusMetadata
   :: { links :: { contract :: ContractEndpoint }
