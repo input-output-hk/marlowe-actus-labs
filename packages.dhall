@@ -129,10 +129,10 @@ in upstream
       "https://github.com/purescript-polyform/batteries-core.git"
       "v0.3.0"
   with
-    polyform-batteries-urlencoded = ../batteries-urlencoded/spago.dhall as Location
-      -- mkPackage
-      --   [ "argonaut" , "console" , "debug" , "effect" , "form-urlencoded"
-      --   , "polyform-batteries-core" , "psci-support" , "spec"
-      --   ]
-      --   "https://github.com/purescript-polyform/batteries-urlencoded.git"
-      --   "v0.4.0"
+    polyform-batteries-urlencoded =
+      mkPackage
+        [ "argonaut" , "console" , "debug" , "effect" , "form-urlencoded"
+        , "polyform-batteries-core" , "psci-support" , "spec"
+        ]
+        "https://github.com/purescript-polyform/batteries-urlencoded.git"
+        "v0.4.1"
