@@ -474,8 +474,9 @@ instance EncodeHeaders PostTransactionsRequest PostContractsHeadersRow where -- 
     }
 
 newtype PostTransactionsResponse = PostTransactionsResponse
-  { -- transactionId :: TxOutRef
-    txBody :: TextEnvelope TxBody
+  { contractId :: TxOutRef
+  , transactionId :: TxId
+  , txBody :: TextEnvelope TxBody
   }
 
 derive instance Newtype PostTransactionsResponse _

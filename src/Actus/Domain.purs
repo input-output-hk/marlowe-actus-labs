@@ -15,6 +15,7 @@ module Actus.Domain
   , marloweFixedPoint
   , Value'(..)
   , Observation'(..)
+  , evalVal'
   ) where
 
 import Prelude

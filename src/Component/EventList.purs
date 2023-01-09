@@ -3,7 +3,7 @@ module Component.EventList where
 import Prelude
 
 import Actus.Core (genProjectedCashflows)
-import Actus.Domain (CashFlow)
+import Actus.Domain (CashFlow(..), evalVal')
 import Component.Modal (mkModal)
 import Component.Types (ContractHeaderResource)
 import Component.Widgets (link)
@@ -91,9 +91,9 @@ mkEventList (Runtime runtime) = do
 
         launchAff_ $
           let
-            ep = TransactionsEndpoint (IndexEndpoint (ResourceLink link))
+            transactionEndpoint = TransactionsEndpoint (IndexEndpoint (ResourceLink link))
           in
-            post' runtime.serverURL ep req
+            post' runtime.serverURL transactionEndpoint req
               >>= case _ of
                 Right ({ resource: PostTransactionsResponse res }) -> do
                   traceM res
@@ -187,18 +187,19 @@ endpointAndMetadata { resource: ContractHeader { metadata }, links } = fromMaybe
     projectedCashFlows = fromFoldable $ genProjectedCashflows (party /\ counterParty) (defaultRiskFactors contractTerms) contractTerms
   pure $
     map
-      ( \cf ->
+      ( \cf@(CashFlow{currency, amount}) ->
           { cashflow: toMarloweCashflow cf
           , party
-          , token: Token "" "" -- currencyToToken cashflow.currency
-          , value: BigInt.fromInt 0 -- FIXME
+          , token: currencyToToken currency
+          , value: fromMaybe (BigInt.fromInt 0) $ evalVal' amount
           , endpoint: links.contract
           }
       )
       projectedCashFlows
 
+-- FIXME: proper mapping
 currencyToToken :: String -> Token
-currencyToToken _ = Token "" "" -- FIXME
+currencyToToken = Token ""
 
 actusMetadata
   :: { links :: { contract :: ContractEndpoint }
