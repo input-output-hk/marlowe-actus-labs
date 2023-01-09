@@ -473,8 +473,16 @@ instance EncodeHeaders PostTransactionsRequest PostContractsHeadersRow where -- 
     , "X-Colateral-UTxO": String.joinWith "," (map txOutRefToString collateralUTxOs)
     }
 
--- FIXME: just a stub
-newtype PostTransactionsResponse = PostTransactionsResponse Int
+newtype PostTransactionsResponse = PostTransactionsResponse
+  { -- transactionId :: TxOutRef
+    txBody :: TextEnvelope TxBody
+  }
+
+derive instance Newtype PostTransactionsResponse _
+
+instance DecodeJson PostTransactionsResponse where
+  decodeJson = decodeNewtypedRecord
+    { txBody: map decodeTxBodyTextEnvelope :: Maybe _ -> Maybe _ }
 
 type GetTransactionsResponse = TxHeader
 
