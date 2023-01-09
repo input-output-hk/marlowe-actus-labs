@@ -32,6 +32,7 @@ import Data.Decimal (Decimal, fromNumber)
 import Data.Decimal as Decimal
 import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe(..), fromJust, maybe)
+import Data.Newtype (class Newtype)
 import Data.Show.Generic (genericShow)
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId)
 import Partial.Unsafe (unsafeCrashWith, unsafePartial)
@@ -112,7 +113,7 @@ data RiskFactors a = RiskFactors
   }
 
 -- | Cash flows
-data CashFlow a b = CashFlow
+newtype CashFlow a b = CashFlow
   { contractId :: String
   , party :: b
   , counterparty :: b
@@ -125,6 +126,7 @@ data CashFlow a b = CashFlow
   }
 
 derive instance Generic (CashFlow a b) _
+derive instance Newtype (CashFlow a b) _
 instance (Show a, Show b) => Show (CashFlow a b) where
   show = genericShow
 

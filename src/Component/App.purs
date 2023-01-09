@@ -22,8 +22,9 @@ import React.Basic.Hooks as React
 
 mkApp :: MkComponentM (Unit -> JSX)
 mkApp = do
+  runtime <- asks _.runtime
   contractListComponent <- mkContractList
-  eventListComponent <- liftEffect mkEventList
+  eventListComponent <- liftEffect $ mkEventList runtime
   connectWallet <- mkConnectWallet
 
   walletInfoCtx <- asks _.walletInfoCtx

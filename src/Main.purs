@@ -96,9 +96,8 @@ main configJson = do
       launchAff_ do
         -- contracts <- foldMapMPages' config.marloweWebServerUrl api (pure <<< _.page) >>= liftEither >>> liftEffect
         -- FIXME: this is a temporary hack to get the first page of contracts to speed up development
-        -- contracts <- getPage' config.marloweWebServerUrl api Nothing >>= liftEither >>> liftEffect <#> _.page
-        let
-          contracts = []
+        contracts <- getPage' config.marloweWebServerUrl api Nothing >>= liftEither >>> liftEffect <#> _.page
+        -- let contracts = []
 
         CardanoMultiplatformLib.importLib >>= case _ of
           Nothing -> liftEffect $ logger "Cardano serialization lib loading failed"

@@ -1,8 +1,7 @@
 -- | Generator for ACTUS contracts
 -- Given ACTUS contract terms a Marlowe contract is generated.
 module Marlowe.Actus
-  ( CashFlowMarlowe
-  , RiskFactorsMarlowe
+  ( RiskFactorsMarlowe
   , genContract
   , defaultRiskFactors
   , toMarloweCashflow
@@ -21,7 +20,6 @@ import Data.List (List, reverse)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Language.Marlowe.Core.V1.Semantics.Types (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), Token(..), Value(..))
 
-type CashFlowMarlowe = CashFlow Value
 type ContractStateMarlowe = ContractState Value'
 type RiskFactorsMarlowe = RiskFactors Value'
 
