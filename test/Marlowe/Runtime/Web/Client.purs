@@ -2,6 +2,7 @@ module Test.Marlowe.Web.Client where
 
 import Prelude
 
+import Actus.Core (genProjectedCashflows)
 import Actus.Domain (ContractTerms(..))
 import Contrib.Fetch (FetchError(InvalidStatusCode))
 import Control.Monad.Error.Class (catchError, throwError)
@@ -13,6 +14,7 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (un)
 import Data.Time.Duration (Milliseconds(..))
+import Data.Tuple.Nested ((/\))
 import Debug (traceM)
 import Effect.Aff (delay)
 import Effect.Class (liftEffect)
@@ -20,6 +22,7 @@ import Effect.Exception (error, throw)
 import Foreign.Object (Object)
 import Language.Marlowe.Core.V1.Semantics.Types (Ada(..))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
+import Marlowe.Actus (defaultRiskFactors, genContract)
 import Marlowe.Actus.Metadata (Metadata(..), actusMetadataKey)
 import Marlowe.Runtime.Web.Client (ClientError(..), foldMapMPages, foldMapMPages', getResource, post, post')
 import Marlowe.Runtime.Web.Types (Address(..), ContractsEndpoint(..), GetContractsResponse, Metadata, PostContractsRequest(..), PostContractsResponse(..), ServerURL(..), Tx(..), api)
@@ -72,8 +75,8 @@ spec serverUrl@(ServerURL serverUrlStr) = do
 
        let
          (terms :: Either JsonDecodeError ContractTerms) = decodeJson json
-         addr1 = V1.Address "addr1w94f8ywk4fg672xasahtk4t9k6w3aql943uxz5rt62d4dvq8evxaf"
-         addr2 = V1.Address "addr1w94f8ywk4fg672xasahtk4t9k6w3aql943uxz5rt62d4dvq8evxaf"
+         addr1 = V1.Role "party"
+         addr2 = V1.Role "counterparty"
 
        case terms of
          Left err -> fail ("Parsing error: " <> show err)
@@ -82,11 +85,13 @@ spec serverUrl@(ServerURL serverUrlStr) = do
              decodeJson <<< encodeJson $ Metadata { contractTerms: contract, party: addr1, counterParty: addr2 }
            let
              addr = RT.Address "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
+             cashflows = genProjectedCashflows (addr1 /\ addr2) (defaultRiskFactors contract) contract
+             marloweContract = genContract cashflows
              req = PostContractsRequest
                { metadata: RT.Metadata $ Map.singleton actusMetadataKey obj
                -- , version :: MarloweVersion
                -- , roles :: Maybe RolesConfig
-               , contract: V1.Close
+               , contract: marloweContract
                , minUTxODeposit: Lovelace (BigInt.fromInt 2_000_000)
                , changeAddress: addr
                , addresses: [ addr ]
