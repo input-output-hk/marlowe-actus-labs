@@ -9,7 +9,10 @@ import Data.Argonaut (class DecodeJson, Json, JsonDecodeError, decodeJson)
 import Data.Argonaut (class DecodeJson, class EncodeJson, Json, JsonDecodeError(..), decodeJson, encodeJson)
 import Data.Argonaut.Decode.Combinators ((.:))
 import Data.Argonaut.Decode.Decoders (decodeMaybe)
+import Data.Bifunctor (rmap)
 import Data.DateTime (DateTime)
+import Data.DateTime.Instant (fromDateTime, toDateTime)
+import Data.DateTime.ISO
 import Data.Either (Either)
 import Data.Either (Either, note)
 import Data.Generic.Rep (class Generic)
@@ -31,6 +34,7 @@ import Fetch.Core.Request (Request)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Language.Marlowe.Core.V1.Semantics.Types as V1
+import Marlowe.Time (instantFromJson, instantToJson)
 import Record as Record
 import Type.Row.Homogeneous as Row
 
@@ -443,11 +447,34 @@ derive instance Eq ContractEndpoint
 derive instance Newtype ContractEndpoint _
 derive newtype instance DecodeJson ContractEndpoint
 
--- FIXME: just a stub
-newtype PostTransactionsRequest = PostTransactionsRequest Int
+newtype PostTransactionsRequest = PostTransactionsRequest
+  { inputs :: Array V1.Input
+  , invalidBefore :: DateTime
+  , invalidHereafter :: DateTime
+  , metadata :: Metadata
+  , changeAddress :: Address
+  , addresses :: Array Address
+  , collateralUTxOs :: Array TxOutRef
+  }
+
+instance EncodeJsonBody PostTransactionsRequest where
+  encodeJsonBody (PostTransactionsRequest r) = encodeJson
+    { inputs: r.inputs
+    , invalidBefore: ISO r.invalidBefore
+    , invalidHereafter: ISO r.invalidHereafter
+    , metadata: r.metadata
+    , version: V1
+    }
+
+instance EncodeHeaders PostTransactionsRequest PostContractsHeadersRow where -- TODO: Rename PostContractsHeaderRow
+  encodeHeaders (PostTransactionsRequest { changeAddress, addresses, collateralUTxOs }) =
+    { "X-Change-Address": addressToString changeAddress
+    , "X-Address": String.joinWith "," (map addressToString addresses)
+    , "X-Colateral-UTxO": String.joinWith "," (map txOutRefToString collateralUTxOs)
+    }
 
 -- FIXME: just a stub
-newtype PostTransactionsResponse = PostTransactinosResponse Int
+newtype PostTransactionsResponse = PostTransactionsResponse Int
 
 type GetTransactionsResponse = TxHeader
 
