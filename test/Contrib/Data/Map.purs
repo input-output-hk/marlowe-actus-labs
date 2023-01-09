@@ -6,11 +6,11 @@ import Contrib.Data.Map (fromFoldableBy) as Map
 import Data.Map (Map)
 import Data.Map (fromFoldable) as Map
 import Data.Tuple.Nested ((/\))
-import Test.Spec (Spec, describeOnly, it)
+import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (shouldEqual)
 
 spec :: Spec Unit
-spec = describeOnly "fromFoldableBy" do
+spec = describe "fromFoldableBy" do
   it "fromFoldableBys correctly" do
     let
       actual :: Map Int { x :: Int, y :: String }
