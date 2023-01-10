@@ -3,11 +3,10 @@ module Actus.Domain
   , module Actus.Domain.ContractState
   , module Actus.Domain.ContractTerms
   , module Actus.Domain.Schedule
-  , class ActusFrac
-  , _ceiling
   , _abs
   , _max
   , _min
+  , _fromDecimal
   , class ActusOps
   , CashFlow(..)
   , RiskFactors(..)
@@ -16,6 +15,7 @@ module Actus.Domain
   , marloweFixedPoint
   , Value'(..)
   , Observation'(..)
+  , evalVal'
   ) where
 
 import Prelude
@@ -25,33 +25,30 @@ import Actus.Domain.ContractState (ContractState(..))
 import Actus.Domain.ContractTerms (BDC(..), CEGE(..), CETC(..), CR(..), CT(..), Calendar(..), ContractTerms(..), Cycle, DCC(..), DS(..), EOMC(..), FEB(..), IPCB(..), OPTP(..), OPXT(..), PPEF(..), PRF(..), PYTP(..), Period(..), SCEF(..), ScheduleConfig, Stub(..))
 import Actus.Domain.Schedule (ShiftedDay, ShiftedSchedule, mkShiftedDay)
 import Control.Alt ((<|>))
-import Data.BigInt.Argonaut (BigInt)
+import Control.Apply (lift2)
+import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (DateTime)
-import Data.Decimal (Decimal, ceil, fromNumber, toNumber)
+import Data.Decimal (Decimal, fromNumber)
 import Data.Decimal as Decimal
 import Data.Generic.Rep (class Generic)
-import Data.Int as Int
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromJust, maybe)
+import Data.Newtype (class Newtype)
 import Data.Show.Generic (genericShow)
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId)
-import Partial.Unsafe (unsafeCrashWith)
-
-class ActusOps a <= ActusFrac a where
-  _ceiling :: a -> Int
+import Partial.Unsafe (unsafeCrashWith, unsafePartial)
 
 class ActusOps a where
   _min :: a -> a -> a
   _max :: a -> a -> a
   _abs :: a -> a
+  _fromDecimal :: Decimal -> a
 
 instance ActusOps Decimal where
   _min = min
   _max = max
   _abs = Decimal.abs
-
-instance ActusFrac Decimal where
-  _ceiling = Int.ceil <<< toNumber <<< ceil
+  _fromDecimal x = x
 
 data Value'
   = Constant' BigInt
@@ -76,8 +73,8 @@ data Observation'
   | FalseObs'
 
 instance Semiring Value' where
-  add x y = AddValue' x y
-  mul x y = DivValue' (MulValue' x y) (Constant' $ BigInt.fromInt marloweFixedPoint)
+  add x y = reduceValue' $ AddValue' x y
+  mul x y = reduceValue' $ DivValue' (MulValue' x y) (Constant' $ BigInt.fromInt marloweFixedPoint)
   one = Constant' $ BigInt.fromInt marloweFixedPoint
   zero = Constant' (BigInt.fromInt 0)
 
@@ -88,7 +85,7 @@ instance CommutativeRing Value'
 
 instance EuclideanRing Value' where
   degree _ = 1
-  div x y = DivValue' (MulValue' (Constant' $ BigInt.fromInt marloweFixedPoint) x) y -- TODO: different rounding, don't use DivValue
+  div x y = reduceValue' $ DivValue' (MulValue' (Constant' $ BigInt.fromInt marloweFixedPoint) x) y -- TODO: different rounding, don't use DivValue
   mod _ _ = unsafeCrashWith "Partial implementation of EuclideanRing for Value'" -- TODO: complete implemenation
 
 instance ActusOps Value' where
@@ -97,9 +94,10 @@ instance ActusOps Value' where
   _abs a = _max a (NegValue' a)
     where
     _max x y = Cond' (ValueGT' x y) x y
-
-instance ActusFrac Value' where
-  _ceiling _ = 0 -- FIXME: unsafeCrashWith "Partial implemenation of ActusFrac for Value'" -- TODO: complete implementation
+  _fromDecimal n = Constant' $ toMarloweFixedPoint n
+    where
+    toMarloweFixedPoint :: Decimal -> BigInt
+    toMarloweFixedPoint i = unsafePartial (fromJust <<< BigInt.fromString <<< Decimal.toString <<< Decimal.floor $ (Decimal.fromInt marloweFixedPoint) * i)
 
 derive instance Generic Value' _
 derive instance Generic Observation' _
@@ -116,7 +114,7 @@ data RiskFactors a = RiskFactors
   }
 
 -- | Cash flows
-data CashFlow a b = CashFlow
+newtype CashFlow a b = CashFlow
   { contractId :: String
   , party :: b
   , counterparty :: b
@@ -129,6 +127,7 @@ data CashFlow a b = CashFlow
   }
 
 derive instance Generic (CashFlow a b) _
+derive instance Newtype (CashFlow a b) _
 instance (Show a, Show b) => Show (CashFlow a b) where
   show = genericShow
 
@@ -147,9 +146,9 @@ sign CR_PFL = negate one
 sign CR_RF = one
 sign CR_PF = negate one
 
--- == Default instance (Decimal)
+-- == Default instance
 
-setDefaultContractTermValues :: ContractTerms Decimal -> ContractTerms Decimal
+setDefaultContractTermValues :: ContractTerms -> ContractTerms
 setDefaultContractTermValues (ContractTerms ct) = ContractTerms $
   ct
     { scheduleConfig =
@@ -184,3 +183,35 @@ setDefaultContractTermValues (ContractTerms ct) = ContractTerms $
 
   applyDefault :: forall a. a -> Maybe a -> Maybe a
   applyDefault v o = o <|> Just v
+
+evalVal' :: Value' -> Maybe BigInt
+evalVal' (Constant' integer) = Just integer
+evalVal' (NegValue' val) = negate <$> evalVal' val
+evalVal' (AddValue' lhs rhs) = lift2 (+) (evalVal' lhs) (evalVal' rhs)
+evalVal' (SubValue' lhs rhs) = lift2 (-) (evalVal' lhs) (evalVal' rhs)
+evalVal' (MulValue' lhs rhs) = lift2 (*) (evalVal' lhs) (evalVal' rhs)
+evalVal' (DivValue' lhs rhs) = do
+  n <- evalVal' lhs
+  d <- evalVal' rhs
+  pure $
+    if d == fromInt 0 then fromInt 0
+    else n / d
+evalVal' (ChoiceValue' _) = Nothing
+evalVal' (Cond' cond thn els) = do
+  obs <- evalObs' cond
+  if obs then evalVal' thn else evalVal' els
+
+evalObs' :: Observation' -> Maybe Boolean
+evalObs' (AndObs' lhs rhs) = lift2 (&&) (evalObs' lhs) (evalObs' rhs)
+evalObs' (OrObs' lhs rhs) = lift2 (||) (evalObs' lhs) (evalObs' rhs)
+evalObs' (NotObs' subObs) = not <$> evalObs' subObs
+evalObs' (ValueGE' lhs rhs) = lift2 (>=) (evalVal' lhs) (evalVal' rhs)
+evalObs' (ValueGT' lhs rhs) = lift2 (>) (evalVal' lhs) (evalVal' rhs)
+evalObs' (ValueLT' lhs rhs) = lift2 (<) (evalVal' lhs) (evalVal' rhs)
+evalObs' (ValueLE' lhs rhs) = lift2 (<=) (evalVal' lhs) (evalVal' rhs)
+evalObs' (ValueEQ' lhs rhs) = lift2 (==) (evalVal' lhs) (evalVal' rhs)
+evalObs' TrueObs' = Just true
+evalObs' FalseObs' = Just false
+
+reduceValue' :: Value' -> Value'
+reduceValue' v = maybe v Constant' (evalVal' v)

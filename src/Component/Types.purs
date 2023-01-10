@@ -2,6 +2,7 @@ module Component.Types where
 
 import Prelude
 
+import CardanoMultiplatformLib as CardanoMultiplatformLib
 import Control.Monad.Reader (ReaderT)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
@@ -36,7 +37,8 @@ type MkComponentM = ReaderT MkContext Effect
 type ContractHeaderResource = ResourceWithLinks ContractHeader (contract :: ContractEndpoint)
 
 type MkContext =
-  { walletInfoCtx :: ReactContext (Maybe (WalletInfo Wallet.Api))
+  { cardanoMultiplatformLib :: CardanoMultiplatformLib.Lib
+  , walletInfoCtx :: ReactContext (Maybe (WalletInfo Wallet.Api))
   -- FIXME: use more advanced logger so we use levels and setup app verbosity.
   , logger :: String -> Effect Unit
   , contractEvents :: Subscription.Emitter ContractEvent

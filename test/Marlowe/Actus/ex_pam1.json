@@ -5,7 +5,8 @@
     "calendar": "NC"
   },
   "maturityDate": "2030-01-01T00:00:00",
-  "contractId": "0",
+  "contractId": "ex_pam1",
+  "currency": "DjedUSD",
   "enableSettlement": false,
   "initialExchangeDate": "2020-01-01T00:00:00",
   "contractRole": "RPA",

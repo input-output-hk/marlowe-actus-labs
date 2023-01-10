@@ -34,6 +34,8 @@ $utilities: map-merge(
         8px: 8px,
         16px: 16px,
         32px: 32px,
+        64px: 64px,
+        128px: 128px,
         1rem: 1rem,
         1_2rem: 1.2rem,
         1_5rem: 1.5rem,
@@ -41,6 +43,7 @@ $utilities: map-merge(
         4rem: 4rem,
         8rem: 8rem,
         16rem: 16rem,
+        32rem: 32rem,
       )
     ),
     // "background-color": (

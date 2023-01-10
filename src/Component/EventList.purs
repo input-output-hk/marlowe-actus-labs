@@ -3,26 +3,37 @@ module Component.EventList where
 import Prelude
 
 import Actus.Core (genProjectedCashflows)
-import Actus.Domain (CashFlow(..), ContractTerms, EventType(..), RiskFactors(..))
+import Actus.Domain (CashFlow(..), _abs, evalVal')
 import Component.Modal (mkModal)
-import Component.Modal as Modal
 import Component.Types (ContractHeaderResource)
+import Component.Widgets (link)
 import Data.Argonaut (decodeJson, fromObject)
-import Data.Array (catMaybes, fromFoldable, replicate)
-import Data.DateTime (DateTime(..), Time(..), canonicalDate)
-import Data.Decimal (Decimal, toString)
-import Data.Decimal as Decimal
-import Data.Either (hush)
-import Data.Enum (toEnum)
+import Data.Array (catMaybes, concat, fromFoldable, singleton)
+import Data.BigInt.Argonaut as BigInt
+import Data.DateTime (adjust)
+import Data.DateTime.Instant (toDateTime)
+import Data.Either (Either(..), hush)
 import Data.Formatter.DateTime (formatDateTime)
 import Data.Map (lookup)
-import Data.Maybe (Maybe(..))
-import Data.Maybe (Maybe(..), fromJust)
+import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Newtype (unwrap)
+import Data.Time.Duration as Duration
+import Debug (traceM)
 import Effect (Effect)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party(..))
-import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractHeader(..), Metadata(..))
-import Partial.Unsafe (unsafePartial)
+import Effect.Aff (launchAff_)
+import Effect.Now (nowDateTime)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input(..), Party, Token(..), Value)
+import Language.Marlowe.Core.V1.Semantics.Types as V1
+import Marlowe.Actus (defaultRiskFactors, evalVal, toMarloweCashflow)
+import Marlowe.Actus.Metadata (actusMetadataKey)
+import Marlowe.Actus.Metadata as M
+import Marlowe.Runtime.Web (post')
+import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), IndexEndpoint(..), Metadata(..), PostTransactionsRequest(..), PostTransactionsResponse(..), ResourceEndpoint(..), ResourceLink(..), Runtime(..), TransactionsEndpoint(..))
+import Marlowe.Runtime.Web.Types as RT
+import Marlowe.Time (unixEpoch)
+import React.Basic (fragment) as DOOM
 import React.Basic.DOM (text)
+import React.Basic.DOM (text) as DOOM
 import React.Basic.DOM as R
 import React.Basic.DOM.Simplified.Generated as DOM
 import React.Basic.Events (handler_)
@@ -36,56 +47,72 @@ data NewInput
   | SubmissionsSuccess
 
 type EventListState =
-  { newInput :: Maybe (CashFlow Decimal Party)
+  { newInput ::
+      Maybe
+        { party :: Party
+        , token :: Token
+        , value :: BigInt.BigInt
+        , endpoint :: ContractEndpoint
+        }
   }
 
-mkEventList :: Effect (Array ContractHeaderResource -> JSX)
-mkEventList = do
+mkEventList :: Runtime -> Effect (Array ContractHeaderResource -> JSX)
+mkEventList (Runtime runtime) = do
   modal <- mkModal
   component "EventList" \contractList -> React.do
-
     let
-      termsList = catMaybes $ map actusContract contractList
-      role1 = Role "R1"
-      role2 = Role "R2"
-
-      projectedCashFlows terms = fromFoldable $ genProjectedCashflows (role1 /\ role2)
-        ( \_ _ ->
-            RiskFactors
-              { o_rf_CURS: Decimal.fromInt 1
-              , o_rf_RRMO: Decimal.fromInt 1
-              , o_rf_SCMO: Decimal.fromInt 1
-              , pp_payoff: Decimal.fromInt 0
-              }
-        )
-        terms
-
-      --cashFlows = concat $ map projectedCashFlows termsList
-      -- FIXME: remove test data
-      cashFlows = replicate 10 $
-        ( CashFlow
-            { contractId: "pam01"
-            , party: role1
-            , counterparty: role2
-            , paymentDay: DateTime (canonicalDate (unsafePartial $ fromJust $ toEnum 2022) (unsafePartial $ fromJust $ toEnum 12) (unsafePartial $ fromJust $ toEnum 22)) (Time (unsafePartial $ fromJust $ toEnum 0) (unsafePartial $ fromJust $ toEnum 0) (unsafePartial $ fromJust $ toEnum 0) (unsafePartial $ fromJust $ toEnum 0))
-            , calculationDay: DateTime (canonicalDate (unsafePartial $ fromJust $ toEnum 2022) (unsafePartial $ fromJust $ toEnum 12) (unsafePartial $ fromJust $ toEnum 22)) (Time (unsafePartial $ fromJust $ toEnum 0) (unsafePartial $ fromJust $ toEnum 0) (unsafePartial $ fromJust $ toEnum 0) (unsafePartial $ fromJust $ toEnum 0))
-            , event: IP
-            , amount: Decimal.fromInt 1000
-            , notional: Decimal.fromInt 10000
-            , currency: "DjedUSD"
-            } :: CashFlow Decimal Party
-        )
+      actusContracts = concat $ map endpointAndMetadata contractList
 
     ((state :: EventListState) /\ updateState) <- useState { newInput: Nothing }
 
     let
-      onEdit cf = handler_ do
-        updateState _ { newInput = Just cf }
+      onEdit { party, token, value, endpoint } = handler_ do
+        updateState _ { newInput = Just { party, token, value, endpoint } }
+
+      onApplyInputs { party, token, value, endpoint: ContractEndpoint (ResourceEndpoint (ResourceLink link)) } = handler_ do
+        now <- nowDateTime
+        let
+          -- FIXME: just a stub
+          inputs = singleton $ IDeposit party party token value
+
+          invalidBefore = now
+          invalidHereafter = fromMaybe now $ adjust (Duration.Minutes 2.0) now
+
+          changeAddress = RT.Address ""
+          addresses = []
+          collateralUTxOs = []
+
+          metadata = mempty
+
+          req = PostTransactionsRequest
+            { inputs
+            , invalidBefore
+            , invalidHereafter
+            , metadata
+            , changeAddress
+            , addresses
+            , collateralUTxOs
+            }
+
+        launchAff_ $
+          let
+            transactionEndpoint = TransactionsEndpoint (IndexEndpoint (ResourceLink link))
+          in
+            post' runtime.serverURL transactionEndpoint req
+              >>= case _ of
+                Right ({ resource: PostTransactionsResponse res }) -> do
+                  traceM res
+                  pure unit
+                Left _ -> do
+                  traceM "error"
+                  pure unit
+
+        updateState _ { newInput = Nothing }
 
     pure $
       DOM.div {}
         [ case state.newInput of
-            Just (CashFlow { currency, amount }) -> modal $
+            Just input@{ token, value, party } -> modal $
               { body:
                   DOM.form {} $
                     [ DOM.div { className: "form-group" }
@@ -95,7 +122,7 @@ mkEventList = do
                         , R.input
                             { className: "form-control"
                             , type: "text"
-                            , value: toString amount
+                            , value: show (BigInt.abs value)
                             }
                         ]
                     , DOM.div { className: "form-group" }
@@ -105,46 +132,103 @@ mkEventList = do
                         , R.input
                             { className: "form-control"
                             , type: "text"
-                            , value: currency
+                            , value: show token
+                            }
+                        ]
+                    , DOM.div { className: "form-group" }
+                        [ DOM.label
+                            { className: "form-control-label" }
+                            "Party"
+                        , R.input
+                            { className: "form-control"
+                            , type: "text"
+                            , value: partyToString party
                             }
                         ]
                     ]
 
               , onDismiss: updateState _ { newInput = Nothing }
               , title: text "Apply inputs"
+              , footer: DOOM.fragment
+                  [ link
+                      { label: DOOM.text "Cancel"
+                      , onClick: updateState _ { newInput = Nothing }
+                      , showBorders: true
+                      }
+                  , DOM.button
+                      { className: "btn btn-primary"
+                      , onClick: onApplyInputs input { value = BigInt.abs value }
+                      }
+                      [ R.text "Submit" ]
+                  ]
               }
             Nothing -> mempty
         , DOM.table { className: "table table-hover" } $
             [ DOM.thead {} $
                 [ DOM.tr {}
-                    [ DOM.th {} [ text "Type" ]
+                    [ DOM.th {} [ text "Contract Id" ]
+                    , DOM.th {} [ text "Type" ]
                     , DOM.th {} [ text "Date" ]
                     , DOM.th {} [ text "Amount" ]
                     , DOM.th {} [ text "Currency" ]
-                    , DOM.th {} [ text "Contract ID" ]
                     , DOM.th {} [ text "Add" ]
                     ]
                 ]
             , DOM.tbody {} $ map
-                ( \cashflow@(CashFlow cf) ->
-                    [ DOM.tr {}
-                        [ DOM.td {} [ text $ show cf.event ]
-                        , DOM.td {} [ text <$> hush (formatDateTime "YYYY-DD-MM HH:mm:ss:SSS" cf.paymentDay) ]
-                        , DOM.td {} [ text $ toString cf.amount ]
-                        , DOM.td {} [ text $ cf.currency ]
-                        , DOM.td {} [ text cf.contractId ]
-                        , DOM.td {} [ DOM.button { onClick: onEdit cashflow, className: "btn btn-secondary btn-sm" } "Add" ]
-                        ]
-                    ]
+                ( \({ cashflow, party, token, value, endpoint }) ->
+                    let
+                      cf = unwrap cashflow
+                    in
+                      [ DOM.tr {}
+                          [ DOM.td {} [ text cf.contractId ]
+                          , DOM.td {} [ text $ show cf.event ]
+                          , DOM.td {} [ text <$> hush (formatDateTime "YYYY-DD-MM HH:mm:ss:SSS" cf.paymentDay) ]
+                          , DOM.td {} [ text $ fromMaybe "" $ BigInt.toString <$> evalVal cf.amount ]
+                          , DOM.td {} [ text $ cf.currency ]
+                          , DOM.td {} [ DOM.button { onClick: onEdit { party, token, value, endpoint }, className: "btn btn-secondary btn-sm" } "Add" ]
+                          ]
+                      ]
                 )
-                cashFlows
+                actusContracts
             ]
         ]
 
-actusContract
+endpointAndMetadata
+  :: { links :: { contract :: ContractEndpoint }, resource :: ContractHeader }
+  -> Array { cashflow :: CashFlow Value Party, party :: Party, token :: Token, value :: BigInt.BigInt, endpoint :: ContractEndpoint }
+endpointAndMetadata { resource: ContractHeader { metadata }, links } = fromMaybe [] $ do
+  M.Metadata { contractTerms, party, counterParty } <- decodeMetadata metadata
+  let
+    projectedCashFlows = fromFoldable $ genProjectedCashflows (party /\ counterParty) (defaultRiskFactors contractTerms) contractTerms
+  pure $ catMaybes $
+    map
+      ( \cf@(CashFlow { currency, amount }) -> do
+          value <- evalVal' amount
+          if value == (BigInt.fromInt 0) then Nothing
+          else pure $
+            { cashflow: toMarloweCashflow cf
+            , party: if value < (BigInt.fromInt 0) then party else counterParty
+            , token: currencyToToken currency
+            , value
+            , endpoint: links.contract
+            }
+      )
+      projectedCashFlows
+
+-- FIXME: proper mapping
+currencyToToken :: String -> Token
+currencyToToken = Token ""
+
+partyToString :: Party -> String
+partyToString (V1.Address addr) = addr
+partyToString (V1.Role role) = role
+
+actusMetadata
   :: { links :: { contract :: ContractEndpoint }
      , resource :: ContractHeader
      }
-  -> Maybe (ContractTerms Decimal)
-actusContract { resource: ContractHeader { metadata: Metadata md } } =
-  lookup 0 md >>= hush <<< decodeJson <<< fromObject -- FIXME: metadata key for ACTUS
+  -> Maybe M.Metadata
+actusMetadata { resource: ContractHeader { metadata } } = decodeMetadata metadata
+
+decodeMetadata :: Metadata -> Maybe M.Metadata
+decodeMetadata (Metadata md) = lookup actusMetadataKey md >>= hush <<< decodeJson

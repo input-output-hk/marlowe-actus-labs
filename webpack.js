@@ -11,7 +11,7 @@ module.exports = (env, argv) => {
     } else {
       console.log("Checking MARLOWE_WEB_SERVER_URL: " + process.env.MARLOWE_WEB_SERVER_URL);
       fetch(process.env.MARLOWE_WEB_SERVER_URL + "/contracts").catch(function (error) {
-        throw ("You should start the marlowe-web-server or change the MARLOWE_WEBSERVER_URL environment variable value.");
+        throw ("You should start the marlowe-web-server or change the MARLOWE_WEB_SERVER_URL environment variable value.");
       }).then(function (response) {
         console.log("marlowe-web-server is running");
       });
@@ -21,6 +21,9 @@ module.exports = (env, argv) => {
   const webServerUrl = process.env.MARLOWE_WEB_SERVER_URL;
 
   return {
+    experiments: {
+      asyncWebAssembly: true
+    },
     entry: {
        app: './src/frontend.js',
     },
@@ -31,6 +34,10 @@ module.exports = (env, argv) => {
       port: 8080
     },
     plugins: [
+      new webpack.NormalModuleReplacementPlugin(
+        /@dcspark\/cardano-multiplatform-lib-nodejs/,
+        '@dcspark/cardano-multiplatform-lib-browser'
+      ),
       new webpack.EnvironmentPlugin({
         MARLOWE_WEB_SERVER_URL: process.env.MARLOWE_WEB_SERVER_URL,
         DEVEL_MODE: develMode,

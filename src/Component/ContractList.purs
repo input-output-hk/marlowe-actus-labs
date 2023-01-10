@@ -2,35 +2,54 @@ module Component.ContractList where
 
 import Prelude
 
-import Actus.Domain (CashFlow, ContractTerms)
-import Component.ContractForm (mkContractForm)
+import Actus.Domain (CashFlow)
+import Actus.Domain.ContractTerms (ContractTerms)
+import Component.ConnectWallet (walletInfo)
+import Component.ContractForm (initialJson, mkContractForm, mkForm)
+import Component.ContractForm as ContractForm
+import Component.EventList (decodeMetadata)
 import Component.Modal (mkModal)
-import Component.Types (ContractHeaderResource, WalletInfo, MkComponentM)
+import Component.SubmitContract (mkSubmitContract)
+import Component.Types (ContractHeaderResource, MkComponentM, WalletInfo(..))
 import Component.Widgets (linkWithIcon)
+import Contrib.React.Basic.Hooks.UseForm as UseForm
 import Contrib.React.Bootstrap (overlayTrigger, tooltip)
 import Contrib.React.Bootstrap.Icons as Icons
 import Contrib.React.Bootstrap.Types as OverlayTrigger
+import Control.Alt ((<|>))
+import Control.Monad.Reader.Class (asks)
 import Data.Array as Array
 import Data.Decimal (Decimal)
+import Data.Either (Either(..))
+import Data.FormURLEncoded.Query as Query
 import Data.List (List)
-import Data.Map (keys)
-import Data.Maybe (Maybe(..), fromMaybe, isNothing)
+import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
+import Data.Newtype (unwrap)
+import Data.Newtype as Newtype
+import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\))
+import Data.Validation.Semigroup (V(..))
+import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party)
-import Marlowe.Runtime.Web.Types (ContractHeader(..), Metadata(..), TxOutRef, txOutRefToString)
+import JS.Unsafe.Stringify (unsafeStringify)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party(..))
+import Marlowe.Runtime.Web.Types (ContractHeader(..), Metadata, TxOutRef, txOutRefToString)
+import Polyform.Validator (runValidator)
 import React.Basic.DOM (text)
 import React.Basic.DOM as DOOM
 import React.Basic.DOM.Events (targetValue)
 import React.Basic.DOM.Simplified.Generated as DOM
 import React.Basic.Events (EventHandler, handler, handler_)
-import React.Basic.Hooks (Hook, JSX, UseState, component, useState, (/\))
+import React.Basic.Hooks (Hook, JSX, UseState, component, useEffectOnce, useState, useState', (/\))
 import React.Basic.Hooks as React
+import Record as Record
+import Type.Prelude (Proxy(..))
 import Wallet as Wallet
+import Web.HTML (window)
+import Web.HTML.Window as Window
 
 type ContractId = TxOutRef
 
-type ActusTerms = ContractTerms Decimal -- V1.Value
 type ProjectedCashFlows = List (CashFlow Decimal Party)
 
 type ValidationError = String
@@ -38,7 +57,7 @@ type ValidationError = String
 data FormState
   = NotValidated
   | Failure ValidationError
-  | Validated (ActusTerms /\ Contract)
+  | Validated (ContractTerms /\ Contract)
 
 -- An example of a simple "custom hook"
 useInput :: String -> Hook (UseState String) (String /\ EventHandler)
@@ -51,9 +70,9 @@ type SubmissionError = String
 
 data NewContractState
   = Creating
-  | Submitting (ActusTerms /\ Contract)
-  | SubmissionError SubmissionError -- ActusTerms SubmissionError
-  | SubmissionsSuccess ActusTerms ContractId
+  | Submitting ContractForm.Result
+  | SubmissionError SubmissionError
+  | SubmissionsSuccess ContractTerms ContractId
 
 type ContractListState =
   { newContract :: Maybe NewContractState
@@ -65,13 +84,59 @@ type Props =
   , connectedWallet :: Maybe (WalletInfo Wallet.Api)
   }
 
+testingSubmit :: Boolean
+testingSubmit = false
+
 mkContractList :: MkComponentM (Props -> JSX)
 mkContractList = do
   contractForm <- mkContractForm
+  submitContract <- mkSubmitContract
   modal <- liftEffect $ mkModal
+  cardanoMultiplatformLib <- asks _.cardanoMultiplatformLib
+  logger <- asks _.logger
 
   liftEffect $ component "ContractList" \{ connectedWallet, contractList } -> React.do
     ((state :: ContractListState) /\ updateState) <- useState { newContract: Nothing, metadata: Nothing }
+
+    -- FIXME: paluh. Submission testing.
+    internalConnectedWallet /\ setInternalConnectedWallet <- useState' Nothing
+
+    useEffectOnce $ do
+      when testingSubmit do
+        let
+          -- nami-work
+          myAddress = "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
+
+          -- nami-test
+          counterPartyAddress = "addr_test1qrp6m3r307r3d73t6vjnqssqmj9deqcprkm5v0yhuyvyfgm6fftzwd90f7aanfwl28s4efxxt3252p3uet87klt2aj4qzgw242"
+
+          UseForm.Form { validator } = mkForm cardanoMultiplatformLib
+
+          query = Query.fromHomogeneous
+            { "party": [ myAddress ]
+            , "counter-party": [ counterPartyAddress ]
+            , "contract-terms": [ initialJson ]
+            }
+
+        launchAff_ do
+          possibleNami <- liftEffect (window >>= Wallet.cardano) >>= case _ of
+            Nothing -> pure Nothing
+            Just cardano -> do
+              liftEffect (Wallet.nami cardano) >>= traverse walletInfo >>= case _ of
+                Nothing -> pure Nothing
+                Just walletInfo@(WalletInfo { wallet }) -> do
+                  walletApi <- Wallet.enable wallet
+                  pure $ Just $ Newtype.over WalletInfo (Record.set (Proxy :: Proxy "wallet") walletApi) walletInfo
+          liftEffect $ setInternalConnectedWallet possibleNami
+
+        runValidator validator query >>= case _ of
+          V (Right result) -> do
+            updateState _ { newContract = Just $ Submitting result }
+          V (Left err) -> do
+            logger $ unsafeStringify err
+            pure unit
+      pure (pure unit)
+
     let
       onAddContractClick = updateState _ { newContract = Just Creating }
 
@@ -83,32 +148,28 @@ mkContractList = do
 
     pure $
       DOOM.div_
-        [ case state.newContract of
-            Just Creating -> contractForm
+        [ case state.newContract, connectedWallet <|> internalConnectedWallet of
+            Just Creating, _ -> contractForm
               { onDismiss: updateState _ { newContract = Nothing }
-              , onError: \error -> updateState _ { newContract = Just (SubmissionError error) }
               , onSuccess: onNewContract
               , inModal: true
               , connectedWallet
               }
-            Just (Submitting contract) ->
-              modal
-                { title: text "Submitting"
-                -- FIXME: Should we ignore dismisses - we are not able to cancel submission I can imagine?
-                , onDismiss: updateState _ { newContract = Nothing }
-                , body:
-                    -- FIXME: We should still present the form
-                    text ("Submitting" <> show contract)
-                }
-            -- FIXME: Just a stub...
-            Just _ ->
+            Just (Submitting contractData), Just wallet -> submitContract
+              { onDismiss: updateState _ { newContract = Nothing }
+              , onSuccess: const $ pure unit
+              , connectedWallet: wallet
+              , inModal: true
+              , contractData
+              }
+            Just _, _ ->
               modal
                 { title: text "Success or failure"
                 , onDismiss: updateState _ { newContract = Nothing }
                 , body:
                     text ("Success or failure...")
                 }
-            Nothing -> mempty
+            Nothing, _ -> mempty
         , DOM.div { className: "row justify-content-end" } $ Array.singleton $ do
             let
               disabled = isNothing connectedWallet
@@ -132,29 +193,48 @@ mkContractList = do
               else
                 addContractLink
         , DOM.div { className: "row" } $ Array.singleton $ case state.metadata of
-            Just (Metadata metadata) -> modal $
-              { body: text $ show (keys metadata) -- FIXME: Just a stub...
+            Just (metadata) -> modal $
+              { body: text $ maybe "Empty Metadata" (show <<< _.contractTerms <<< unwrap) $ decodeMetadata metadata -- TODO: encode contractTerms as JSON
               , onDismiss: updateState _ { metadata = Nothing }
-              , title: text "ACTUS Contract Terms"
+              , title: text "Contract Terms"
               }
             Nothing -> mempty
         , DOM.div { className: "row" } $ Array.singleton $
             DOM.table { className: "table table-striped table-hover" }
               [ DOM.thead {} $
                   [ DOM.tr {}
-                      [ DOM.th {} [ text "Status" ]
-                      , DOM.th {} [ text "Contract ID" ]
-                      , DOM.th {} [ text "View" ]
+                      [ DOM.th {} [ text "Id" ]
+                      , DOM.th {} [ text "Type" ]
+                      , DOM.th {} [ text "Party" ]
+                      , DOM.th {} [ text "Counter Party" ]
+                      , DOM.th {} [ text "Terms" ]
+                      , DOM.th {} [ text "Status" ]
                       ]
                   ]
               , DOM.tbody {} $ map
                   ( \{ resource: ContractHeader { contractId, status, metadata } } ->
-                      DOM.tr {}
-                        [ DOM.td {} [ text $ show status ]
-                        , DOM.td {} [ text $ txOutRefToString contractId ]
-                        , DOM.td {} [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
-                        ]
+                      let
+                        md = decodeMetadata metadata
+                      in
+                        DOM.tr {}
+                          [ DOM.td {} [ text $ maybe "" (_.contractId <<< unwrap <<< _.contractTerms <<< unwrap) md ]
+                          , DOM.td {} [ text $ maybe "" (show <<< _.contractType <<< unwrap <<< _.contractTerms <<< unwrap) md ]
+                          , DOM.td {} [ text $ maybe "" (displayParty <<< _.party <<< unwrap) md ]
+                          , DOM.td {} [ text $ maybe "" (displayParty <<< _.counterParty <<< unwrap) md ]
+                          , DOM.td {} [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
+                          , DOM.td {} $ do
+                              let
+                                tooltipJSX = tooltip {} (DOOM.text $ txOutRefToString contractId)
+                              overlayTrigger
+                                { overlay: tooltipJSX
+                                , placement: OverlayTrigger.placement.bottom
+                                } $ DOM.td {} [ show status ]
+                          ]
                   )
                   contractList
               ]
         ]
+  where
+  displayParty :: Party -> String
+  displayParty (Role role) = role
+  displayParty (Address address) = address

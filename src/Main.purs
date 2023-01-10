@@ -4,6 +4,7 @@ module Main
 
 import Prelude
 
+import CardanoMultiplatformLib as CardanoMultiplatformLib
 import Component.App (mkApp)
 import Component.Types (ContractEvent(..))
 import Contrib.Data.Argonaut (JsonParser)
@@ -116,17 +117,22 @@ main configJson = do
           for_ e.deletions $ Subscription.notify contractListener <<< Deletion
           for_ e.updates $ Subscription.notify contractListener <<< Update
 
-        walletInfoCtx <- liftEffect $ createContext Nothing
-        let
-          mkAppCtx =
-            { walletInfoCtx
-            , logger
-            , contractEvents: contractEmitter
-            , runtime
-            }
+        CardanoMultiplatformLib.importLib >>= case _ of
+          Nothing -> liftEffect $ logger "Cardano serialization lib loading failed"
+          Just cardanoMultiplatformLib -> do
+            walletInfoCtx <- liftEffect $ createContext Nothing
+            let
+              mkAppCtx =
+                { cardanoMultiplatformLib
+                , walletInfoCtx
+                , logger
+                , contractEvents: contractEmitter
+                , runtime
+                }
 
-        app <- liftEffect $ runReaderT mkApp mkAppCtx
-        liftEffect $ renderRoot reactRoot $ app unit
+            app <- liftEffect $ runReaderT mkApp mkAppCtx
+            liftEffect $ renderRoot reactRoot $ app unit
+
         -- FIXME: We need a resource monad to clean this stuff up and make cleanup reliable:
         liftEffect do
           Subscription.unsubscribe contractsSubscription

@@ -7,7 +7,6 @@ module Wallet
   , Hash32(..)
   , Transaction(..)
   , TransactionUnspentOutput
-  , TransactionWitnessSet(..)
   , Value(..)
   , Wallet
   , apiVersion
@@ -33,21 +32,27 @@ module Wallet
 
 import Prelude
 
+import CardanoMultiplatformLib.Transaction (TransactionWitnessSet(..))
 import Control.Monad.Except (runExceptT)
 import Data.Either (Either(..))
+import Data.Foldable (fold)
 import Data.Maybe (Maybe(..))
 import Data.Nullable (Nullable)
 import Data.Nullable as Nullable
 import Effect (Effect)
-import Effect.Aff (Aff)
+import Effect.Aff (Aff, makeAff)
+import Effect.Class (liftEffect)
 import Effect.Exception (throw)
+import Foreign (Foreign)
 import Foreign as Foreign
 import Foreign.Index as Foreign.Index
 import JS.Object (EffectMth0, EffectMth1, EffectMth2, EffectProp, JSObject)
 import JS.Object.Generic (mkFFI)
+import Promise as Promise
 import Promise.Aff (Promise)
 import Promise.Aff as Promise
 import Type.Prelude (Proxy(..))
+import Unsafe.Coerce (unsafeCoerce)
 import Web.HTML (Window)
 
 newtype Address = Address String
@@ -62,8 +67,6 @@ data Coin
 data Transaction
 
 data Value
-
-data TransactionWitnessSet
 
 data Hash32
 
@@ -198,8 +201,8 @@ getChangeAddress :: Api -> Aff Address
 getChangeAddress = Promise.toAffE <<< _Api.getChangeAddress
 
 -- | Manually tested and works with Nami.
-getCollateral :: Api -> Cbor Coin -> Aff (Maybe (Array (Cbor TransactionUnspentOutput)))
-getCollateral api = map Nullable.toMaybe <<< Promise.toAffE <<< _Api.getCollateral api
+getCollateral :: Api -> Cbor Coin -> Aff (Array (Cbor TransactionUnspentOutput))
+getCollateral api = map (fold <<< Nullable.toMaybe) <<< Promise.toAffE <<< _Api.getCollateral api
 
 -- | Manually tested and works with Nami.
 getRewardAddresses :: Api -> Aff (Array Address)
@@ -220,8 +223,24 @@ getUtxos = map Nullable.toMaybe <<< Promise.toAffE <<< _Api.getUtxos
 signData :: Api -> Address -> Bytes -> Aff Bytes
 signData api address = Promise.toAffE <<< _Api.signData api address
 
-signTx :: Api -> Cbor Transaction -> Boolean -> Aff (Cbor TransactionWitnessSet)
-signTx api cbor = Promise.toAffE <<< _Api.signTx api cbor
+rejectionToForeign :: Promise.Rejection -> Foreign
+rejectionToForeign = unsafeCoerce
+
+toAffEither :: forall a err. (Promise.Rejection -> err) -> Promise.Promise a -> Aff (Either err a)
+toAffEither customCoerce p = makeAff \cb ->
+  mempty <$
+    Promise.thenOrCatch
+      (\a -> Promise.resolve <$> cb (Right (Right a)))
+      (\e -> Promise.resolve <$> cb (Right (Left (customCoerce e))))
+      p
+
+-- FIXME: paluh. Fix error handling by introducing Variant based error
+-- representation and using it across the whole API.
+toAffEitherE :: forall a err. (Promise.Rejection -> err) -> Effect (Promise a) -> Aff (Either err a)
+toAffEitherE coerce f = liftEffect f >>= toAffEither coerce
+
+signTx :: Api -> Cbor Transaction -> Boolean -> Aff (Either Foreign (Cbor TransactionWitnessSet))
+signTx api cbor = toAffEitherE rejectionToForeign <<< _Api.signTx api cbor
 
 submitTx :: Api -> Cbor Transaction -> Aff (Cbor Hash32)
 submitTx api = Promise.toAffE <<< _Api.submitTx api

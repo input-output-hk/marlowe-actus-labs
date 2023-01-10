@@ -23,6 +23,7 @@ import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.String.CaseInsensitive (CaseInsensitiveString(..))
 import Data.Tuple.Nested ((/\))
+import Debug (traceM)
 import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Fetch (RequestMode(..))
@@ -212,6 +213,12 @@ post (ServerURL serverUrl) (IndexEndpoint (ResourceLink path)) req = runExceptT 
       R.insert (Proxy :: Proxy "Accept") "application/json"
         $ R.insert (Proxy :: Proxy "Content-Type") "application/json"
         $ (encodeHeaders req :: { | extraHeaders })
+
+  traceM "Request body:"
+  traceM body
+
+  traceM "Request headers:"
+  traceM headers
 
   response <- ExceptT $ fetchEither url { method: POST, body, headers } allowedStatusCodes FetchError
   (lift (jsonBody response)) >>= decodeResourceWithLink (map decodeJson :: Maybe _ -> Maybe _) >>> case _ of

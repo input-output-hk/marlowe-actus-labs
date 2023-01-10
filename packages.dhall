@@ -95,6 +95,11 @@ in upstream
       "https://github.com/danieljharvey/purescript-refined.git"
       "v1.0.0"
   with
+    js-unsafe-stringify = mkPackage
+      ([] : List Text)
+      "https://github.com/paluh/purescript-js-unsafe-stringify.git"
+      "v0.2.1"
+  with
     js-object = mkPackage
       [ "aff", "effect", "heterogeneous", "prelude", "typelevel-prelude", "contravariant", "newtype", "record", "unsafe-coerce" ]
       "https://github.com/purescript-codegen/purescript-js-object.git"
@@ -106,3 +111,28 @@ in upstream
       ]
       "https://github.com/JamieBallingall/purescript-atleast.git"
       "x0.5.1"
+  with
+    polyform =
+      mkPackage
+      [ "js-unsafe-stringify", "newtype" ,"ordered-collections"
+      , "variant", "profunctor", "invariant", "foreign-object"
+      , "run", "transformers","validation", "foreign"
+      ]
+      "https://github.com/purescript-polyform/polyform.git"
+      "v0.9.2"
+
+  with
+    polyform-batteries-core = mkPackage
+      [ "debug", "decimals", "filterable", "numbers"
+      , "polyform", "prelude", "record-extra", "test-unit"
+      ]
+      "https://github.com/purescript-polyform/batteries-core.git"
+      "v0.3.0"
+  with
+    polyform-batteries-urlencoded =
+      mkPackage
+        [ "argonaut" , "console" , "debug" , "effect" , "form-urlencoded"
+        , "polyform-batteries-core" , "psci-support" , "spec"
+        ]
+        "https://github.com/purescript-polyform/batteries-urlencoded.git"
+        "v0.4.1"

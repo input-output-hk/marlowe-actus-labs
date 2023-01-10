@@ -7,7 +7,11 @@ import Contrib.Data.Argonaut.Generic.Record (class DecodeRecord, DecodeJsonField
 import Data.Argonaut (class DecodeJson, Json, class EncodeJson, JsonDecodeError(..), decodeJson, encodeJson)
 import Data.Argonaut.Decode.Combinators ((.:))
 import Data.Argonaut.Decode.Decoders (decodeMaybe)
+import Data.Bifunctor (rmap)
 import Data.DateTime (DateTime)
+import Data.DateTime.Instant (fromDateTime, toDateTime)
+import Data.DateTime.ISO
+import Data.Either (Either)
 import Data.Either (Either, note)
 import Data.Generic.Rep (class Generic)
 import Data.Int as Int
@@ -24,6 +28,7 @@ import Effect.Unsafe (unsafePerformEffect)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Language.Marlowe.Core.V1.Semantics.Types as V1
+import Marlowe.Time (instantFromJson, instantToJson)
 import Record as Record
 import Type.Row.Homogeneous as Row
 
@@ -120,7 +125,7 @@ derive instance Ord BlockHeader
 instance DecodeJson BlockHeader where
   decodeJson json = BlockHeader <$> decodeJson json
 
-newtype Metadata = Metadata (Map Int (Object Json))
+newtype Metadata = Metadata (Map Int Json)
 
 derive instance Generic Metadata _
 derive instance Newtype Metadata _
@@ -140,9 +145,9 @@ instance EncodeJson Metadata where
 
 instance DecodeJson Metadata where
   decodeJson json = do
-    (obj :: Object (Object Json)) <- decodeJson json
+    (obj :: Object Json) <- decodeJson json
 
-    (arr :: Array (Int /\ Object Json)) <- for (Object.toUnfoldable obj) \(idx /\ value) -> do
+    (arr :: Array (Int /\ Json)) <- for (Object.toUnfoldable obj) \(idx /\ value) -> do
       idx' <- do
         let
           err = TypeMismatch $ "Expecting an integer metadata label but got: " <> show idx
@@ -298,6 +303,9 @@ derive instance Newtype Address _
 addressToString :: Address -> String
 addressToString = un Address
 
+addressToParty :: Address -> V1.Party
+addressToParty (Address address) = V1.Address address
+
 instance EncodeJson Address where
   encodeJson = encodeJson <<< addressToString
 
@@ -391,14 +399,17 @@ instance EncodeJsonBody PostContractsRequest where
 type PostContractsHeadersRow =
   ( "X-Change-Address" :: String
   , "X-Address" :: String
-  , "X-Colateral-UTxO" :: String
+  -- , "X-Collateral-UTxO" :: String
   )
 
 instance EncodeHeaders PostContractsRequest PostContractsHeadersRow where
-  encodeHeaders (PostContractsRequest { changeAddress, addresses, collateralUTxOs }) =
+  encodeHeaders (PostContractsRequest { changeAddress, addresses }) =
     { "X-Change-Address": addressToString changeAddress
     , "X-Address": String.joinWith "," (map addressToString addresses)
-    , "X-Colateral-UTxO": String.joinWith "," (map txOutRefToString collateralUTxOs)
+    -- FIXME: Empty collateral causes request rejection so ... this header record representation
+    -- gonna be hard to maintain and we should switch to `Object String` probably and use
+    -- lower level fetch API.
+    -- , "X-Collateral-UTxO": String.joinWith "," (map txOutRefToString collateralUTxOs)
     }
 
 newtype PostContractsResponse = PostContractsResponse
@@ -433,11 +444,44 @@ derive instance Eq ContractEndpoint
 derive instance Newtype ContractEndpoint _
 derive newtype instance DecodeJson ContractEndpoint
 
--- FIXME: just a stub
-newtype PostTransactionsRequest = PostTransactionsRequest Int
+newtype PostTransactionsRequest = PostTransactionsRequest
+  { inputs :: Array V1.Input
+  , invalidBefore :: DateTime
+  , invalidHereafter :: DateTime
+  , metadata :: Metadata
+  , changeAddress :: Address
+  , addresses :: Array Address
+  , collateralUTxOs :: Array TxOutRef
+  }
 
--- FIXME: just a stub
-newtype PostTransactionsResponse = PostTransactinosResponse Int
+instance EncodeJsonBody PostTransactionsRequest where
+  encodeJsonBody (PostTransactionsRequest r) = encodeJson
+    { inputs: r.inputs
+    , invalidBefore: ISO r.invalidBefore
+    , invalidHereafter: ISO r.invalidHereafter
+    , metadata: r.metadata
+    , version: V1
+    }
+
+instance EncodeHeaders PostTransactionsRequest PostContractsHeadersRow where -- TODO: Rename PostContractsHeaderRow
+  encodeHeaders (PostTransactionsRequest { changeAddress, addresses, collateralUTxOs }) =
+    { "X-Change-Address": addressToString changeAddress
+    , "X-Address": String.joinWith "," (map addressToString addresses)
+    -- FIXME: Check comment above regarding the same header and contraacts endpoint request.
+    -- , "X-Collateral-UTxO": String.joinWith "," (map txOutRefToString collateralUTxOs)
+    }
+
+newtype PostTransactionsResponse = PostTransactionsResponse
+  { contractId :: TxOutRef
+  , transactionId :: TxId
+  , txBody :: TextEnvelope TxBody
+  }
+
+derive instance Newtype PostTransactionsResponse _
+
+instance DecodeJson PostTransactionsResponse where
+  decodeJson = decodeNewtypedRecord
+    { txBody: map decodeTxBodyTextEnvelope :: Maybe _ -> Maybe _ }
 
 type GetTransactionsResponse = TxHeader
 

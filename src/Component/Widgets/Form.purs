@@ -4,20 +4,43 @@ import Prelude
 
 import Data.Array.ArrayAL (ArrayAL)
 import Data.Array.ArrayAL as ArrayAL
-import Data.Foldable (length)
+import Data.Either (Either(..))
+import Data.Foldable (length, null)
+import Data.FormURLEncoded.Query (FieldId(..), Query)
+import Data.FormURLEncoded.Query as Query
 import Data.FunctorWithIndex (mapWithIndex)
-import Data.Maybe (Maybe(..))
+import Data.Map (Map)
+import Data.Map as Map
+import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Monoid.Disj (Disj(..))
+import Data.Newtype (class Newtype)
+import Data.Set (Set)
+import Data.Set as Set
+import Data.Time.Duration (Seconds)
 import Data.Traversable (traverse)
+import Data.Validation.Semigroup (V(..))
 import Effect (Effect)
 import Effect.Random (random)
 import Effect.Ref as Ref
+import Effect.Uncurried (EffectFn1)
+import Polyform.Batteries.UrlEncoded as UrlEncoded
+import Polyform.Batteries.UrlEncoded as UrleEncoded
+import Polyform.Batteries.UrlEncoded.Types (stringifyValidator)
+import Polyform.Batteries.UrlEncoded.Types.Errors as Errors
+import Polyform.Batteries.UrlEncoded.Validators (MissingValue)
+import Polyform.Batteries.UrlEncoded.Validators as Validators
+import Polyform.Validator (runValidator)
+import Polyform.Validator as Validator
 import React.Basic (JSX)
 import React.Basic.DOM as R
 import React.Basic.DOM.Events (targetValue)
 import React.Basic.DOM.Simplified.Generated as DOM
-import React.Basic.Events (handler, handler_)
-import React.Basic.Hooks (type (/\), component, useEffectOnce, useState, (/\))
+import React.Basic.Events (EventHandler, SyntheticEvent, handler, handler_)
+import React.Basic.Hooks (type (&), type (/\), Hook, UseEffect, UseMemo, UseState, component, useEffect, useEffectOnce, useMemo, useState, useState', (/\))
 import React.Basic.Hooks as React
+import Safe.Coerce (coerce)
+import Type.Row (type (+))
+import Utils.React.Basic.Hooks (useDebounce)
 
 type RadioFieldChoice = String /\ JSX /\ Boolean
 
@@ -31,7 +54,17 @@ option value label = value /\ label /\ false
 
 data SingleChoiceField
   = RadioButtonField (ArrayAL 1 RadioFieldChoice) -- use `solo` / `solo'` to create
-  | SelectField (ArrayAL 2 SelectFieldChoice) -- use `duet` / `duet'` to create
+  | SelectField (ArrayAL 1 SelectFieldChoice) -- use `duet` / `duet'` to create
+
+data MultiChoiceField
+  = SelectMultipleField (ArrayAL 1 SelectFieldChoice) -- use `solo` / `solo'` to create
+  | CheckboxField (ArrayAL 1 SelectFieldChoice) -- use `duet` / `duet'` to create
+
+data Field
+  = SingleChoiceField SingleChoiceField
+  | MultiChoiceField MultiChoiceField
+  | InputField
+  | TextArea
 
 type SingleChoiceFieldProps =
   { initialValue :: String
@@ -39,6 +72,8 @@ type SingleChoiceFieldProps =
   , type :: SingleChoiceField
   }
 
+-- FIXME: These widgets were create before we started to bind to `react-bootstrap` and implementation
+-- `useForm` so they should be deprecated and replaced.
 -- Choice widget either radio button or checkbox which can handle
 -- multiple options.
 mkSingleChoiceField :: Effect (SingleChoiceFieldProps -> JSX)
@@ -128,3 +163,4 @@ mkBooleanField = do
         onToggle (value == "on")
     , type: RadioButtonField $ ArrayAL.solo ("on" /\ label /\ disabled)
     }
+
