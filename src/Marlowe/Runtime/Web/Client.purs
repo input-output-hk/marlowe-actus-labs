@@ -10,7 +10,7 @@ import Control.Monad.Loops (unfoldrM)
 import Control.Monad.Trans.Class (lift)
 import Data.Argonaut (class DecodeJson, JsonDecodeError, decodeJson, stringify)
 import Data.Argonaut.Decode ((.:))
-import Data.Bifunctor (lmap)
+import Data.Bifunctor (lmap, rmap)
 import Data.Either (Either(..))
 import Data.Foldable (fold)
 import Data.Generic.Rep (class Generic)
@@ -27,7 +27,7 @@ import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Fetch (RequestMode(..))
 import Fetch.Core.Headers (Headers, toArray)
-import Marlowe.Runtime.Web.Types (class EncodeHeaders, class EncodeJsonBody, class ToResourceLink, IndexEndpoint(..), ResourceEndpoint(..), ResourceLink(..), ResourceWithLinks, ResourceWithLinksRow, ServerURL(..), decodeResourceWithLink, encodeHeaders, encodeJsonBody, toResourceLink)
+import Marlowe.Runtime.Web.Types (class EncodeHeaders, class EncodeJsonBody, class ToResourceLink, ContractEndpoint, GetContractsResponse, IndexEndpoint(..), ResourceEndpoint(..), ResourceLink(..), ResourceWithLinks, ResourceWithLinksRow, ServerURL(..), decodeResourceWithLink, encodeHeaders, encodeJsonBody, toResourceLink)
 import Prim.Row (class Lacks) as Row
 import Record as R
 import Safe.Coerce (coerce)
@@ -39,7 +39,6 @@ data ClientError
   | ResponseDecodingError JsonDecodeError
 
 derive instance Generic ClientError _
-
 instance Show ClientError where
   show = genericShow
 
@@ -102,6 +101,24 @@ getPage serverUrl path possibleRange = runExceptT do
         else Nothing
     }
 
+-- TODO generalize
+getContracts
+  :: ServerURL
+  -> ResourceLink (Array (ResourceWithLinks GetContractsResponse (contract :: ContractEndpoint)))
+  -> Maybe Range
+  -> Aff (Either ClientError (Array GetContractsResponse))
+getContracts serverUrl resourceLink = map (rmap (map _.resource <<< fold <<< map _.page)) <<< getPages serverUrl resourceLink
+
+-- TODO generalize
+getContracts'
+  :: forall endpoint
+   . ToResourceLink endpoint (Array (ResourceWithLinks GetContractsResponse (contract :: ContractEndpoint)))
+  => ServerURL
+  -> endpoint
+  -> Maybe Range
+  -> Aff (Either ClientError (Array GetContractsResponse))
+getContracts' serverUrl endpoint = getContracts serverUrl (toResourceLink endpoint)
+
 data FoldPageStep = FetchPage (Maybe Range) | StopFetching
 
 foldMapMPages
@@ -112,9 +129,10 @@ foldMapMPages
   => ServerURL
   -> ResourceLink a
   -> ({ page :: a, currRange :: Maybe Range } -> m b)
+  -> Maybe Range
   -> m (GetResourceResponse b)
-foldMapMPages serverUrl path f = do
-  bs <- runExceptT $ flip unfoldrM (FetchPage Nothing) case _ of
+foldMapMPages serverUrl path f startRange = do
+  bs <- runExceptT $ flip unfoldrM (FetchPage startRange) case _ of
     StopFetching -> pure Nothing
     FetchPage currRange -> do
       { page, nextRange } <- ExceptT $ liftAff $ getPage serverUrl path currRange
@@ -130,6 +148,7 @@ getPages
   => MonadAff m
   => ServerURL
   -> ResourceLink a
+  -> Maybe Range
   -> m (GetResourceResponse (List { page :: a, currRange :: Maybe Range }))
 getPages serverUrl path = foldMapMPages serverUrl path (pure <<< List.singleton)
 
@@ -165,6 +184,7 @@ foldMapMPages'
   => ServerURL
   -> t
   -> ({ currRange :: Maybe Range, page :: a } -> m b)
+  -> Maybe Range
   -> m (Either ClientError b)
 foldMapMPages' serverUrl path = foldMapMPages serverUrl (toResourceLink path)
 

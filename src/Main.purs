@@ -5,61 +5,37 @@ module Main
 import Prelude
 
 import Component.App (mkApp)
-import Component.ContractList (mkContractList)
-import Component.EventList (mkEventList)
+import Component.Types (ContractEvent(..))
 import Contrib.Data.Argonaut (JsonParser)
+import Contrib.Data.Map as Contrib.Map
 import Control.Monad.Reader (runReaderT)
-import Control.Monad.Reader.Class (asks)
 import Data.Argonaut (Json, decodeJson, (.:))
 import Data.Either (Either, either)
+import Data.Map (Map)
+import Data.Map as Map
 import Data.Maybe (Maybe(..))
-import Data.Newtype (un)
-import Data.Tuple.Nested ((/\))
-import Debug (traceM)
+import Data.Newtype as Newtype
+import Data.Traversable (for_)
+import Data.Tuple (snd)
+import Data.Tuple.Nested (type (/\), (/\))
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
-import Effect.Aff (Milliseconds(..), delay, launchAff_)
-import Effect.Aff (launchAff_)
-import Effect.Class (liftEffect)
+import Effect.Aff as Aff
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
-import Effect.Exception (error, throw)
+import Effect.Exception (throw)
+import Effect.Timer as Timer
+import Halogen.Subscription as Subscription
 import Marlowe.Runtime.Web as Marlowe.Runtime.Web
-import Marlowe.Runtime.Web.Client (foldMapMPages, foldMapMPages', getPage')
-import Marlowe.Runtime.Web.Types (ResourceLink(..), ServerURL(..), api)
+import Marlowe.Runtime.Web.Client as Client
+import Marlowe.Runtime.Web.Types (ContractHeader, ServerURL(..), TxOutRef, api)
 import React.Basic (createContext)
 import React.Basic.DOM.Client (createRoot, renderRoot)
-import React.Basic.DOM.Simplified.Generated as DOM
-import React.Basic.Hooks (component, provider, useState)
-import Wallet as Wallet
 import Web.DOM (Element)
 import Web.DOM.NonElementParentNode (getElementById)
 import Web.HTML (HTMLDocument, window)
 import Web.HTML.HTMLDocument (toNonElementParentNode)
 import Web.HTML.Window (document)
-
--- | TODO: move this testing code to a separate "app"
-testWallet :: Effect Unit
-testWallet = launchAff_ do
-  delay (Milliseconds 3_000.0)
-  mC <- liftEffect (Wallet.cardano =<< window)
-  case mC of
-    Nothing -> Console.log "nay"
-    Just c -> do
-      liftEffect (Wallet.nami c)
-        >>= case _ of
-          Nothing -> Console.log "boo"
-          Just nami -> do
-            api <- Wallet.enable nami
-            Console.log <<< ("getBalance: " <> _) <<< show =<< Wallet.getBalance api
-            Console.log <<< ("getChangeAddress: " <> _) <<< show =<< Wallet.getChangeAddress api
-            Console.log <<< ("getRewardAddresses: " <> _) <<< show =<< Wallet.getRewardAddresses api
-            Console.log <<< ("getUnusedAddresses: " <> _) <<< show =<< Wallet.getUnusedAddresses api
-            Console.log <<< ("getUsedAddresses: " <> _) <<< show =<< Wallet.getUsedAddresses api
-            Console.log <<< ("getUtxos: " <> _) <<< show =<< Wallet.getUtxos api
-
-liftEitherWith :: forall a err. (err -> String) -> Either err a -> Effect a
-liftEitherWith showErr = either (throw <<< showErr) pure
 
 liftEither :: forall a err. Show err => Either err a -> Effect a
 liftEither = either (throw <<< show) pure
@@ -75,6 +51,33 @@ decodeConfig json = do
   marloweWebServerUrl <- obj .: "marloweWebServerUrl"
   develMode <- obj .: "develMode"
   pure { marloweWebServerUrl: ServerURL marloweWebServerUrl, develMode }
+
+type IntervalEvent = Unit
+
+withSetIntervalEmitter :: forall a. Int -> (Subscription.Emitter IntervalEvent -> Aff a) -> Aff a
+withSetIntervalEmitter interval k = do
+  { emitter, listener } <- liftEffect Subscription.create
+  let
+    aquire :: Aff Timer.IntervalId
+    aquire = liftEffect $ Timer.setInterval interval (Subscription.notify listener unit)
+
+    cleanup :: Timer.IntervalId -> Aff Unit
+    cleanup = liftEffect <<< Timer.clearInterval
+  Aff.bracket aquire cleanup \_ -> k emitter
+
+type GetContractsEvent =
+  { additions :: Map TxOutRef ContractHeader
+  , deletions :: Map TxOutRef ContractHeader
+  , updates :: Map TxOutRef { old :: ContractHeader, new :: ContractHeader }
+  }
+
+contractScanner :: Map TxOutRef ContractHeader -> Map TxOutRef ContractHeader /\ GetContractsEvent -> Map TxOutRef ContractHeader /\ GetContractsEvent
+contractScanner new (old /\ _) =
+  new /\
+    { additions: Contrib.Map.additions old new
+    , deletions: Contrib.Map.deletions old new
+    , updates: Contrib.Map.updates old new
+    }
 
 main :: Json -> Effect Unit
 main configJson = do
@@ -92,21 +95,39 @@ main configJson = do
     Nothing -> throw "Could not find element with id 'app-root'"
     Just container -> do
       reactRoot <- createRoot container
-      launchAff_ do
-        -- contracts <- foldMapMPages' config.marloweWebServerUrl api (pure <<< _.page) >>= liftEither >>> liftEffect
-        -- FIXME: this is a temporary hack to get the first page of contracts to speed up development
-        -- contracts <- getPage' config.marloweWebServerUrl api Nothing >>= liftEither >>> liftEffect <#> _.page
+      launchAff_ $ withSetIntervalEmitter 1_000 \setIntervalEmitter -> do
+        initialContracts :: Array ContractHeader <- liftEffect <<< liftEither =<< Client.getContracts' config.marloweWebServerUrl api Nothing
+        { emitter: contractsEmitter, listener: contractsListener :: Subscription.Listener (Map TxOutRef ContractHeader) } <- liftEffect Subscription.create
+
+        contractsSubscription <- liftEffect $ Subscription.subscribe setIntervalEmitter \_ -> launchAff_ do
+          liftEffect <<< (Subscription.notify contractsListener <<< Contrib.Map.fromFoldableBy (_.contractId <<< Newtype.unwrap) <=< liftEither)
+            =<< Client.getContracts' config.marloweWebServerUrl api Nothing
+
         let
-          contracts = []
+          getContractsEvents :: Subscription.Emitter GetContractsEvent
+          getContractsEvents = map snd $ Subscription.fold contractScanner contractsEmitter $
+            Contrib.Map.fromFoldableBy (_.contractId <<< Newtype.unwrap) initialContracts
+              /\ { additions: Map.empty, deletions: Map.empty, updates: Map.empty }
+
+        { emitter: contractEmitter, listener: contractListener :: Subscription.Listener ContractEvent } <- liftEffect Subscription.create
+
+        contractSubscription <- liftEffect $ Subscription.subscribe getContractsEvents \e -> do
+          for_ e.additions $ Subscription.notify contractListener <<< Addition
+          for_ e.deletions $ Subscription.notify contractListener <<< Deletion
+          for_ e.updates $ Subscription.notify contractListener <<< Update
 
         walletInfoCtx <- liftEffect $ createContext Nothing
         let
           mkAppCtx =
             { walletInfoCtx
             , logger
-            , contracts
+            , contractEvents: contractEmitter
             , runtime
             }
 
         app <- liftEffect $ runReaderT mkApp mkAppCtx
         liftEffect $ renderRoot reactRoot $ app unit
+        -- FIXME: We need a resource monad to clean this stuff up and make cleanup reliable:
+        liftEffect do
+          Subscription.unsubscribe contractsSubscription
+          Subscription.unsubscribe contractSubscription
