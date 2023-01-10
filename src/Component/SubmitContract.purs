@@ -94,6 +94,7 @@ mkSubmitContract = do
                 Just txBytes -> do
                   traceM "DECODED HEX BYTES OF THE TX BODY"
                   tx <- liftEffect $ Transaction.transaction.from_bytes lib."Transaction" txBytes
+
                   traceM "Successfully created a transaction"
                   let
                     WalletInfo { wallet: walletApi } = connectedWallet
@@ -103,6 +104,13 @@ mkSubmitContract = do
                     throwError err
                   traceM "SIGNED"
                   traceM witnesses
+                  case witnesses of
+                    Right w -> do
+                      pure unit
+                    Left e -> do
+                      traceM "Error from the wallet signTx"
+                      traceM e
+
                 Nothing ->
                   traceM "Hex decoding failed"
             Left err ->

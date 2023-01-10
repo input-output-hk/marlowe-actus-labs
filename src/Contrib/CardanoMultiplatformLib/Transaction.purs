@@ -10,6 +10,59 @@ import JS.Object (EffectMth0, EffectMth1, EffectMth2, JSObject)
 import JS.Object.Generic (mkNewtypedFFI)
 import Type.Prelude (Proxy(..))
 
+-- export class Transaction {
+--   free(): void;
+-- /**
+-- * @returns {Uint8Array}
+-- */
+--   to_bytes(): Uint8Array;
+-- /**
+-- * @param {Uint8Array} bytes
+-- * @returns {Transaction}
+-- */
+--   static from_bytes(bytes: Uint8Array): Transaction;
+-- /**
+-- * @returns {string}
+-- */
+--   to_json(): string;
+-- /**
+-- * @returns {TransactionJSON}
+-- */
+--   to_js_value(): TransactionJSON;
+-- /**
+-- * @param {string} json
+-- * @returns {Transaction}
+-- */
+--   static from_json(json: string): Transaction;
+-- /**
+-- * @returns {TransactionBody}
+-- */
+--   body(): TransactionBody;
+-- /**
+-- * @returns {TransactionWitnessSet}
+-- */
+--   witness_set(): TransactionWitnessSet;
+-- /**
+-- * @returns {boolean}
+-- */
+--   is_valid(): boolean;
+-- /**
+-- * @returns {AuxiliaryData | undefined}
+-- */
+--   auxiliary_data(): AuxiliaryData | undefined;
+-- /**
+-- * @param {boolean} valid
+-- */
+--   set_is_valid(valid: boolean): void;
+-- /**
+-- * @param {TransactionBody} body
+-- * @param {TransactionWitnessSet} witness_set
+-- * @param {AuxiliaryData | undefined} auxiliary_data
+-- * @returns {Transaction}
+-- */
+--   static new(body: TransactionBody, witness_set: TransactionWitnessSet, auxiliary_data?: AuxiliaryData): Transaction;
+-- }
+
 newtype Transaction = Transaction
   ( JSObject
       ( from_bytes :: EffectMth1 Uint8Array TransactionObject
@@ -32,13 +85,20 @@ newtype TransactionObject = TransactionObject
       ( free :: EffectMth0 Unit
       , to_bytes :: EffectMth0 Uint8Array
       , to_json :: EffectMth0 JsonString
+      -- | Clone the tx body
+      , body :: EffectMth0 TransactionBodyObject
       )
   )
 
 derive instance Newtype TransactionObject _
 
-transactionBodyObject :: { free :: TransactionBodyObject -> Effect Unit }
-transactionBodyObject = mkNewtypedFFI (Proxy :: Proxy TransactionBodyObject)
+transactionObject
+  :: { free :: TransactionObject -> Effect Unit
+     , to_bytes :: TransactionObject -> Effect Uint8Array
+     , to_json :: TransactionObject -> Effect JsonString
+     , body :: TransactionObject -> Effect TransactionBodyObject
+     }
+transactionObject = mkNewtypedFFI (Proxy :: Proxy TransactionObject)
 
 -- export class TransactionBody {
 --   free(): void;
@@ -134,12 +194,8 @@ newtype TransactionBodyObject = TransactionBodyObject (JSObject (free :: EffectM
 
 derive instance Newtype TransactionBodyObject _
 
-transactionObject
-  :: { free :: TransactionObject -> Effect Unit
-     , to_bytes :: TransactionObject -> Effect Uint8Array
-     , to_json :: TransactionObject -> Effect JsonString
-     }
-transactionObject = mkNewtypedFFI (Proxy :: Proxy TransactionObject)
+transactionBodyObject :: { free :: TransactionBodyObject -> Effect Unit }
+transactionBodyObject = mkNewtypedFFI (Proxy :: Proxy TransactionBodyObject)
 
 -- export class TransactionWitnessSet {
 --   free(): void;

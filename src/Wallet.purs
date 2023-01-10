@@ -7,7 +7,6 @@ module Wallet
   , Hash32(..)
   , Transaction(..)
   , TransactionUnspentOutput
-  , TransactionWitnessSet(..)
   , Value(..)
   , Wallet
   , apiVersion
@@ -33,6 +32,7 @@ module Wallet
 
 import Prelude
 
+import CardanoMultiplatformLib.Transaction (TransactionWitnessSet(..))
 import Control.Monad.Except (runExceptT)
 import Data.Either (Either(..))
 import Data.Foldable (fold)
@@ -67,8 +67,6 @@ data Coin
 data Transaction
 
 data Value
-
-data TransactionWitnessSet
 
 data Hash32
 
