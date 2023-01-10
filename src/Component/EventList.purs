@@ -227,4 +227,4 @@ actusMetadata
 actusMetadata { resource: ContractHeader { metadata } } = decodeMetadata metadata
 
 decodeMetadata :: Metadata -> Maybe M.Metadata
-decodeMetadata (Metadata md) = lookup actusMetadataKey md >>= hush <<< decodeJson <<< fromObject
+decodeMetadata (Metadata md) = lookup actusMetadataKey md >>= hush <<< decodeJson

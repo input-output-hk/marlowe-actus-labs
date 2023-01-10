@@ -3,6 +3,7 @@ module Marlowe.Actus.Metadata where
 import Prelude
 
 import Actus.Domain.ContractTerms (ContractTerms(..), decodeCycle, decodeDecimal, encodeCycle, encodeDecimal)
+import Control.Alt ((<|>))
 import Data.Argonaut (class DecodeJson, Json, JsonDecodeError, decodeJson, encodeJson, jsonEmptyObject, (.:), (.:?), (:=), (:=?), (~>), (~>?))
 import Data.Argonaut.Decode.Decoders as Decoders
 import Data.Argonaut.Encode.Class (class EncodeJson)
@@ -13,9 +14,11 @@ import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
+import Data.String as String
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Language.Marlowe.Core.V1.Semantics.Types (Party)
+import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Time (instantFromJson, instantToJson)
 
 actusMetadataKey :: Int
@@ -26,6 +29,32 @@ newtype Metadata = Metadata
   , party :: Party -- TODO: really need in metadata?
   , counterParty :: Party -- TODO: really need in metadata?
   }
+
+-- Because there is a limit for metadata string
+-- we have to split addresses in two parts
+newtype PartyParts = PartyParts Party
+
+instance encodeJson :: EncodeJson PartyParts where
+  encodeJson (PartyParts (V1.Role role)) = encodeJson { role }
+  encodeJson (PartyParts (V1.Address address)) = do
+    let
+      { before, after } = String.splitAt 64 address
+    encodeJson { address: { before, after } }
+
+instance decodeJson :: DecodeJson PartyParts where
+  decodeJson json = do
+    obj <- decodeJson json
+    let
+      decodeRole = do
+        role <- obj .: "role"
+        pure $ PartyParts $ V1.Role role
+
+      decodeAddress = do
+        address <- obj .: "address"
+        before <- address .: "before"
+        after <- address .: "after"
+        pure $ PartyParts $ V1.Address $ before <> after
+    decodeRole <|> decodeAddress
 
 derive instance Eq Metadata
 derive instance Generic Metadata _
@@ -127,8 +156,8 @@ instance EncodeJson Metadata where
       ~>? "dvcl" :=? (encodeCycle <$> ct.cycleOfDividendPayment)
       ~>? "dvanx" :=? (encodeDateTime <$> ct.cycleAnchorDateOfDividendPayment)
       ~>? "dvnxt" :=? (encodeDecimal <$> ct.nextDividendPaymentAmount)
-      ~>? "pa" := party
-      ~> "cp" := counterParty
+      ~>? "pa1" := PartyParts party
+      ~> "cp1" := PartyParts counterParty
       ~> jsonEmptyObject
 
 instance DecodeJson Metadata where
@@ -212,8 +241,8 @@ instance DecodeJson Metadata where
     cycleOfDividendPayment <- rmap (_ >>= decodeCycle) (obj .:? "dvcl")
     cycleAnchorDateOfDividendPayment <- Decoders.getFieldOptional' decodeDateTime obj "dvanx"
     nextDividendPaymentAmount <- Decoders.getFieldOptional' decodeDecimal obj "dvnxt"
-    party <- obj .: "pa"
-    counterParty <- obj .: "cp"
+    PartyParts party <- obj .: "pa"
+    PartyParts counterParty <- obj .: "cp"
     pure $
       { contractTerms: ContractTerms
           { contractId

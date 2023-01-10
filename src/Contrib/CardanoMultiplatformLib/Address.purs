@@ -2,7 +2,10 @@ module CardanoMultiplatformLib.Address where
 
 import Prelude
 
-import CardanoMultiplatformLib.Types (Lib)
+-- TODO: We shifted to a different Lib representation
+--      and this should be not used anymore here. We should remove it.
+--      Please check Trasnaction module for an exmple.
+import CardanoMultiplatformLib.Lib (Lib)
 import Contrib.Effect as Effect
 import Control.Monad.Error.Class (catchError)
 import Data.Argonaut (Json)

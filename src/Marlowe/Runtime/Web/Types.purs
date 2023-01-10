@@ -131,7 +131,7 @@ derive instance Ord BlockHeader
 instance DecodeJson BlockHeader where
   decodeJson json = BlockHeader <$> decodeJson json
 
-newtype Metadata = Metadata (Map Int (Object Json))
+newtype Metadata = Metadata (Map Int Json)
 
 derive instance Generic Metadata _
 derive instance Newtype Metadata _
@@ -151,9 +151,9 @@ instance EncodeJson Metadata where
 
 instance DecodeJson Metadata where
   decodeJson json = do
-    (obj :: Object (Object Json)) <- decodeJson json
+    (obj :: Object Json) <- decodeJson json
 
-    (arr :: Array (Int /\ Object Json)) <- for (Object.toUnfoldable obj) \(idx /\ value) -> do
+    (arr :: Array (Int /\ Json)) <- for (Object.toUnfoldable obj) \(idx /\ value) -> do
       idx' <- do
         let
           err = TypeMismatch $ "Expecting an integer metadata label but got: " <> show idx
@@ -405,14 +405,17 @@ instance EncodeJsonBody PostContractsRequest where
 type PostContractsHeadersRow =
   ( "X-Change-Address" :: String
   , "X-Address" :: String
-  , "X-Colateral-UTxO" :: String
+  -- , "X-Collateral-UTxO" :: String
   )
 
 instance EncodeHeaders PostContractsRequest PostContractsHeadersRow where
-  encodeHeaders (PostContractsRequest { changeAddress, addresses, collateralUTxOs }) =
+  encodeHeaders (PostContractsRequest { changeAddress, addresses }) =
     { "X-Change-Address": addressToString changeAddress
     , "X-Address": String.joinWith "," (map addressToString addresses)
-    , "X-Colateral-UTxO": String.joinWith "," (map txOutRefToString collateralUTxOs)
+    -- FIXME: Empty collateral causes request rejection so ... this header record representation
+    -- gonna be hard to maintain and we should switch to `Object String` probably and use
+    -- lower level fetch API.
+    -- , "X-Collateral-UTxO": String.joinWith "," (map txOutRefToString collateralUTxOs)
     }
 
 newtype PostContractsResponse = PostContractsResponse
@@ -470,7 +473,8 @@ instance EncodeHeaders PostTransactionsRequest PostContractsHeadersRow where -- 
   encodeHeaders (PostTransactionsRequest { changeAddress, addresses, collateralUTxOs }) =
     { "X-Change-Address": addressToString changeAddress
     , "X-Address": String.joinWith "," (map addressToString addresses)
-    , "X-Colateral-UTxO": String.joinWith "," (map txOutRefToString collateralUTxOs)
+    -- FIXME: Check comment above regarding the same header and contraacts endpoint request.
+    -- , "X-Collateral-UTxO": String.joinWith "," (map txOutRefToString collateralUTxOs)
     }
 
 newtype PostTransactionsResponse = PostTransactionsResponse

@@ -59,6 +59,7 @@
   , "prelude"
   , "profunctor"
   , "profunctor-lenses"
+  , "qualified-do"
   , "quickcheck"
   , "random"
   , "react-basic"

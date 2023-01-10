@@ -53,6 +53,7 @@ spec serverUrl@(ServerURL serverUrlStr) = do
             }
         post' serverUrl api req >>= case _ of
           Right ({ resource: PostContractsResponse res, links }) -> do
+            traceM "NO ERRORS"
             traceM res
             pure unit
           Left (FetchError (InvalidStatusCode res)) -> do
@@ -75,20 +76,21 @@ spec serverUrl@(ServerURL serverUrlStr) = do
 
        let
          (terms :: Either JsonDecodeError ContractTerms) = decodeJson json
-         addr1 = V1.Role "party"
-         addr2 = V1.Role "counterparty"
+         -- addr1 = V1.Address "addr1w94f8ywk4fg672xasahtk4t9k6w3aql943uxz5rt62d4dvq8evxaf"
+         -- addr2 = V1.Address "addr1w94f8ywk4fg672xasahtk4t9k6w3aql943uxz5rt62d4dvq8evxaf"
+         addr1 = V1.Address "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
+         addr2 = V1.Address "addr_test1qrwl8cukwn7tazx5aee4ynzgj0edp6un878htr5fpgmjk3yhwefmaav7gfzuuck7c27y6fdp4vzgezrmmts3x3jp989se3tc7f"
 
        case terms of
          Left err -> fail ("Parsing error: " <> show err)
          Right contract -> do
-           (obj :: Object Json) <- either (throwError <<< error <<< show) pure do
-             decodeJson <<< encodeJson $ Metadata { contractTerms: contract, party: addr1, counterParty: addr2 }
            let
+             metadataJson = encodeJson $ Metadata { contractTerms: contract, party: addr1, counterParty: addr2 }
              addr = RT.Address "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
              cashflows = genProjectedCashflows (addr1 /\ addr2) (defaultRiskFactors contract) contract
              marloweContract = genContract cashflows
              req = PostContractsRequest
-               { metadata: RT.Metadata $ Map.singleton actusMetadataKey obj
+               { metadata: RT.Metadata $ Map.singleton actusMetadataKey metadataJson
                -- , version :: MarloweVersion
                -- , roles :: Maybe RolesConfig
                , contract: marloweContract

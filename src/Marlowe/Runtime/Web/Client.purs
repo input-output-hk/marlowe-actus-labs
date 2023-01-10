@@ -211,6 +211,12 @@ post (ServerURL serverUrl) (IndexEndpoint (ResourceLink path)) req = runExceptT 
         $ R.insert (Proxy :: Proxy "Content-Type") "application/json"
         $ (encodeHeaders req :: { | extraHeaders })
 
+  traceM "Request body:"
+  traceM body
+
+  traceM "Request headers:"
+  traceM headers
+
   response <- ExceptT $ fetchEither url { method: POST, body, headers } allowedStatusCodes FetchError
   (lift (jsonBody response)) >>= decodeResourceWithLink (map decodeJson :: Maybe _ -> Maybe _) >>> case _ of
     Left err -> throwError (ResponseDecodingError err)

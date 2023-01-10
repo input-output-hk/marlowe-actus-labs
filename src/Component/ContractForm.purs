@@ -25,14 +25,15 @@ import Data.Maybe (Maybe(..))
 import Data.String as String
 import Data.Time.Duration (Seconds(..))
 import Data.Validation.Semigroup (V(..))
+import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import Language.Marlowe.Core.V1.Semantics.Types (Party)
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus (defaultRiskFactors, genContract)
-import Marlowe.Runtime.Web.Types (Address)
 import Marlowe.Runtime.Web.Types (Address(..), addressToParty) as RT
+import Marlowe.Runtime.Web.Types (Address, TxOutRef)
 import Polyform.Batteries (rawError)
 import Polyform.Batteries as Batteries
 import Polyform.Validator (liftFnEither, liftFnMEither) as Validator
@@ -55,6 +56,7 @@ type Result =
 
   , changeAddress :: Address
   , usedAddresses :: Array Address
+  , collateralUTxOs :: Array TxOutRef
   }
 
 type Props =
@@ -141,6 +143,7 @@ mkForm cardanoMultiplatformLib = FormBuilder.evalBuilder ado
 
     , changeAddress: partyAddress
     , usedAddresses: Array.singleton partyAddress
+    , collateralUTxOs: []
     }
 
 mkContractForm :: MkComponentM (Props -> JSX)

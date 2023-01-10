@@ -4,17 +4,19 @@ import Prelude
 
 import Actus.Domain (CashFlow)
 import Actus.Domain.ContractTerms (ContractTerms)
+import Component.ConnectWallet (walletInfo)
 import Component.ContractForm (initialJson, mkContractForm, mkForm)
 import Component.ContractForm as ContractForm
 import Component.EventList (decodeMetadata)
 import Component.Modal (mkModal)
 import Component.SubmitContract (mkSubmitContract)
-import Component.Types (ContractHeaderResource, WalletInfo, MkComponentM)
+import Component.Types (ContractHeaderResource, MkComponentM, WalletInfo(..))
 import Component.Widgets (linkWithIcon)
 import Contrib.React.Basic.Hooks.UseForm as UseForm
 import Contrib.React.Bootstrap (overlayTrigger, tooltip)
 import Contrib.React.Bootstrap.Icons as Icons
 import Contrib.React.Bootstrap.Types as OverlayTrigger
+import Control.Alt ((<|>))
 import Control.Monad.Reader.Class (asks)
 import Data.Array as Array
 import Data.Decimal (Decimal)
@@ -23,8 +25,11 @@ import Data.FormURLEncoded.Query as Query
 import Data.List (List)
 import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
 import Data.Newtype (unwrap)
+import Data.Newtype as Newtype
+import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\))
 import Data.Validation.Semigroup (V(..))
+import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import JS.Unsafe.Stringify (unsafeStringify)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party(..))
@@ -35,9 +40,13 @@ import React.Basic.DOM as DOOM
 import React.Basic.DOM.Events (targetValue)
 import React.Basic.DOM.Simplified.Generated as DOM
 import React.Basic.Events (EventHandler, handler, handler_)
-import React.Basic.Hooks (Hook, JSX, UseState, component, useEffectOnce, useState, (/\))
+import React.Basic.Hooks (Hook, JSX, UseState, component, useEffectOnce, useState, useState', (/\))
 import React.Basic.Hooks as React
+import Record as Record
+import Type.Prelude (Proxy(..))
 import Wallet as Wallet
+import Web.HTML (window)
+import Web.HTML.Window as Window
 
 type ContractId = TxOutRef
 
@@ -75,6 +84,7 @@ type Props =
   , connectedWallet :: Maybe (WalletInfo Wallet.Api)
   }
 
+testingSubmit :: Boolean
 testingSubmit = false
 
 mkContractList :: MkComponentM (Props -> JSX)
@@ -88,13 +98,18 @@ mkContractList = do
   liftEffect $ component "ContractList" \{ connectedWallet, contractList } -> React.do
     ((state :: ContractListState) /\ updateState) <- useState { newContract: Nothing, metadata: Nothing }
 
+    -- FIXME: paluh. Submission testing.
+    internalConnectedWallet /\ setInternalConnectedWallet <- useState' Nothing
+
     useEffectOnce $ do
       when testingSubmit do
         let
-          -- yoroi
-          myAddress = "addr_test1qrwl8cukwn7tazx5aee4ynzgj0edp6un878htr5fpgmjk3yhwefmaav7gfzuuck7c27y6fdp4vzgezrmmts3x3jp989se3tc7f"
-          -- nami
-          counterPartyAddress = "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
+          -- nami-work
+          myAddress = "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
+
+          -- nami-test
+          counterPartyAddress = "addr_test1qrp6m3r307r3d73t6vjnqssqmj9deqcprkm5v0yhuyvyfgm6fftzwd90f7aanfwl28s4efxxt3252p3uet87klt2aj4qzgw242"
+
           UseForm.Form { validator } = mkForm cardanoMultiplatformLib
 
           query = Query.fromHomogeneous
@@ -102,6 +117,18 @@ mkContractList = do
             , "counter-party": [ counterPartyAddress ]
             , "contract-terms": [ initialJson ]
             }
+
+        launchAff_ do
+          possibleNami <- liftEffect (window >>= Wallet.cardano) >>= case _ of
+            Nothing -> pure Nothing
+            Just cardano -> do
+              liftEffect (Wallet.nami cardano) >>= traverse walletInfo >>= case _ of
+                Nothing -> pure Nothing
+                Just walletInfo@(WalletInfo { wallet }) -> do
+                  walletApi <- Wallet.enable wallet
+                  pure $ Just $ Newtype.over WalletInfo (Record.set (Proxy :: Proxy "wallet") walletApi) walletInfo
+          liftEffect $ setInternalConnectedWallet possibleNami
+
         runValidator validator query >>= case _ of
           V (Right result) -> do
             updateState _ { newContract = Just $ Submitting result }
@@ -121,27 +148,28 @@ mkContractList = do
 
     pure $
       DOOM.div_
-        [ case state.newContract of
-            Just Creating -> contractForm
+        [ case state.newContract, connectedWallet <|> internalConnectedWallet of
+            Just Creating, _ -> contractForm
               { onDismiss: updateState _ { newContract = Nothing }
               , onSuccess: onNewContract
               , inModal: true
               , connectedWallet
               }
-            Just (Submitting contractData) -> submitContract
+            Just (Submitting contractData), Just wallet -> submitContract
               { onDismiss: updateState _ { newContract = Nothing }
               , onSuccess: const $ pure unit
+              , connectedWallet: wallet
               , inModal: true
               , contractData
               }
-            Just _ ->
+            Just _, _ ->
               modal
                 { title: text "Success or failure"
                 , onDismiss: updateState _ { newContract = Nothing }
                 , body:
                     text ("Success or failure...")
                 }
-            Nothing -> mempty
+            Nothing, _ -> mempty
         , DOM.div { className: "row justify-content-end" } $ Array.singleton $ do
             let
               disabled = isNothing connectedWallet

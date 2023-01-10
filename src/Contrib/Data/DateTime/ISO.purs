@@ -16,6 +16,7 @@ import Data.Newtype (class Newtype, unwrap)
 import Data.String (fromCodePointArray, codePointFromChar, toCodePointArray)
 import Data.String (length) as String
 import Data.String.CodeUnits (fromCharArray, toCharArray) as String
+
 --import Data.Traversable (sequence)
 
 --import Parsing as P
@@ -34,25 +35,25 @@ unwrapISO :: ISO -> DateTime
 unwrapISO = unwrap
 
 instance showISO :: Show ISO where
-    show (ISO (DateTime date time)) = foldl append ""
-        [ showInt $ DT.year date
-        , "-"
-        , padl 2 '0' $ showInt $ DT.month date
-        , "-"
-        , padl 2 '0' $ showInt $ DT.day date
-        , "T"
-        , padl 2 '0' $ showInt $ DT.hour time
-        , ":"
-        , padl 2 '0' $ showInt $ DT.minute time
-        , ":"
-        , padl 2 '0' $ showInt $ DT.second time
-        , "."
-        , removeTrailingZeros $ padMilli $ DT.millisecond time
-        , "Z"
-        ]
-        where
-            showInt :: forall a. BoundedEnum a => a -> String
-            showInt = show <<< fromEnum
+  show (ISO (DateTime date time)) = foldl append ""
+    [ showInt $ DT.year date
+    , "-"
+    , padl 2 '0' $ showInt $ DT.month date
+    , "-"
+    , padl 2 '0' $ showInt $ DT.day date
+    , "T"
+    , padl 2 '0' $ showInt $ DT.hour time
+    , ":"
+    , padl 2 '0' $ showInt $ DT.minute time
+    , ":"
+    , padl 2 '0' $ showInt $ DT.second time
+    , "."
+    , removeTrailingZeros $ padMilli $ DT.millisecond time
+    , "Z"
+    ]
+    where
+    showInt :: forall a. BoundedEnum a => a -> String
+    showInt = show <<< fromEnum
 
 -- | Pad an integer from a millisecond value with enough zeros so it is three
 -- digits.
@@ -63,11 +64,12 @@ padMilli = padl 3 '0' <<< show <<< fromEnum
 removeTrailingZeros :: String -> String
 removeTrailingZeros "000" = "0"
 removeTrailingZeros s =
-  fromCodePointArray <<<
-  Array.reverse <<<
-  Array.dropWhile (_ == codePointFromChar '0') <<<
-  Array.reverse $
-  toCodePointArray s
+  fromCodePointArray
+    <<< Array.reverse
+    <<< Array.dropWhile (_ == codePointFromChar '0')
+    <<<
+      Array.reverse $
+    toCodePointArray s
 
 -- instance decodeJsonISO :: DecodeJson ISO where
 --     decodeJson = decodeJson
@@ -75,7 +77,7 @@ removeTrailingZeros s =
 --              >>> lmap P.parseErrorMessage
 
 instance encodeJsonISO :: EncodeJson ISO where
-    encodeJson = show >>> encodeJson
+  encodeJson = show >>> encodeJson
 
 --------------------------------------------------------------------------------
 
@@ -144,9 +146,9 @@ instance encodeJsonISO :: EncodeJson ISO where
 
 padl :: Int -> Char -> String -> String
 padl n chr str = String.fromCharArray $
-    padl' (n - String.length str) chr (String.toCharArray str)
+  padl' (n - String.length str) chr (String.toCharArray str)
 
 padl' :: Int -> Char -> Array Char -> Array Char
 padl' n chr chrs
-    | n <= 0 = chrs
-    | otherwise = padl' (n - 1) chr (chr `Array.cons` chrs)
+  | n <= 0 = chrs
+  | otherwise = padl' (n - 1) chr (chr `Array.cons` chrs)

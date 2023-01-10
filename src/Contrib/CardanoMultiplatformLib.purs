@@ -5,8 +5,8 @@ module CardanoMultiplatformLib
 
 import Prelude
 
-import CardanoMultiplatformLib.Types (Lib)
-import CardanoMultiplatformLib.Types (Lib) as Exports
+import CardanoMultiplatformLib.Lib (Lib)
+import CardanoMultiplatformLib.Lib (Lib) as Exports
 import Control.Monad.Except (catchError)
 import Data.Maybe (Maybe(..))
 import Data.Nullable (Nullable)
@@ -16,6 +16,7 @@ import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Promise.Aff (Promise, toAff)
 
+-- TODO: Move to Lib module
 foreign import importLibImpl :: Effect (Nullable (Promise Lib))
 
 importLib :: Aff (Maybe Lib)
