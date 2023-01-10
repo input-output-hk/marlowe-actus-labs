@@ -49,6 +49,7 @@
   , "node-buffer"
   , "node-fs-aff"
   , "node-process"
+  , "now"
   , "nullable"
   , "ordered-collections"
   , "orders"

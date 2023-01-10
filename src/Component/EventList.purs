@@ -10,15 +10,18 @@ import Component.Widgets (link)
 import Data.Argonaut (decodeJson, fromObject)
 import Data.Array (catMaybes, concat, fromFoldable, singleton)
 import Data.BigInt.Argonaut as BigInt
+import Data.DateTime (adjust)
 import Data.DateTime.Instant (toDateTime)
 import Data.Either (Either(..), hush)
 import Data.Formatter.DateTime (formatDateTime)
 import Data.Map (lookup)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (unwrap)
+import Data.Time.Duration as Duration
 import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (launchAff_)
+import Effect.Now (nowDateTime)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input(..), Party, Token(..), Value)
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus (defaultRiskFactors, evalVal, toMarloweCashflow)
@@ -67,13 +70,14 @@ mkEventList (Runtime runtime) = do
         updateState _ { newInput = Just { party, token, value, endpoint } }
 
       onApplyInputs { party, token, value, endpoint: ContractEndpoint (ResourceEndpoint (ResourceLink link)) } = handler_ do
-
+        now <- nowDateTime
         let
           -- FIXME: just a stub
           inputs = singleton $ IDeposit party party token value
 
-          invalidBefore = toDateTime unixEpoch
-          invalidHereafter = toDateTime unixEpoch
+          invalidBefore = now
+          invalidHereafter = fromMaybe now $ adjust (Duration.Minutes 2.0) now
+
           changeAddress = RT.Address ""
           addresses = []
           collateralUTxOs = []
