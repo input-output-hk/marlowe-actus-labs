@@ -218,8 +218,8 @@ getBalance :: Api -> Aff (Cbor Value)
 getBalance = Promise.toAffE <<< _Api.getBalance
 
 -- | Manually tested and works with Nami.
-getChangeAddress :: Api -> Aff Address
-getChangeAddress = Promise.toAffE <<< _Api.getChangeAddress
+getChangeAddress :: Api -> Aff (Either Foreign Address)
+getChangeAddress = toAffEitherE rejectionToForeign <<< _Api.getChangeAddress
 
 -- | Manually tested and works with Nami.
 getCollateral :: Api -> Cbor Coin -> Aff (Array (Cbor TransactionUnspentOutput))
@@ -234,8 +234,8 @@ getUnusedAddresses :: Api -> Aff (Array Address)
 getUnusedAddresses = Promise.toAffE <<< _Api.getUnusedAddresses
 
 -- | Manually tested and works with Nami.
-getUsedAddresses :: Api -> Aff (Array Address)
-getUsedAddresses = Promise.toAffE <<< _Api.getUsedAddresses
+getUsedAddresses :: Api -> Aff (Either Foreign (Array Address))
+getUsedAddresses = toAffEitherE rejectionToForeign <<< _Api.getUsedAddresses
 
 -- | Manually tested and works with Nami.
 getUtxos :: Api -> Aff (Maybe (Array (Cbor TransactionUnspentOutput)))

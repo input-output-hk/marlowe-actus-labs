@@ -78,7 +78,10 @@ spec serverUrl@(ServerURL serverUrlStr) = do
          (terms :: Either JsonDecodeError ContractTerms) = decodeJson json
          -- addr1 = V1.Address "addr1w94f8ywk4fg672xasahtk4t9k6w3aql943uxz5rt62d4dvq8evxaf"
          -- addr2 = V1.Address "addr1w94f8ywk4fg672xasahtk4t9k6w3aql943uxz5rt62d4dvq8evxaf"
-         addr1 = V1.Address "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
+         -- nami preview
+         -- addr1 = V1.Address "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
+         -- yoroi preprod
+         addr1 = V1.Address "addr_test1qqe94c7z039ceta3xevcagwwh0l8ahmy90883nqm5edknmyhwefmaav7gfzuuck7c27y6fdp4vzgezrmmts3x3jp989s5f6lqr"
          addr2 = V1.Address "addr_test1qrwl8cukwn7tazx5aee4ynzgj0edp6un878htr5fpgmjk3yhwefmaav7gfzuuck7c27y6fdp4vzgezrmmts3x3jp989se3tc7f"
 
        case terms of

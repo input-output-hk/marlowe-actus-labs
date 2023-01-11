@@ -149,11 +149,11 @@ mkContractList = do
     pure $
       DOOM.div_
         [ case state.newContract, connectedWallet <|> internalConnectedWallet of
-            Just Creating, _ -> contractForm
+            Just Creating, Just cw -> contractForm
               { onDismiss: updateState _ { newContract = Nothing }
               , onSuccess: onNewContract
               , inModal: true
-              , connectedWallet
+              , connectedWallet: cw
               }
             Just (Submitting contractData), Just wallet -> submitContract
               { onDismiss: updateState _ { newContract = Nothing }

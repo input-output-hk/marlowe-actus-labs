@@ -269,7 +269,7 @@ mkSubmitContract = do
 submit :: ContractForm.Result -> ServerURL -> ContractsEndpoint -> Aff _
 submit contractData serverUrl contractsEndpoint = do
   let
-    { contractTerms, contract, party, counterParty, changeAddress } = contractData
+    { contractTerms, contract, party, counterParty, changeAddress, usedAddresses } = contractData
     metadata = RT.Metadata $ Map.singleton actusMetadataKey $ encodeJson $ Metadata
       { contractTerms: contractTerms
       , party
@@ -283,7 +283,7 @@ submit contractData serverUrl contractsEndpoint = do
       , contract
       , minUTxODeposit: V1.Lovelace (BigInt.fromInt 2_000_000)
       , changeAddress: changeAddress
-      , addresses: [ changeAddress ]
+      , addresses: usedAddresses
       , collateralUTxOs: []
       }
 

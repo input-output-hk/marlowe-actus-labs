@@ -25,6 +25,7 @@ import Effect.Class (liftEffect)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Effect.Exception (error, throw)
+import JS.Unsafe.Stringify (unsafeStringify)
 import Marlowe.Runtime.Web as Marlowe.Runtime.Web
 import Marlowe.Runtime.Web.Client (foldMapMPages, foldMapMPages', getPage')
 import Marlowe.Runtime.Web.Types (ResourceLink(..), ServerURL(..), api)
@@ -52,12 +53,12 @@ testWallet = launchAff_ do
           Nothing -> Console.log "boo"
           Just nami -> do
             api <- Wallet.enable nami
-            Console.log <<< ("getBalance: " <> _) <<< show =<< Wallet.getBalance api
-            Console.log <<< ("getChangeAddress: " <> _) <<< show =<< Wallet.getChangeAddress api
-            Console.log <<< ("getRewardAddresses: " <> _) <<< show =<< Wallet.getRewardAddresses api
-            Console.log <<< ("getUnusedAddresses: " <> _) <<< show =<< Wallet.getUnusedAddresses api
-            Console.log <<< ("getUsedAddresses: " <> _) <<< show =<< Wallet.getUsedAddresses api
-            Console.log <<< ("getUtxos: " <> _) <<< show =<< Wallet.getUtxos api
+            Console.log <<< ("getBalance: " <> _) <<< unsafeStringify =<< Wallet.getBalance api
+            Console.log <<< ("getChangeAddress: " <> _) <<< unsafeStringify =<< Wallet.getChangeAddress api
+            Console.log <<< ("getRewardAddresses: " <> _) <<< unsafeStringify =<< Wallet.getRewardAddresses api
+            Console.log <<< ("getUnusedAddresses: " <> _) <<< unsafeStringify =<< Wallet.getUnusedAddresses api
+            Console.log <<< ("getUsedAddresses: " <> _) <<< unsafeStringify =<< Wallet.getUsedAddresses api
+            Console.log <<< ("getUtxos: " <> _) <<< unsafeStringify =<< Wallet.getUtxos api
 
 liftEitherWith :: forall a err. (err -> String) -> Either err a -> Effect a
 liftEitherWith showErr = either (throw <<< showErr) pure

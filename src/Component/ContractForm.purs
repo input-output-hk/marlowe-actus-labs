@@ -24,6 +24,7 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.String as String
 import Data.Time.Duration (Seconds(..))
+import Data.Traversable (for)
 import Data.Validation.Semigroup (V(..))
 import Debug (traceM)
 import Effect (Effect)
@@ -42,7 +43,7 @@ import React.Basic (fragment) as DOOM
 import React.Basic.DOM (text) as DOOM
 import React.Basic.DOM as R
 import React.Basic.DOM.Simplified.Generated as DOM
-import React.Basic.Hooks (component, useEffectOnce, (/\))
+import React.Basic.Hooks (component, useEffectOnce, useState', (/\))
 import React.Basic.Hooks as React
 import Wallet as Wallet
 
@@ -54,8 +55,8 @@ type Result =
   , counterParty :: V1.Party
   , party :: V1.Party
 
-  , changeAddress :: Address
-  , usedAddresses :: Array Address
+  , changeAddress :: RT.Address
+  , usedAddresses :: Array RT.Address
   , collateralUTxOs :: Array TxOutRef
   }
 
@@ -64,7 +65,7 @@ type Props =
   -- , onError :: String -> Effect Unit
   , onDismiss :: Effect Unit
   , inModal :: Boolean
-  , connectedWallet :: Maybe (WalletInfo Wallet.Api)
+  , connectedWallet :: WalletInfo Wallet.Api
   }
 
 createContract :: Party -> Party -> ContractTerms -> V1.Contract
@@ -141,8 +142,9 @@ mkForm cardanoMultiplatformLib = FormBuilder.evalBuilder ado
     , counterParty
     , party
 
+    -- Ugly hack
+    , usedAddresses: []
     , changeAddress: partyAddress
-    , usedAddresses: Array.singleton partyAddress
     , collateralUTxOs: []
     }
 
@@ -155,9 +157,18 @@ mkContractForm = do
     form = mkForm cardanoMultiplatformLib
 
   liftEffect $ component "ContractForm" \{ connectedWallet, onSuccess, onDismiss, inModal } -> React.do
+    changeAddresses /\ setChangeAddresses <- useState' Nothing
+
     let
       onSubmit = _.result >>> case _ of
-        Just (V (Right result)) -> onSuccess result
+        Just (V (Right result)) -> do
+
+           case changeAddresses of
+            Nothing -> do
+              traceM "No change addresses"
+              pure unit
+            Just addresses -> do
+              onSuccess $ result { usedAddresses = addresses }
         _ -> do
           -- Rather improbable path because we disable submit button if the form is invalid
           pure unit
@@ -166,14 +177,34 @@ mkContractForm = do
 
     useEffectOnce $ do
       case connectedWallet of
-        Nothing -> pure unit
-        Just (WalletInfo { wallet }) -> launchAff_ do
-          Wallet.Address addressStr <- Wallet.getChangeAddress wallet
-          liftEffect $ bech32FromHex cardanoMultiplatformLib addressStr >>= case _, Map.lookup (FieldId "party") formState.fields of
-            Just (Bech32 addr), Just { onChange } ->
-              onChange [ addr ]
+        WalletInfo { wallet } -> launchAff_ do
+          let
+            walletAddressToBech32 (Wallet.Address addressStr) = do
+              bech32FromHex cardanoMultiplatformLib addressStr >>= case _ of
+                Just (Bech32 bech32) -> pure $ Just $ RT.Address bech32
+                Nothing -> pure Nothing
+
+          possibleAddress <- Wallet.getChangeAddress wallet
+          possibleUsedAddresses <- Wallet.getUsedAddresses wallet
+          case possibleAddress, possibleUsedAddresses of
+            Right address, Right addresses -> do
+              -- setChangeAddresses $ Just addresses
+              addr <- liftEffect $ walletAddressToBech32 address
+              liftEffect $ case addr, Map.lookup (FieldId "party") formState.fields of
+                Just (RT.Address addr), Just { onChange } ->
+                  onChange [ addr ]
+                _, _ -> do
+                  pure unit
+
+              liftEffect $ do
+                addresses' <- Array.catMaybes <$> for addresses \address -> do
+                  walletAddressToBech32 address
+                setChangeAddresses $ Just addresses'
             _, _ -> do
-              pure unit
+              traceM "Failed to get change address"
+              traceM possibleAddress
+              traceM "Used addresses"
+              traceM possibleUsedAddresses
       pure (pure unit)
     pure $ do
       let
