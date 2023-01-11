@@ -85,7 +85,7 @@ type Props =
   }
 
 testingSubmit :: Boolean
-testingSubmit = false
+testingSubmit = true
 
 mkContractList :: MkComponentM (Props -> JSX)
 mkContractList = do

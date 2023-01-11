@@ -3,19 +3,44 @@ module CardanoMultiplatformLib.Types
   , jsonStringToString
   , jsonStringFromString
   , unsafeJsonString
+  -- FIXME: Import only the type
+  , cborHexToHex
+  , cborHexToCbor
+  , cborToCborHex
+  , CborHex(..)
+  , Cbor
   ) where
 
 import Prelude
 
-import Data.Argonaut (parseJson, stringify)
+import Data.Argonaut (class DecodeJson, class EncodeJson, parseJson, stringify)
+import Data.ArrayBuffer.Types (Uint8Array)
 import Data.Either (hush)
 import Data.Maybe (Maybe)
+import HexString (Hex)
+import HexString as HexString
 
--- We load the lib dynamically (nodejs vs browser version) so we represent
--- the lib module by opaque value.
--- FIXME: in `js-object` we should introduce the concept of `TsClass` so we
--- can actually handle these scenarios generically.
--- foreign import data Lib :: Type
+newtype CborHex :: Type -> Type
+newtype CborHex a = CborHex Hex
+
+derive instance Eq (CborHex a)
+derive newtype instance EncodeJson (CborHex a)
+derive newtype instance DecodeJson (CborHex a)
+
+cborHexToHex :: forall a. CborHex a -> Hex
+cborHexToHex (CborHex h) = h
+
+cborHexToCbor :: forall a. CborHex a -> Cbor a
+cborHexToCbor = Cbor <<< HexString.decode <<< cborHexToHex
+
+cborToCborHex :: forall a. Cbor a -> CborHex a
+cborToCborHex = CborHex <<< HexString.encode <<< unCbor
+
+newtype Cbor :: Type -> Type
+newtype Cbor a = Cbor Uint8Array
+
+unCbor :: forall a. Cbor a -> Uint8Array
+unCbor (Cbor a) = a
 
 newtype JsonString = JsonString String
 
@@ -27,3 +52,4 @@ jsonStringFromString = map (JsonString <<< stringify) <<< hush <<< parseJson
 
 jsonStringToString :: JsonString -> String
 jsonStringToString (JsonString s) = s
+

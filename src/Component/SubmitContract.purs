@@ -5,8 +5,11 @@ import Prelude
 
 import Actus.Domain (CT(..), CashFlow, ContractTerms(..))
 import Actus.Domain.ContractTerms (ContractTerms)
+import CardanoMultiplatformLib (CborHex(..), Lib, allocate, runGarbageCollector, transactionWitnessSetFromBytes)
 import CardanoMultiplatformLib.Lib as Lib
+import CardanoMultiplatformLib.Transaction (TransactionObject(..), TransactionWitnessSetObject(..))
 import CardanoMultiplatformLib.Transaction as Transaction
+import CardanoMultiplatformLib.Types (Cbor, cborHexToCbor, cborToCborHex)
 import Component.ContractForm (initialJson, mkContractForm)
 import Component.ContractForm as ContractForm
 import Component.EventList (decodeMetadata)
@@ -33,17 +36,20 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
 import Data.Newtype (unwrap)
 import Data.Tuple.Nested (type (/\))
+import Data.Undefined.NoProblem as NoProblem
 import Data.Validation.Semigroup (V(..))
 import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
+import HexString (hexToString)
 import HexString as HexString
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party(..))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus.Metadata (Metadata(..), actusMetadataKey, encodeMetadataObject)
 import Marlowe.Runtime.Web.Client (ClientError(..), foldMapMPages, foldMapMPages', getResource, post, post')
-import Marlowe.Runtime.Web.Types (CborHex(..), ContractEndpoint(..), ContractHeader(..), ContractsEndpoint(..), Metadata, PostContractsRequest(..), PostContractsResponse(..), Runtime(..), ServerURL(..), TextEnvelope(..), TxOutRef, txOutRefToString)
+import Marlowe.Runtime.Web.Client as Client
+import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), ContractsEndpoint(..), Metadata, PostContractsRequest(..), PostContractsResponse(..), PutContractRequest(..), Runtime(..), ServerURL(..), TextEnvelope(..), TxOutRef, txOutRefToString)
 import Marlowe.Runtime.Web.Types as RT
 import Polyform.Validator (runValidator)
 import React.Basic as DOOM
@@ -70,6 +76,51 @@ data SubmissionStep
   | Signing (Either String PostContractsResponse)
   | Signed (Either ClientError PostContractsResponse)
 
+
+addWitnessSet :: Lib -> Cbor TransactionObject -> Cbor TransactionWitnessSetObject -> Effect TransactionObject
+addWitnessSet cardanoMultiplatformLib txCbor witnessSetCbor = runGarbageCollector cardanoMultiplatformLib do
+  let
+    lib = Lib.props cardanoMultiplatformLib
+  tx <- allocate $ Transaction.transaction.from_bytes lib."Transaction" txCbor
+  body <- allocate $ Transaction.transactionObject.body tx
+  -- auxData <- allocate $ Transaction.transactionObject.auxiliary_data tx
+
+  -- FIXME: paluh. Memory leak.
+  auxData <- liftEffect $ Transaction.transactionObject.auxiliary_data tx
+
+  tws <- transactionWitnessSetFromBytes witnessSetCbor
+
+  -- allocate $ Transaction.transaction.new lib."Transaction" body tws auxData -- NoProblem.undefined
+  -- FIXME: paluh. Memory leak. We are not able to use allocate here.
+  liftEffect $ Transaction.transaction.new lib."Transaction" body tws auxData -- NoProblem.undefined
+
+              --       ---
+              --       body' <- allocate $ Transaction.transactionObject.body tx'
+
+              --       traceM "body"
+              --       bodyJson <- liftEffect $ Transaction.transactionBodyObject.to_js_value body
+              --       traceM bodyJson
+
+              --       traceM "body'"
+              --       bodyJson' <- liftEffect $ Transaction.transactionBodyObject.to_js_value body'
+              --       traceM bodyJson'
+
+              --       traceM (bodyJson' == bodyJson)
+
+              --       bytes <- liftEffect $ Transaction.transactionObject.to_bytes tx'
+              --       pure $ HexString.encode bytes
+              --     let
+              --       textEnvelope = TextEnvelope
+              --         { type_: "Tx BabbageEra"
+              --         , cborHex: CborHex $ hexToString signedTransactionHex
+              --         , description: ""
+              --         }
+              --       req = PutContractRequest textEnvelope
+              --     void $ Client.put' (runtime.serverURL) contractEndpoint req
+
+
+
+
 mkSubmitContract :: MkComponentM (Props -> JSX)
 mkSubmitContract = do
   Runtime runtime <- asks _.runtime
@@ -86,33 +137,80 @@ mkSubmitContract = do
               traceM "Response"
               traceM res
               let
-                { contractId, txBody } = postContractsResponse
-                TextEnvelope { cborHex: CborHex cborHex } = txBody
+                { contractId, txBody: tx } = postContractsResponse
+                TextEnvelope { cborHex: txCborHex } = tx
                 lib = Lib.props cardanoMultiplatformLib
-              traceM cborHex
-              case HexString.decode <$> HexString.hex cborHex of
-                Just txBytes -> do
-                  traceM "DECODED HEX BYTES OF THE TX BODY"
-                  tx <- liftEffect $ Transaction.transaction.from_bytes lib."Transaction" txBytes
-
-                  traceM "Successfully created a transaction"
+                txCbor = cborHexToCbor txCborHex
+              traceM "Successfully created a transaction"
+              let
+                WalletInfo { wallet: walletApi } = connectedWallet
+              Wallet.signTx walletApi txCborHex false >>= case _ of
+                Right wintessSet -> do
                   let
-                    WalletInfo { wallet: walletApi } = connectedWallet
-                  witnesses <- Wallet.signTx walletApi (Wallet.Cbor cborHex) false `catchError` \err -> do
-                    traceM "Error signing the transaction: "
-                    traceM err
-                    throwError err
-                  traceM "SIGNED"
-                  traceM witnesses
-                  case witnesses of
-                    Right w -> do
-                      pure unit
-                    Left e -> do
-                      traceM "Error from the wallet signTx"
-                      traceM e
+                    witnessSetCbor = cborHexToCbor wintessSet
+                  tx <- liftEffect $ addWitnessSet cardanoMultiplatformLib txCbor witnessSetCbor
+                  txCbor' <- liftEffect $ Transaction.transactionObject.to_bytes tx
+                  let
+                    txCborHex' = cborToCborHex txCbor'
 
-                Nothing ->
-                  traceM "Hex decoding failed"
+                  txId <- Wallet.submitTx walletApi txCborHex
+
+                  traceM "Submitted transaction"
+                  traceM txId
+                  case txId of
+                    Right id -> do
+                      traceM "Successfully submitted transaction"
+                      traceM id
+                    Left err -> do
+                      traceM "Failed to submit transaction"
+                Left err -> do
+                  traceM "Failed to sign transaction"
+                  traceM err
+
+              -- case possibleWitnesses of
+              --   Right witnessesCbor -> do
+              --     signedTransactionHex <- liftEffect $ runGarbageCollector cardanoMultiplatformLib do
+
+              --       tx <- allocate $ Transaction.transaction.from_bytes lib."Transaction" txCbor
+              --       body <- allocate $ Transaction.transactionObject.body tx
+              --       -- auxData <- allocate $ Transaction.transactionObject.auxiliary_data tx
+              --       -- FIXME: paluh. Memory leak.
+              --       auxData <- liftEffect $ Transaction.transactionObject.auxiliary_data tx
+
+              --       tws <- transactionWitnessSetFromBytes witnessesCbor
+
+              --       tx' <- allocate $ Transaction.transaction.new lib."Transaction" body tws auxData -- NoProblem.undefined
+
+              --       ---
+              --       body' <- allocate $ Transaction.transactionObject.body tx'
+
+              --       traceM "body"
+              --       bodyJson <- liftEffect $ Transaction.transactionBodyObject.to_js_value body
+              --       traceM bodyJson
+
+              --       traceM "body'"
+              --       bodyJson' <- liftEffect $ Transaction.transactionBodyObject.to_js_value body'
+              --       traceM bodyJson'
+
+              --       traceM (bodyJson' == bodyJson)
+
+              --       bytes <- liftEffect $ Transaction.transactionObject.to_bytes tx'
+              --       pure $ HexString.encode bytes
+              --     let
+              --       textEnvelope = TextEnvelope
+              --         { type_: "Tx BabbageEra"
+              --         , cborHex: CborHex $ hexToString signedTransactionHex
+              --         , description: ""
+              --         }
+              --       req = PutContractRequest textEnvelope
+              --     void $ Client.put' (runtime.serverURL) contractEndpoint req
+
+              --     traceM "GOT SIGNED TX"
+              --     traceM signedTransactionHex
+              --     pure unit
+              --   Left e -> do
+              --     traceM "Error from the wallet signTx"
+              --     traceM e
             Left err ->
               traceM $ "Error: " <> show err
     pure $ do

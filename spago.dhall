@@ -78,6 +78,7 @@
   , "tuples"
   , "typelevel-eval"
   , "typelevel-prelude"
+  , "undefined-is-not-a-problem"
   , "unfoldable"
   , "unsafe-coerce"
   , "validation"

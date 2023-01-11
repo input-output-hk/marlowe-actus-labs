@@ -265,3 +265,22 @@ put (ServerURL serverUrl) (ResourceEndpoint (ResourceLink path)) req = runExcept
         $ R.insert (Proxy :: Proxy "Content-Type") "application/json"
         $ (encodeHeaders req :: { | extraHeaders })
   void $ ExceptT $ fetchEither url { method: PUT, body, headers } allowedStatusCodes identity
+
+
+put'
+  :: forall links putRequest getResponse extraHeaders t
+   . EncodeHeaders putRequest extraHeaders
+  => EncodeJsonBody putRequest
+  => Newtype t (ResourceEndpoint putRequest getResponse links)
+  => Row.Homogeneous extraHeaders String
+  => Row.Homogeneous ("Accept" :: String, "Content-Type" :: String | extraHeaders) String
+  => Row.Lacks "Accept" extraHeaders
+  => Row.Lacks "Content-Type" extraHeaders
+  => ServerURL
+  -> t
+  -> putRequest
+  -> Aff (Either FetchError Unit)
+put' serverUrl endpoint req = do
+  let
+    endpoint' = unwrap endpoint
+  put serverUrl endpoint' req

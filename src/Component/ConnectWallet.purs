@@ -69,9 +69,12 @@ mkConnectWallet = do
       liftEffect (Wallet.cardano =<< window) >>= case _ of
         Nothing -> pure unit
         Just cardano -> launchAff_ do
+          -- eternl <- liftEffect (Wallet.eternl cardano) >>= traverse walletInfo
+          -- gerowallet <- liftEffect (Wallet.gerowallet cardano) >>= traverse walletInfo
+          lace <- liftEffect (Wallet.lace cardano) >>= traverse walletInfo
           nami <- liftEffect (Wallet.nami cardano) >>= traverse walletInfo
           yoroi <- liftEffect (Wallet.yoroi cardano) >>= traverse walletInfo
-          case ArrayAL.fromArray (Proxy :: Proxy 1) (Array.catMaybes [ nami, yoroi ]) of
+          case ArrayAL.fromArray (Proxy :: Proxy 1) (Array.catMaybes [ lace, nami, yoroi ]) of
             Nothing -> liftEffect $ onWalletConnect NoWallets
             Just wallets -> liftEffect $ do
               setWallets (Just wallets)
