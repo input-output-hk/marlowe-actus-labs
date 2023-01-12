@@ -21,6 +21,7 @@ import Control.Monad.Reader.Class (asks)
 import Data.Array as Array
 import Data.Decimal (Decimal)
 import Data.Either (Either(..))
+import Data.Foldable (foldMap)
 import Data.FormURLEncoded.Query as Query
 import Data.List (List)
 import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
@@ -28,12 +29,12 @@ import Data.Newtype (unwrap)
 import Data.Newtype as Newtype
 import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\))
-import Data.String (length, take)
 import Data.Validation.Semigroup (V(..))
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import JS.Unsafe.Stringify (unsafeStringify)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party(..))
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party)
+import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Runtime.Web.Types (ContractHeader(..), Metadata, TxOutRef, txOutRefToString)
 import Polyform.Validator (runValidator)
 import React.Basic.DOM (text)
@@ -47,7 +48,6 @@ import Record as Record
 import Type.Prelude (Proxy(..))
 import Wallet as Wallet
 import Web.HTML (window)
-import Web.HTML.Window as Window
 
 type ContractId = TxOutRef
 
@@ -220,8 +220,8 @@ mkContractList = do
                         DOM.tr {}
                           [ DOM.td {} [ text $ maybe "" (_.contractId <<< unwrap <<< _.contractTerms <<< unwrap) md ]
                           , DOM.td {} [ text $ maybe "" (show <<< _.contractType <<< unwrap <<< _.contractTerms <<< unwrap) md ]
-                          , DOM.td {} [ textWithTooltip (map (displayParty <<< _.party <<< unwrap) md) ]
-                          , DOM.td {} [ textWithTooltip (map (displayParty <<< _.counterParty <<< unwrap) md) ]
+                          , DOM.td {} [ foldMap (displayParty <<< _.party <<< unwrap) md]
+                          , DOM.td {} [ foldMap (displayParty <<< _.counterParty <<< unwrap) md]
                           , DOM.td {} [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
                           , DOM.td {} $ do
                               let
@@ -236,17 +236,13 @@ mkContractList = do
               ]
         ]
   where
-  textWithTooltip (Just message) =
-    overlayTrigger
-      { overlay: tooltip {} (DOOM.text $ message)
-      , placement: OverlayTrigger.placement.bottom
-      } $ DOM.td {} [ text $ ellipsis message ]
-  textWithTooltip Nothing = text ""
-
-  ellipsis :: String -> String
-  ellipsis s | length s > 24 = take 24 s <> "..."
-  ellipsis s = s
-
-  displayParty :: Party -> String
-  displayParty (Role role) = role
-  displayParty (Address address) = address
+  displayParty :: Party -> JSX
+  displayParty = case _ of
+    V1.Role role -> render role (DOOM.text role)
+    V1.Address addr -> render addr (DOM.div { className: "text-truncate" } [ DOOM.text addr ])
+    where
+      render msg body = overlayTrigger
+        { overlay: tooltip {} (DOOM.text $ msg)
+        , placement: OverlayTrigger.placement.bottom
+        }
+        $ DOM.td {} [ body ]

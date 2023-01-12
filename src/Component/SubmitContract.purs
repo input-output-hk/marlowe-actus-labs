@@ -131,6 +131,7 @@ mkSubmitContract = do
     step /\ setStep <- useState' Creating
     let
       onSubmit = handler preventDefault \_ -> do
+        traceM "ON SUBMIT CLICKED"
         launchAff_ $ do
           submit contractData runtime.serverURL runtime.root >>= case _ of
             Right res@{ resource: PostContractsResponse postContractsResponse, links: { contract: contractEndpoint } } -> do
@@ -283,7 +284,7 @@ submit contractData serverUrl contractsEndpoint = do
       , contract
       , minUTxODeposit: V1.Lovelace (BigInt.fromInt 2_000_000)
       , changeAddress: changeAddress
-      , addresses: usedAddresses
+      , addresses: usedAddresses <> [changeAddress]
       , collateralUTxOs: []
       }
 

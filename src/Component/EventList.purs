@@ -4,6 +4,7 @@ import Prelude
 
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain (CashFlow(..), _abs, evalVal')
+import CardanoMultiplatformLib.Types (unsafeBech32)
 import Component.Modal (mkModal)
 import Component.Types (ContractHeaderResource)
 import Component.Widgets (link)
@@ -29,7 +30,7 @@ import Marlowe.Actus.Metadata (actusMetadataKey)
 import Marlowe.Actus.Metadata as M
 import Marlowe.Runtime.Web (post')
 import Marlowe.Runtime.Web.Client (GetResourceResponse, getResource)
-import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), IndexEndpoint(..), Metadata(..), PostTransactionsRequest(..), PostTransactionsResponse(..), ResourceEndpoint(..), ResourceLink(..), Runtime(..), TransactionsEndpoint(..))
+import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), IndexEndpoint(..), Metadata(..), PostTransactionsRequest(..), PostTransactionsResponse(..), ResourceEndpoint(..), ResourceLink(..), Runtime(..), TransactionsEndpoint(..), partyToBech32)
 import Marlowe.Runtime.Web.Types as RT
 import Marlowe.Time (unixEpoch)
 import React.Basic (fragment) as DOOM
@@ -74,15 +75,14 @@ mkEventList (Runtime runtime) = do
         now <- nowDateTime
         launchAff_ $
           getResource runtime.serverURL link {}
-            >>= case _ of
-              Right { payload: { links: { transactions } } } -> do
+            >>= case _ , partyToBech32 party of
+              Right { payload: { links: { transactions } } }, Just changeAddress -> do
                 let
                   inputs = singleton $ IDeposit party party token value
 
                   invalidBefore = now
                   invalidHereafter = fromMaybe now $ adjust (Duration.Minutes 2.0) now
 
-                  changeAddress = partyToAddress party
                   addresses = []
                   collateralUTxOs = []
 
@@ -108,10 +108,11 @@ mkEventList (Runtime runtime) = do
                       pure unit
 
                 pure unit
-              Left err -> do
+              Left err, _ -> do
                 -- Note: this happens, when the contract is in status `Unsigned`
                 traceM err
                 pure unit
+              _, _ -> pure unit
 
         updateState _ { newInput = Nothing }
 
@@ -229,9 +230,9 @@ partyToString :: Party -> String
 partyToString (V1.Address addr) = addr
 partyToString (V1.Role role) = role
 
-partyToAddress :: Party -> RT.Address
-partyToAddress (V1.Address addr) = RT.Address addr
-partyToAddress (V1.Role _) = RT.Address "" -- FIXME
+-- partyToAddress :: Party -> Bech32
+-- partyToAddress (V1.Address addr) = RT.Address addr
+-- partyToAddress (V1.Role _) = RT.Address "" -- FIXME
 
 actusMetadata
   :: { links :: { contract :: ContractEndpoint }

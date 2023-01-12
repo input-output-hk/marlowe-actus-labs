@@ -1,6 +1,5 @@
 module Wallet
-  ( Address(..)
-  , Api
+  ( Api
   , Bytes(..)
   , Cbor(..)
   , Coin
@@ -35,8 +34,8 @@ module Wallet
 
 import Prelude
 
-import CardanoMultiplatformLib (CborHex)
-import CardanoMultiplatformLib.Transaction (TransactionWitnessSetObject, TransactionObject)
+import CardanoMultiplatformLib (AddressObject, CborHex)
+import CardanoMultiplatformLib.Transaction (TransactionObject, TransactionUnspentOutputObject, TransactionWitnessSetObject)
 import Control.Monad.Except (runExceptT)
 import Data.Either (Either(..))
 import Data.Foldable (fold)
@@ -59,11 +58,6 @@ import Type.Prelude (Proxy(..))
 import Unsafe.Coerce (unsafeCoerce)
 import Web.HTML (Window)
 
-newtype Address = Address String
-
-instance Show Address where
-  show (Address s) = "(Address " <> show s <> ")"
-
 data TransactionUnspentOutput
 
 data Coin
@@ -84,28 +78,28 @@ newtype Bytes = Bytes String
 
 type Api = JSObject
   ( getNetworkId :: EffectMth0 (Promise Int)
-  , getUtxos :: EffectMth0 (Promise (Nullable (Array (Cbor TransactionUnspentOutput))))
+  , getUtxos :: EffectMth0 (Promise (Nullable (Array (CborHex TransactionUnspentOutputObject))))
   , getCollateral :: EffectMth1 (Cbor Coin) (Promise (Nullable (Array (Cbor TransactionUnspentOutput))))
   , getBalance :: EffectMth0 (Promise (Cbor Value))
-  , getUsedAddresses :: EffectMth0 (Promise (Array Address))
-  , getUnusedAddresses :: EffectMth0 (Promise (Array Address))
-  , getChangeAddress :: EffectMth0 (Promise Address)
-  , getRewardAddresses :: EffectMth0 (Promise (Array Address))
+  , getUsedAddresses :: EffectMth0 (Promise (Array (CborHex AddressObject)))
+  , getUnusedAddresses :: EffectMth0 (Promise (Array (CborHex AddressObject)))
+  , getChangeAddress :: EffectMth0 (Promise (CborHex AddressObject))
+  , getRewardAddresses :: EffectMth0 (Promise (Array (CborHex AddressObject)))
   , signTx :: EffectMth2 (CborHex TransactionObject) Boolean (Promise (CborHex TransactionWitnessSetObject))
-  , signData :: EffectMth2 Address Bytes (Promise Bytes)
+  , signData :: EffectMth2 (CborHex AddressObject) Bytes (Promise Bytes)
   , submitTx :: EffectMth1 (CborHex TransactionObject) (Promise (Cbor Hash32))
   )
 
 _Api
   :: { getBalance :: Api -> Effect (Promise (Cbor Value))
-     , getChangeAddress :: Api -> Effect (Promise Address)
+     , getChangeAddress :: Api -> Effect (Promise (CborHex AddressObject))
      , getCollateral :: Api -> Cbor Coin -> Effect (Promise (Nullable (Array (Cbor TransactionUnspentOutput))))
      , getNetworkId :: Api -> Effect (Promise Int)
-     , getRewardAddresses :: Api -> Effect (Promise (Array Address))
-     , getUnusedAddresses :: Api -> Effect (Promise (Array Address))
-     , getUsedAddresses :: Api -> Effect (Promise (Array Address))
-     , getUtxos :: Api -> Effect (Promise (Nullable (Array (Cbor TransactionUnspentOutput))))
-     , signData :: Api -> Address -> Bytes -> Effect (Promise Bytes)
+     , getRewardAddresses :: Api -> Effect (Promise (Array (CborHex AddressObject)))
+     , getUnusedAddresses :: Api -> Effect (Promise (Array (CborHex AddressObject)))
+     , getUsedAddresses :: Api -> Effect (Promise (Array (CborHex AddressObject)))
+     , getUtxos :: Api -> Effect (Promise (Nullable (Array (CborHex TransactionUnspentOutputObject))))
+     , signData :: Api -> CborHex AddressObject -> Bytes -> Effect (Promise Bytes)
      , signTx :: Api -> CborHex TransactionObject -> Boolean -> Effect (Promise (CborHex TransactionWitnessSetObject))
      , submitTx :: Api -> CborHex TransactionObject -> Effect (Promise (Cbor Hash32))
      }
@@ -218,7 +212,7 @@ getBalance :: Api -> Aff (Cbor Value)
 getBalance = Promise.toAffE <<< _Api.getBalance
 
 -- | Manually tested and works with Nami.
-getChangeAddress :: Api -> Aff (Either Foreign Address)
+getChangeAddress :: Api -> Aff (Either Foreign (CborHex AddressObject))
 getChangeAddress = toAffEitherE rejectionToForeign <<< _Api.getChangeAddress
 
 -- | Manually tested and works with Nami.
@@ -226,22 +220,22 @@ getCollateral :: Api -> Cbor Coin -> Aff (Array (Cbor TransactionUnspentOutput))
 getCollateral api = map (fold <<< Nullable.toMaybe) <<< Promise.toAffE <<< _Api.getCollateral api
 
 -- | Manually tested and works with Nami.
-getRewardAddresses :: Api -> Aff (Array Address)
+getRewardAddresses :: Api -> Aff (Array (CborHex AddressObject))
 getRewardAddresses = Promise.toAffE <<< _Api.getRewardAddresses
 
 -- | Manually tested and works with Nami.
-getUnusedAddresses :: Api -> Aff (Array Address)
-getUnusedAddresses = Promise.toAffE <<< _Api.getUnusedAddresses
+getUnusedAddresses :: Api -> Aff (Either Foreign (Array (CborHex AddressObject)))
+getUnusedAddresses = toAffEitherE rejectionToForeign <<< _Api.getUnusedAddresses
 
 -- | Manually tested and works with Nami.
-getUsedAddresses :: Api -> Aff (Either Foreign (Array Address))
+getUsedAddresses :: Api -> Aff (Either Foreign (Array (CborHex AddressObject)))
 getUsedAddresses = toAffEitherE rejectionToForeign <<< _Api.getUsedAddresses
 
 -- | Manually tested and works with Nami.
-getUtxos :: Api -> Aff (Maybe (Array (Cbor TransactionUnspentOutput)))
-getUtxos = map Nullable.toMaybe <<< Promise.toAffE <<< _Api.getUtxos
+getUtxos :: Api -> Aff (Either Foreign (Maybe (Array (CborHex TransactionUnspentOutputObject))))
+getUtxos = map (map Nullable.toMaybe) <<< toAffEitherE rejectionToForeign <<< _Api.getUtxos
 
-signData :: Api -> Address -> Bytes -> Aff Bytes
+signData :: Api -> CborHex AddressObject -> Bytes -> Aff Bytes
 signData api address = Promise.toAffE <<< _Api.signData api address
 
 rejectionToForeign :: Promise.Rejection -> Foreign

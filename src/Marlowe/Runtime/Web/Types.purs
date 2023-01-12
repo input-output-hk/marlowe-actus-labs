@@ -1,42 +1,33 @@
 module Marlowe.Runtime.Web.Types where
 
-import Data.DateTime.ISO
+import Data.DateTime.ISO (ISO(..))
 import Prelude
 
-import CardanoMultiplatformLib (CborHex)
-import CardanoMultiplatformLib.Transaction (TransactionObject(..))
+import CardanoMultiplatformLib (Bech32, CborHex, bech32ToString)
+import CardanoMultiplatformLib.Transaction (TransactionObject)
+import CardanoMultiplatformLib.Types (unsafeBech32)
 import Contrib.Data.Argonaut (JsonParser, JsonParserResult, decodeFromString)
-import Contrib.Data.Argonaut.Generic.Record (DecodeJsonFieldFn, decodeNewtypedRecord)
-import Contrib.Data.Argonaut.Generic.Record (class DecodeRecord, DecodeJsonFieldFn, decodeRecord)
-import Data.Argonaut (class DecodeJson, Json, JsonDecodeError, decodeJson)
+import Contrib.Data.Argonaut.Generic.Record (class DecodeRecord, DecodeJsonFieldFn, decodeRecord, decodeNewtypedRecord)
 import Data.Argonaut (class DecodeJson, class EncodeJson, Json, JsonDecodeError(..), decodeJson, encodeJson)
 import Data.Argonaut.Decode.Combinators ((.:))
 import Data.Argonaut.Decode.Decoders (decodeMaybe)
-import Data.Bifunctor (rmap)
 import Data.DateTime (DateTime)
-import Data.DateTime.Instant (fromDateTime, toDateTime)
-import Data.Either (Either)
 import Data.Either (Either, note)
-import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep (class Generic)
 import Data.Int as Int
 import Data.JSDate as JSDate
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
-import Data.Newtype (class Newtype, un)
-import Data.Newtype (class Newtype, unwrap)
+import Data.Newtype (class Newtype, un, unwrap)
 import Data.Profunctor.Strong ((***))
 import Data.String as String
 import Data.Traversable (for)
 import Data.Tuple.Nested (type (/\), (/\))
-import Debug (traceM)
 import Effect.Unsafe (unsafePerformEffect)
-import Fetch.Core.Request (Request)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Language.Marlowe.Core.V1.Semantics.Types as V1
-import Marlowe.Time (instantFromJson, instantToJson)
 import Record as Record
 import Type.Row.Homogeneous as Row
 
@@ -303,20 +294,12 @@ instance DecodeJson Tx where
 
 newtype ServerURL = ServerURL String
 
-newtype Address = Address String
+bech32ToParty :: Bech32 -> V1.Party
+bech32ToParty bech32 = V1.Address (bech32ToString bech32)
 
-derive instance Newtype Address _
-
-addressToString :: Address -> String
-addressToString = un Address
-
-addressToParty :: Address -> V1.Party
-addressToParty (Address address) = V1.Address address
-
-instance EncodeJson Address where
-  encodeJson = encodeJson <<< addressToString
-
--- Base types for typed API endpoints
+partyToBech32 :: V1.Party -> Maybe Bech32
+partyToBech32 (V1.Address str) = Just $ unsafeBech32 str
+partyToBech32 _ = Nothing
 
 newtype ResourceLink :: Type -> Type
 newtype ResourceLink resource = ResourceLink String
@@ -389,8 +372,8 @@ newtype PostContractsRequest = PostContractsRequest
   -- , roles :: Maybe RolesConfig
   , contract :: V1.Contract
   , minUTxODeposit :: V1.Ada
-  , changeAddress :: Address
-  , addresses :: Array Address
+  , changeAddress :: Bech32
+  , addresses :: Array Bech32
   , collateralUTxOs :: Array TxOutRef
   }
 
@@ -411,8 +394,8 @@ type PostContractsHeadersRow =
 
 instance EncodeHeaders PostContractsRequest PostContractsHeadersRow where
   encodeHeaders (PostContractsRequest { changeAddress, addresses }) =
-    { "X-Change-Address": addressToString changeAddress
-    , "X-Address": String.joinWith "," (map addressToString addresses)
+    { "X-Change-Address": bech32ToString changeAddress
+    , "X-Address": String.joinWith "," (map bech32ToString addresses)
     -- FIXME: Empty collateral causes request rejection so ... this header record representation
     -- gonna be hard to maintain and we should switch to `Object String` probably and use
     -- lower level fetch API.
@@ -464,8 +447,8 @@ newtype PostTransactionsRequest = PostTransactionsRequest
   , invalidBefore :: DateTime
   , invalidHereafter :: DateTime
   , metadata :: Metadata
-  , changeAddress :: Address
-  , addresses :: Array Address
+  , changeAddress :: Bech32
+  , addresses :: Array Bech32
   , collateralUTxOs :: Array TxOutRef
   }
 
@@ -479,9 +462,9 @@ instance EncodeJsonBody PostTransactionsRequest where
     }
 
 instance EncodeHeaders PostTransactionsRequest PostContractsHeadersRow where
-  encodeHeaders (PostTransactionsRequest { changeAddress, addresses, collateralUTxOs }) =
-    { "X-Change-Address": addressToString changeAddress
-    , "X-Address": String.joinWith "," (map addressToString addresses)
+  encodeHeaders (PostTransactionsRequest { changeAddress, addresses }) = -- , collateralUTxOs }) =
+    { "X-Change-Address": bech32ToString changeAddress
+    , "X-Address": String.joinWith "," (map bech32ToString addresses)
     -- FIXME: Check comment above regarding the same header and contraacts endpoint request.
     -- , "X-Collateral-UTxO": String.joinWith "," (map txOutRefToString collateralUTxOs)
     }

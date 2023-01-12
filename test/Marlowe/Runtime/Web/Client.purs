@@ -4,6 +4,7 @@ import Prelude
 
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain (ContractTerms(..))
+import CardanoMultiplatformLib.Types (unsafeBech32)
 import Contrib.Fetch (FetchError(InvalidStatusCode))
 import Control.Monad.Error.Class (catchError, throwError)
 import Data.Argonaut (Json, JsonDecodeError, decodeJson, encodeJson, jsonParser)
@@ -25,7 +26,7 @@ import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus (defaultRiskFactors, genContract)
 import Marlowe.Actus.Metadata (Metadata(..), actusMetadataKey)
 import Marlowe.Runtime.Web.Client (ClientError(..), foldMapMPages, foldMapMPages', getResource, post, post')
-import Marlowe.Runtime.Web.Types (Address(..), ContractsEndpoint(..), GetContractsResponse, Metadata, PostContractsRequest(..), PostContractsResponse(..), ServerURL(..), Tx(..), api)
+import Marlowe.Runtime.Web.Types (ContractsEndpoint(..), GetContractsResponse, Metadata, PostContractsRequest(..), PostContractsResponse(..), ServerURL(..), Tx(..), api)
 import Marlowe.Runtime.Web.Types as RT
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff (readTextFile)
@@ -40,7 +41,7 @@ spec serverUrl@(ServerURL serverUrlStr) = do
           -- addr = Address "addr_xvk12wjl5zcq8dd4q7he36667aqvcwm9sjhqpk3vyu625g3tcfex5sckf35hyu3vnhveyqrqvtrvff6m0jqu6xfus5lx5att4h2g7pteqrgu04hjs"
           -- addr = Address "00bf05a62e0a25a1cde8b6f3b5b0d33ea60fde9a9ec8f615169493c7a90f1e33e7772682a03adde020ba989d97339c9b3f32a516aa056a9c7c"
           -- addr = Address "addr1w94f8ywk4fg672xasahtk4t9k6w3aql943uxz5rt62d4dvq8evxaf"
-          addr = Address "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
+          addr = unsafeBech32 "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
           req = PostContractsRequest
             { metadata: mempty
             -- , version :: MarloweVersion
@@ -89,7 +90,7 @@ spec serverUrl@(ServerURL serverUrlStr) = do
          Right contract -> do
            let
              metadataJson = encodeJson $ Metadata { contractTerms: contract, party: addr1, counterParty: addr2 }
-             addr = RT.Address "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
+             addr = unsafeBech32 "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
              cashflows = genProjectedCashflows (addr1 /\ addr2) (defaultRiskFactors contract) contract
              marloweContract = genContract cashflows
              req = PostContractsRequest

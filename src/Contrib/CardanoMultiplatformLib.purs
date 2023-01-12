@@ -3,39 +3,42 @@ module CardanoMultiplatformLib
   , module Exports
   , GarbageCollector
   , allocate
+  , bech32FromBytes
+  , bech32FromString
   , runGarbageCollector
   , transactionWitnessSetFromBytes
   ) where
 
 import Prelude
 
+import CardanoMultiplatformLib.Address (Address, AddressObject, addressObject, address) as Exports
+import CardanoMultiplatformLib.Address (AddressObject, addressObject)
+import CardanoMultiplatformLib.Address as Address
 import CardanoMultiplatformLib.Lib (Lib)
 import CardanoMultiplatformLib.Lib (Lib) as Exports
 import CardanoMultiplatformLib.Lib as Lib
-import CardanoMultiplatformLib.Transaction (TransactionWitnessSetObject(..))
+import CardanoMultiplatformLib.Transaction (TransactionWitnessSetObject)
 import CardanoMultiplatformLib.Transaction as Transaction
-import CardanoMultiplatformLib.Types (Cbor, CborHex(..))
-import CardanoMultiplatformLib.Types (CborHex(..)) as Exports
+import CardanoMultiplatformLib.Types (Bech32, Cbor, unsafeBech32)
+import CardanoMultiplatformLib.Types (CborHex(..), Bech32, cborToCborHex, cborHexToHex, bech32ToString) as Exports
 import Control.Monad.Error.Class (throwError)
 import Control.Monad.Except (catchError)
 import Control.Monad.Reader (ReaderT, runReaderT)
-import Control.Monad.Reader.Class (ask, asks)
+import Control.Monad.Reader.Class (asks)
 import Data.Foldable (length, sequence_)
 import Data.List (List)
 import Data.List as List
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap)
 import Data.Nullable (Nullable)
 import Data.Nullable as Nullable
+import Data.Undefined.NoProblem (Opt)
 import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff)
-import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect, liftEffect)
-import Effect.Exception (throw)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
-import HexString as HexString
 import JS.Object (EffectMth0, JSObject, runEffectMth0)
 import Promise.Aff (Promise, toAff)
 import Type.Prelude (Proxy(..))
@@ -53,6 +56,9 @@ type Ctx = { lib :: Lib, frees :: Ref (List (Effect Unit)) }
 
 -- | StateT is not sufficient because it is not exception
 -- | safe. We need to use `Ref` to store the release actions.
+-- |
+-- | FIXME: We should probably introduce a scope phantom
+-- | to avoid leaks.
 newtype GarbageCollector a = GarbageCollector
   (ReaderT Ctx Effect a)
 derive newtype instance Functor GarbageCollector
@@ -68,7 +74,7 @@ runGarbageCollector lib (GarbageCollector action) = do
   let
     release = do
       frees <- Ref.read freesRef
-      traceM $ "Releasing " <> show (length frees :: Int) <> " resources"
+      traceM $ "Releasing resource(s): " <> show (length frees :: Int)
       sequence_ frees
     run = do
       a <- runReaderT action { frees: freesRef, lib }
@@ -94,10 +100,21 @@ allocate alloc = GarbageCollector do
 
 transactionWitnessSetFromBytes :: Cbor TransactionWitnessSetObject -> GarbageCollector TransactionWitnessSetObject
 transactionWitnessSetFromBytes twCbor = do
-  lib <- GarbageCollector $ asks _.lib
+  { "TransactionWitnessSet": tws } <- GarbageCollector $ asks (Lib.props <<< _.lib)
+  allocate $ Transaction.transactionWitnessSet.from_bytes tws twCbor
+
+bech32FromBytes :: Cbor AddressObject -> Opt String -> GarbageCollector Bech32
+bech32FromBytes cbor prefix = do
+  { "Address": addrClass } <- GarbageCollector $ asks (Lib.props <<< _.lib)
+  addrObject <- allocate $ Address.address.from_bytes addrClass cbor
+  liftEffect $ addressObject.to_bech32 addrObject prefix
+
+bech32FromString :: Lib -> String -> Effect (Maybe Bech32)
+bech32FromString lib addrStr = do
   let
-    { "TransactionWitnessSet": tws } = Lib.props lib
-    { "from_bytes": fromBytes } = Transaction.transactionWitnessSet
-  allocate $ fromBytes tws twCbor
-
-
+    { "Address": addressClass } = Lib.props lib
+  Address.address.is_valid_bech32 addressClass addrStr >>= if _
+    then
+      pure $ Just $ unsafeBech32 addrStr
+    else
+      pure Nothing

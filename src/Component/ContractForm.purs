@@ -4,8 +4,9 @@ import Prelude
 
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain (ContractTerms)
+import CardanoMultiplatformLib (Bech32(..), address, bech32FromBytes, bech32FromString, bech32ToString, cborHexToHex, runGarbageCollector)
 import CardanoMultiplatformLib as CardanoMultiplatformLib
-import CardanoMultiplatformLib.Address (Bech32(..), bech32FromHex, isValidBech32)
+import CardanoMultiplatformLib.Types (cborHexToCbor)
 import Component.Modal (mkModal)
 import Component.Modal as Modal
 import Component.Types (MkComponentM, WalletInfo(..))
@@ -14,6 +15,7 @@ import Contrib.React.Basic.Hooks.UseForm (useForm)
 import Contrib.React.Basic.Hooks.UseForm as UseForm
 import Contrib.React.Bootstrap.FormBuilder (FormBuilder, BootstrapForm)
 import Contrib.React.Bootstrap.FormBuilder as FormBuilder
+import Control.Monad.Error.Class (catchError)
 import Control.Monad.Reader.Class (asks)
 import Data.Argonaut (decodeJson, parseJson)
 import Data.Array as Array
@@ -25,6 +27,7 @@ import Data.Maybe (Maybe(..))
 import Data.String as String
 import Data.Time.Duration (Seconds(..))
 import Data.Traversable (for)
+import Data.Undefined.NoProblem as NoProblem
 import Data.Validation.Semigroup (V(..))
 import Debug (traceM)
 import Effect (Effect)
@@ -33,11 +36,11 @@ import Effect.Class (liftEffect)
 import Language.Marlowe.Core.V1.Semantics.Types (Party)
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus (defaultRiskFactors, genContract)
-import Marlowe.Runtime.Web.Types (Address(..), addressToParty) as RT
-import Marlowe.Runtime.Web.Types (Address, TxOutRef)
+import Marlowe.Runtime.Web.Types (TxOutRef, bech32ToParty)
+import Marlowe.Runtime.Web.Types (bech32ToParty) as RT
 import Polyform.Batteries (rawError)
 import Polyform.Batteries as Batteries
-import Polyform.Validator (liftFnEither, liftFnMEither) as Validator
+import Polyform.Validator (liftFnEither, liftFnMEither, liftFnMMaybe) as Validator
 import React.Basic (JSX)
 import React.Basic (fragment) as DOOM
 import React.Basic.DOM (text) as DOOM
@@ -55,8 +58,8 @@ type Result =
   , counterParty :: V1.Party
   , party :: V1.Party
 
-  , changeAddress :: RT.Address
-  , usedAddresses :: Array RT.Address
+  , changeAddress :: Bech32
+  , usedAddresses :: Array Bech32
   , collateralUTxOs :: Array TxOutRef
   }
 
@@ -105,17 +108,15 @@ initialAddress = "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g
 error :: forall errs. String -> Batteries.Errors' (raw :: Array String | errs)
 error = Array.singleton <<< rawError
 
-addressInput :: CardanoMultiplatformLib.Lib -> String -> Maybe String -> FormBuilder Effect Address
+addressInput :: CardanoMultiplatformLib.Lib -> String -> Maybe String -> FormBuilder Effect Bech32
 addressInput cardanoMultiplatformLib initial name = do
   let
     props =
       { initial
       , label: Just $ DOOM.text "Address"
       , name
-      , validator: Validator.liftFnMEither \str -> do
-          isValidBech32 cardanoMultiplatformLib str <#>
-            if _ then Right (RT.Address str)
-            else Left [ "Invalid address" ]
+      , validator: Validator.liftFnMMaybe (const $ pure ["Invalid address"]) \str -> do
+          bech32FromString cardanoMultiplatformLib str
       }
   FormBuilder.textInput props
 
@@ -133,8 +134,8 @@ mkForm cardanoMultiplatformLib = FormBuilder.evalBuilder ado
   partyAddress <- addressInput cardanoMultiplatformLib "" $ Just "party"
   counterPartyAddress <- addressInput cardanoMultiplatformLib initialAddress $ Just "counter-party"
   let
-    counterParty = RT.addressToParty counterPartyAddress
-    party = RT.addressToParty partyAddress
+    counterParty = bech32ToParty counterPartyAddress
+    party = bech32ToParty partyAddress
     contract = createContract party counterParty contractTerms
   in
     { contractTerms
@@ -179,26 +180,36 @@ mkContractForm = do
       case connectedWallet of
         WalletInfo { wallet } -> launchAff_ do
           let
-            walletAddressToBech32 (Wallet.Address addressStr) = do
-              bech32FromHex cardanoMultiplatformLib addressStr >>= case _ of
-                Just (Bech32 bech32) -> pure $ Just $ RT.Address bech32
-                Nothing -> pure Nothing
+            walletAddressToBech32 addressCborHex = do
+              let
+                addressCbor = cborHexToCbor addressCborHex
+              (map Just $ runGarbageCollector cardanoMultiplatformLib $ bech32FromBytes addressCbor NoProblem.undefined) `catchError` \_ -> pure Nothing
 
           possibleAddress <- Wallet.getChangeAddress wallet
           possibleUsedAddresses <- Wallet.getUsedAddresses wallet
           case possibleAddress, possibleUsedAddresses of
             Right address, Right addresses -> do
               -- setChangeAddresses $ Just addresses
-              addr <- liftEffect $ walletAddressToBech32 address
-              liftEffect $ case addr, Map.lookup (FieldId "party") formState.fields of
-                Just (RT.Address addr), Just { onChange } ->
-                  onChange [ addr ]
-                _, _ -> do
+              liftEffect $ walletAddressToBech32 address >>= case _, Map.lookup (FieldId "party") formState.fields of
+                Just address', Just { onChange } -> do
+
+                  traceM "Address"
+                  traceM address'
+
+                  onChange [ bech32ToString address' ]
+                addr, field -> do
+                  traceM "No address"
+                  traceM addr
+                  traceM field
                   pure unit
 
               liftEffect $ do
                 addresses' <- Array.catMaybes <$> for addresses \address -> do
                   walletAddressToBech32 address
+
+                traceM "Used addresses"
+                traceM addresses'
+
                 setChangeAddresses $ Just addresses'
             _, _ -> do
               traceM "Failed to get change address"
@@ -248,3 +259,5 @@ mkContractForm = do
 --   let onChange = handler targetValue (setValue <<< const <<< fromMaybe "")
 --   pure (value /\ onChange)
 -- 
+
+

@@ -9,6 +9,9 @@ module CardanoMultiplatformLib.Types
   , cborToCborHex
   , CborHex(..)
   , Cbor
+  , Bech32
+  , bech32ToString
+  , unsafeBech32
   ) where
 
 import Prelude
@@ -53,3 +56,10 @@ jsonStringFromString = map (JsonString <<< stringify) <<< hush <<< parseJson
 jsonStringToString :: JsonString -> String
 jsonStringToString (JsonString s) = s
 
+newtype Bech32 = Bech32 String
+
+bech32ToString :: Bech32 -> String
+bech32ToString (Bech32 str) = str
+
+unsafeBech32 :: String -> Bech32
+unsafeBech32 = Bech32
