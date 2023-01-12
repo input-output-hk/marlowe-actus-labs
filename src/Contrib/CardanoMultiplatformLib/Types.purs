@@ -58,6 +58,12 @@ jsonStringToString (JsonString s) = s
 
 newtype Bech32 = Bech32 String
 
+derive newtype instance Eq Bech32
+derive newtype instance Ord Bech32
+derive newtype instance EncodeJson Bech32
+derive newtype instance DecodeJson Bech32
+derive newtype instance Show Bech32
+
 bech32ToString :: Bech32 -> String
 bech32ToString (Bech32 str) = str
 

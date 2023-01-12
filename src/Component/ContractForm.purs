@@ -4,8 +4,9 @@ import Prelude
 
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain (ContractTerms)
-import CardanoMultiplatformLib (Bech32(..), address, bech32FromBytes, bech32FromString, bech32ToString, cborHexToHex, runGarbageCollector)
+import CardanoMultiplatformLib (Bech32(..), address, addressObject, allocate, asksLib, bech32FromBytes, bech32FromString, bech32ToString, cborHexToHex, runGarbageCollector)
 import CardanoMultiplatformLib as CardanoMultiplatformLib
+import CardanoMultiplatformLib.Transaction (transactionOutputObject, transactionUnspentOutput, transactionUnspentOutputObject)
 import CardanoMultiplatformLib.Types (cborHexToCbor)
 import Component.Modal (mkModal)
 import Component.Modal as Modal
@@ -186,9 +187,27 @@ mkContractForm = do
               (map Just $ runGarbageCollector cardanoMultiplatformLib $ bech32FromBytes addressCbor NoProblem.undefined) `catchError` \_ -> pure Nothing
 
           possibleAddress <- Wallet.getChangeAddress wallet
+
           possibleUsedAddresses <- Wallet.getUsedAddresses wallet
-          case possibleAddress, possibleUsedAddresses of
-            Right address, Right addresses -> do
+          possibleUTxOs <- Wallet.getUtxos wallet
+
+          case possibleAddress, possibleUsedAddresses, possibleUTxOs of
+            Right address, Right addresses, Right (Just utxos) -> do
+
+              utxoAddresses <- liftEffect $ runGarbageCollector cardanoMultiplatformLib do
+                _TransactionUnspentOutput <- asksLib _."TransactionUnspentOutput"
+                addresses <- for utxos \utxo -> do
+                  let
+                    utxo' = cborHexToCbor utxo
+                  unspentTxOutObj <- allocate $ transactionUnspentOutput.from_bytes _TransactionUnspentOutput utxo'
+                  txOutObj <- allocate $ transactionUnspentOutputObject.output unspentTxOutObj
+                  addressObj <- allocate $ transactionOutputObject.address txOutObj
+                  liftEffect $ addressObject.to_bech32 addressObj NoProblem.undefined
+                pure $ Array.nub addresses
+
+              traceM "UTXO addresses"
+              traceM utxoAddresses
+
               -- setChangeAddresses $ Just addresses
               liftEffect $ walletAddressToBech32 address >>= case _, Map.lookup (FieldId "party") formState.fields of
                 Just address', Just { onChange } -> do
@@ -204,14 +223,13 @@ mkContractForm = do
                   pure unit
 
               liftEffect $ do
-                addresses' <- Array.catMaybes <$> for addresses \address -> do
-                  walletAddressToBech32 address
+                -- addresses' <- Array.catMaybes <$> for addresses \address -> do
+                --   walletAddressToBech32 address
+                -- traceM "Used addresses"
+                -- traceM addresses'
 
-                traceM "Used addresses"
-                traceM addresses'
-
-                setChangeAddresses $ Just addresses'
-            _, _ -> do
+                setChangeAddresses $ Just utxoAddresses
+            _, _, _ -> do
               traceM "Failed to get change address"
               traceM possibleAddress
               traceM "Used addresses"

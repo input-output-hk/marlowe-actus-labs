@@ -3,16 +3,14 @@ module Component.EventList where
 import Prelude
 
 import Actus.Core (genProjectedCashflows)
-import Actus.Domain (CashFlow(..), _abs, evalVal')
-import CardanoMultiplatformLib.Types (unsafeBech32)
+import Actus.Domain (CashFlow(..), evalVal')
 import Component.Modal (mkModal)
 import Component.Types (ContractHeaderResource)
 import Component.Widgets (link)
-import Data.Argonaut (decodeJson, fromObject)
+import Data.Argonaut (decodeJson)
 import Data.Array (catMaybes, concat, fromFoldable, singleton)
 import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (adjust)
-import Data.DateTime.Instant (toDateTime)
 import Data.Either (Either(..), hush)
 import Data.Formatter.DateTime (formatDateTime)
 import Data.Map (lookup)
@@ -29,10 +27,8 @@ import Marlowe.Actus (defaultRiskFactors, evalVal, toMarloweCashflow)
 import Marlowe.Actus.Metadata (actusMetadataKey)
 import Marlowe.Actus.Metadata as M
 import Marlowe.Runtime.Web (post')
-import Marlowe.Runtime.Web.Client (GetResourceResponse, getResource)
-import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), IndexEndpoint(..), Metadata(..), PostTransactionsRequest(..), PostTransactionsResponse(..), ResourceEndpoint(..), ResourceLink(..), Runtime(..), TransactionsEndpoint(..), partyToBech32)
-import Marlowe.Runtime.Web.Types as RT
-import Marlowe.Time (unixEpoch)
+import Marlowe.Runtime.Web.Client (getResource)
+import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), Metadata(..), PostTransactionsRequest(..), PostTransactionsResponse(..), ResourceEndpoint(..), Runtime(..), partyToBech32)
 import React.Basic (fragment) as DOOM
 import React.Basic.DOM (text)
 import React.Basic.DOM (text) as DOOM

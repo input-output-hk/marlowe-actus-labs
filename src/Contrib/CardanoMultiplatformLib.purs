@@ -1,5 +1,7 @@
 module CardanoMultiplatformLib
-  ( importLib
+  ( askLib
+  , asksLib
+  , importLib
   , module Exports
   , GarbageCollector
   , allocate
@@ -97,6 +99,13 @@ allocate alloc = GarbageCollector do
     _free = Proxy :: Proxy "free"
   liftEffect $ Ref.modify_ (List.Cons (runEffectMth0 _free jsobj)) freesRef
   pure obj
+
+askLib :: GarbageCollector Lib
+askLib = GarbageCollector do
+  asks _.lib
+
+asksLib :: forall a. (Lib.Props -> a) -> GarbageCollector a
+asksLib f = askLib <#> (f <<< Lib.props)
 
 transactionWitnessSetFromBytes :: Cbor TransactionWitnessSetObject -> GarbageCollector TransactionWitnessSetObject
 transactionWitnessSetFromBytes twCbor = do

@@ -239,7 +239,7 @@ mkContractList = do
   displayParty :: Party -> JSX
   displayParty = case _ of
     V1.Role role -> render role (DOOM.text role)
-    V1.Address addr -> render addr (DOM.div { className: "text-truncate" } [ DOOM.text addr ])
+    V1.Address addr -> render addr (DOM.div { className: "text-truncate w-16rem" } [ DOOM.text addr ])
     where
       render msg body = overlayTrigger
         { overlay: tooltip {} (DOOM.text $ msg)

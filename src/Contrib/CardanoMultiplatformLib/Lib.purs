@@ -4,8 +4,6 @@ module CardanoMultiplatformLib.Lib
   , Props
   ) where
 
-import Prelude
-
 import CardanoMultiplatformLib.Address as Address
 import CardanoMultiplatformLib.Transaction as Transaction
 
@@ -14,6 +12,7 @@ type Props =
   , "Transaction" :: Transaction.Transaction
   , "TransactionWitnessSet" :: Transaction.TransactionWitnessSet
   , "TransactionBody" :: Transaction.TransactionBody
+  , "TransactionUnspentOutput" :: Transaction.TransactionUnspentOutput
   }
 
 newtype Lib = Lib
@@ -21,6 +20,7 @@ newtype Lib = Lib
   , "Transaction" :: Transaction.Transaction
   , "TransactionWitnessSet" :: Transaction.TransactionWitnessSet
   , "TransactionBody" :: Transaction.TransactionBody
+  , "TransactionUnspentOutput" :: Transaction.TransactionUnspentOutput
   }
 
 props :: Lib -> Props

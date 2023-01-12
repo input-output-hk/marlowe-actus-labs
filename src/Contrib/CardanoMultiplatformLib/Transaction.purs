@@ -442,12 +442,12 @@ transactionOutputObject = mkNewtypedFFI (Proxy :: Proxy TransactionOutputObject)
 -- }
 
 -- FIXME: missing binding.
-foreign import data TransactionInput :: Type
+foreign import data TransactionInputObject :: Type
 
 newtype TransactionUnspentOutput = TransactionUnspentOutput
   ( JSObject
       ( from_bytes :: EffectMth1 (Cbor TransactionUnspentOutputObject) TransactionUnspentOutputObject
-      , new :: EffectMth2 TransactionInput TransactionOutput TransactionUnspentOutputObject
+      , new :: EffectMth2 TransactionInputObject TransactionOutput TransactionUnspentOutputObject
       )
   )
 
@@ -455,15 +455,15 @@ derive instance Newtype TransactionUnspentOutput _
 
 transactionUnspentOutput
   :: { from_bytes :: TransactionUnspentOutput -> (Cbor TransactionUnspentOutputObject) -> Effect TransactionUnspentOutputObject
-     , new :: TransactionUnspentOutput -> TransactionInput -> TransactionOutput -> Effect TransactionUnspentOutputObject
+     , new :: TransactionUnspentOutput -> TransactionInputObject -> TransactionOutput -> Effect TransactionUnspentOutputObject
      }
 transactionUnspentOutput = mkNewtypedFFI (Proxy :: Proxy TransactionUnspentOutput)
 
 newtype TransactionUnspentOutputObject = TransactionUnspentOutputObject
   ( JSObject
     ( free :: EffectMth0 Unit
-    , input :: EffectMth0 TransactionInput
-    , output :: EffectMth0 TransactionOutput
+    , input :: EffectMth0 TransactionInputObject
+    , output :: EffectMth0 TransactionOutputObject
     )
   )
 
@@ -471,8 +471,8 @@ derive instance Newtype TransactionUnspentOutputObject _
 
 transactionUnspentOutputObject
   :: { free :: TransactionUnspentOutputObject -> Effect Unit
-     , input :: TransactionUnspentOutputObject -> Effect TransactionInput
-     , output :: TransactionUnspentOutputObject -> Effect TransactionOutput
+     , input :: TransactionUnspentOutputObject -> Effect TransactionInputObject
+     , output :: TransactionUnspentOutputObject -> Effect TransactionOutputObject
      }
 transactionUnspentOutputObject = mkNewtypedFFI (Proxy :: Proxy TransactionUnspentOutputObject)
 
