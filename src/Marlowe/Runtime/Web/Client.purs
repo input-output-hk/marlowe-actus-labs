@@ -267,7 +267,6 @@ put (ServerURL serverUrl) (ResourceEndpoint (ResourceLink path)) req = runExcept
         $ (encodeHeaders req :: { | extraHeaders })
   void $ ExceptT $ fetchEither url { method: PUT, body, headers } allowedStatusCodes identity
 
-
 put'
   :: forall links putRequest getResponse extraHeaders t
    . EncodeHeaders putRequest extraHeaders

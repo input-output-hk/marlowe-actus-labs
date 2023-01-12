@@ -71,7 +71,7 @@ mkEventList (Runtime runtime) = do
         now <- nowDateTime
         launchAff_ $
           getResource runtime.serverURL link {}
-            >>= case _ , partyToBech32 party of
+            >>= case _, partyToBech32 party of
               Right { payload: { links: { transactions } } }, Just changeAddress -> do
                 let
                   inputs = singleton $ IDeposit party party token value

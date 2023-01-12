@@ -26,4 +26,3 @@ newtype Lib = Lib
 props :: Lib -> Props
 props (Lib r) = r
 
-

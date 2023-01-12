@@ -156,7 +156,6 @@ cardano w = do
       | Foreign.isUndefined prop -> pure Nothing
       | otherwise -> pure $ Just $ Foreign.unsafeFromForeign prop
 
-
 eternl :: Cardano -> Effect (Maybe Wallet)
 eternl = map Nullable.toMaybe <<< _Cardano.eternl
 

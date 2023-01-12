@@ -76,7 +76,6 @@ data SubmissionStep
   | Signing (Either String PostContractsResponse)
   | Signed (Either ClientError PostContractsResponse)
 
-
 addWitnessSet :: Lib -> Cbor TransactionObject -> Cbor TransactionWitnessSetObject -> Effect TransactionObject
 addWitnessSet cardanoMultiplatformLib txCbor witnessSetCbor = runGarbageCollector cardanoMultiplatformLib do
   let
@@ -94,32 +93,29 @@ addWitnessSet cardanoMultiplatformLib txCbor witnessSetCbor = runGarbageCollecto
   -- FIXME: paluh. Memory leak. We are not able to use allocate here.
   liftEffect $ Transaction.transaction.new lib."Transaction" body tws auxData -- NoProblem.undefined
 
-              --       ---
-              --       body' <- allocate $ Transaction.transactionObject.body tx'
+--       ---
+--       body' <- allocate $ Transaction.transactionObject.body tx'
 
-              --       traceM "body"
-              --       bodyJson <- liftEffect $ Transaction.transactionBodyObject.to_js_value body
-              --       traceM bodyJson
+--       traceM "body"
+--       bodyJson <- liftEffect $ Transaction.transactionBodyObject.to_js_value body
+--       traceM bodyJson
 
-              --       traceM "body'"
-              --       bodyJson' <- liftEffect $ Transaction.transactionBodyObject.to_js_value body'
-              --       traceM bodyJson'
+--       traceM "body'"
+--       bodyJson' <- liftEffect $ Transaction.transactionBodyObject.to_js_value body'
+--       traceM bodyJson'
 
-              --       traceM (bodyJson' == bodyJson)
+--       traceM (bodyJson' == bodyJson)
 
-              --       bytes <- liftEffect $ Transaction.transactionObject.to_bytes tx'
-              --       pure $ HexString.encode bytes
-              --     let
-              --       textEnvelope = TextEnvelope
-              --         { type_: "Tx BabbageEra"
-              --         , cborHex: CborHex $ hexToString signedTransactionHex
-              --         , description: ""
-              --         }
-              --       req = PutContractRequest textEnvelope
-              --     void $ Client.put' (runtime.serverURL) contractEndpoint req
-
-
-
+--       bytes <- liftEffect $ Transaction.transactionObject.to_bytes tx'
+--       pure $ HexString.encode bytes
+--     let
+--       textEnvelope = TextEnvelope
+--         { type_: "Tx BabbageEra"
+--         , cborHex: CborHex $ hexToString signedTransactionHex
+--         , description: ""
+--         }
+--       req = PutContractRequest textEnvelope
+--     void $ Client.put' (runtime.serverURL) contractEndpoint req
 
 mkSubmitContract :: MkComponentM (Props -> JSX)
 mkSubmitContract = do
@@ -168,50 +164,50 @@ mkSubmitContract = do
                   traceM "Failed to sign transaction"
                   traceM err
 
-              -- case possibleWitnesses of
-              --   Right witnessesCbor -> do
-              --     signedTransactionHex <- liftEffect $ runGarbageCollector cardanoMultiplatformLib do
+            -- case possibleWitnesses of
+            --   Right witnessesCbor -> do
+            --     signedTransactionHex <- liftEffect $ runGarbageCollector cardanoMultiplatformLib do
 
-              --       tx <- allocate $ Transaction.transaction.from_bytes lib."Transaction" txCbor
-              --       body <- allocate $ Transaction.transactionObject.body tx
-              --       -- auxData <- allocate $ Transaction.transactionObject.auxiliary_data tx
-              --       -- FIXME: paluh. Memory leak.
-              --       auxData <- liftEffect $ Transaction.transactionObject.auxiliary_data tx
+            --       tx <- allocate $ Transaction.transaction.from_bytes lib."Transaction" txCbor
+            --       body <- allocate $ Transaction.transactionObject.body tx
+            --       -- auxData <- allocate $ Transaction.transactionObject.auxiliary_data tx
+            --       -- FIXME: paluh. Memory leak.
+            --       auxData <- liftEffect $ Transaction.transactionObject.auxiliary_data tx
 
-              --       tws <- transactionWitnessSetFromBytes witnessesCbor
+            --       tws <- transactionWitnessSetFromBytes witnessesCbor
 
-              --       tx' <- allocate $ Transaction.transaction.new lib."Transaction" body tws auxData -- NoProblem.undefined
+            --       tx' <- allocate $ Transaction.transaction.new lib."Transaction" body tws auxData -- NoProblem.undefined
 
-              --       ---
-              --       body' <- allocate $ Transaction.transactionObject.body tx'
+            --       ---
+            --       body' <- allocate $ Transaction.transactionObject.body tx'
 
-              --       traceM "body"
-              --       bodyJson <- liftEffect $ Transaction.transactionBodyObject.to_js_value body
-              --       traceM bodyJson
+            --       traceM "body"
+            --       bodyJson <- liftEffect $ Transaction.transactionBodyObject.to_js_value body
+            --       traceM bodyJson
 
-              --       traceM "body'"
-              --       bodyJson' <- liftEffect $ Transaction.transactionBodyObject.to_js_value body'
-              --       traceM bodyJson'
+            --       traceM "body'"
+            --       bodyJson' <- liftEffect $ Transaction.transactionBodyObject.to_js_value body'
+            --       traceM bodyJson'
 
-              --       traceM (bodyJson' == bodyJson)
+            --       traceM (bodyJson' == bodyJson)
 
-              --       bytes <- liftEffect $ Transaction.transactionObject.to_bytes tx'
-              --       pure $ HexString.encode bytes
-              --     let
-              --       textEnvelope = TextEnvelope
-              --         { type_: "Tx BabbageEra"
-              --         , cborHex: CborHex $ hexToString signedTransactionHex
-              --         , description: ""
-              --         }
-              --       req = PutContractRequest textEnvelope
-              --     void $ Client.put' (runtime.serverURL) contractEndpoint req
+            --       bytes <- liftEffect $ Transaction.transactionObject.to_bytes tx'
+            --       pure $ HexString.encode bytes
+            --     let
+            --       textEnvelope = TextEnvelope
+            --         { type_: "Tx BabbageEra"
+            --         , cborHex: CborHex $ hexToString signedTransactionHex
+            --         , description: ""
+            --         }
+            --       req = PutContractRequest textEnvelope
+            --     void $ Client.put' (runtime.serverURL) contractEndpoint req
 
-              --     traceM "GOT SIGNED TX"
-              --     traceM signedTransactionHex
-              --     pure unit
-              --   Left e -> do
-              --     traceM "Error from the wallet signTx"
-              --     traceM e
+            --     traceM "GOT SIGNED TX"
+            --     traceM signedTransactionHex
+            --     pure unit
+            --   Left e -> do
+            --     traceM "Error from the wallet signTx"
+            --     traceM e
             Left err ->
               traceM $ "Error: " <> show err
     pure $ do
@@ -284,7 +280,7 @@ submit contractData serverUrl contractsEndpoint = do
       , contract
       , minUTxODeposit: V1.Lovelace (BigInt.fromInt 2_000_000)
       , changeAddress: changeAddress
-      , addresses: usedAddresses <> [changeAddress]
+      , addresses: usedAddresses <> [ changeAddress ]
       , collateralUTxOs: []
       }
 

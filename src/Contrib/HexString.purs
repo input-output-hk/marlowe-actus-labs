@@ -10,10 +10,10 @@ import Data.String.Regex as Regex
 import Data.String.Regex.Unsafe (unsafeRegex)
 
 newtype Hex = Hex String
+
 derive newtype instance Eq Hex
 derive newtype instance EncodeJson Hex
 derive newtype instance DecodeJson Hex
-
 
 hexToString :: Hex -> String
 hexToString (Hex str) = str

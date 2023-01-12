@@ -201,8 +201,7 @@ unsafeDecodeTextEnvelope json = TextEnvelope <$> do
   pure { type_, description, cborHex }
 
 instance EncodeJson (TextEnvelope a) where
-  encodeJson (TextEnvelope { type_, description, cborHex })
-    = encodeJson { "type": type_, description, cborHex }
+  encodeJson (TextEnvelope { type_, description, cborHex }) = encodeJson { "type": type_, description, cborHex }
 
 decodeTransactionObjectTextEnvelope :: JsonParser (TextEnvelope TransactionObject)
 decodeTransactionObjectTextEnvelope = unsafeDecodeTextEnvelope

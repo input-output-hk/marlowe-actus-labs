@@ -201,9 +201,9 @@ transactionBody = mkNewtypedFFI (Proxy :: Proxy TransactionBody)
 
 newtype TransactionBodyObject = TransactionBodyObject
   ( JSObject
-    ( free :: EffectMth0 Unit
-    , to_js_value :: EffectMth0 Json -- TransactionBodyJSON
-    )
+      ( free :: EffectMth0 Unit
+      , to_js_value :: EffectMth0 Json -- TransactionBodyJSON
+      )
   )
 
 derive instance Newtype TransactionBodyObject _
@@ -400,9 +400,9 @@ transactionOutput = mkNewtypedFFI (Proxy :: Proxy TransactionOutput)
 
 newtype TransactionOutputObject = TransactionOutputObject
   ( JSObject
-    ( free :: EffectMth0 Unit
-    , address :: EffectMth0 AddressObject
-    )
+      ( free :: EffectMth0 Unit
+      , address :: EffectMth0 AddressObject
+      )
   )
 
 derive instance Newtype TransactionOutputObject _
@@ -412,7 +412,6 @@ transactionOutputObject
      , address :: TransactionOutputObject -> Effect AddressObject
      }
 transactionOutputObject = mkNewtypedFFI (Proxy :: Proxy TransactionOutputObject)
-
 
 -- export class TransactionUnspentOutput {
 --   free(): void;
@@ -461,10 +460,10 @@ transactionUnspentOutput = mkNewtypedFFI (Proxy :: Proxy TransactionUnspentOutpu
 
 newtype TransactionUnspentOutputObject = TransactionUnspentOutputObject
   ( JSObject
-    ( free :: EffectMth0 Unit
-    , input :: EffectMth0 TransactionInputObject
-    , output :: EffectMth0 TransactionOutputObject
-    )
+      ( free :: EffectMth0 Unit
+      , input :: EffectMth0 TransactionInputObject
+      , output :: EffectMth0 TransactionOutputObject
+      )
   )
 
 derive instance Newtype TransactionUnspentOutputObject _

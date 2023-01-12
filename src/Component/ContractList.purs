@@ -86,7 +86,7 @@ type Props =
   }
 
 testingSubmit :: Boolean
-testingSubmit = true
+testingSubmit = false
 
 mkContractList :: MkComponentM (Props -> JSX)
 mkContractList = do
@@ -220,8 +220,8 @@ mkContractList = do
                         DOM.tr {}
                           [ DOM.td {} [ text $ maybe "" (_.contractId <<< unwrap <<< _.contractTerms <<< unwrap) md ]
                           , DOM.td {} [ text $ maybe "" (show <<< _.contractType <<< unwrap <<< _.contractTerms <<< unwrap) md ]
-                          , DOM.td {} [ foldMap (displayParty <<< _.party <<< unwrap) md]
-                          , DOM.td {} [ foldMap (displayParty <<< _.counterParty <<< unwrap) md]
+                          , DOM.td {} [ foldMap (displayParty <<< _.party <<< unwrap) md ]
+                          , DOM.td {} [ foldMap (displayParty <<< _.counterParty <<< unwrap) md ]
                           , DOM.td {} [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
                           , DOM.td {} $ do
                               let
@@ -241,7 +241,8 @@ mkContractList = do
     V1.Role role -> render role (DOOM.text role)
     V1.Address addr -> render addr (DOM.div { className: "text-truncate w-16rem" } [ DOOM.text addr ])
     where
-      render msg body = overlayTrigger
+    render msg body =
+      overlayTrigger
         { overlay: tooltip {} (DOOM.text $ msg)
         , placement: OverlayTrigger.placement.bottom
         }

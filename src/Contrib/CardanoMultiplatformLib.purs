@@ -63,6 +63,7 @@ type Ctx = { lib :: Lib, frees :: Ref (List (Effect Unit)) }
 -- | to avoid leaks.
 newtype GarbageCollector a = GarbageCollector
   (ReaderT Ctx Effect a)
+
 derive newtype instance Functor GarbageCollector
 derive newtype instance Apply GarbageCollector
 derive newtype instance Applicative GarbageCollector
@@ -122,8 +123,8 @@ bech32FromString :: Lib -> String -> Effect (Maybe Bech32)
 bech32FromString lib addrStr = do
   let
     { "Address": addressClass } = Lib.props lib
-  Address.address.is_valid_bech32 addressClass addrStr >>= if _
-    then
+  Address.address.is_valid_bech32 addressClass addrStr >>=
+    if _ then
       pure $ Just $ unsafeBech32 addrStr
     else
       pure Nothing

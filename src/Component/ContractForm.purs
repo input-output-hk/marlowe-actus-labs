@@ -116,7 +116,7 @@ addressInput cardanoMultiplatformLib initial name = do
       { initial
       , label: Just $ DOOM.text "Address"
       , name
-      , validator: Validator.liftFnMMaybe (const $ pure ["Invalid address"]) \str -> do
+      , validator: Validator.liftFnMMaybe (const $ pure [ "Invalid address" ]) \str -> do
           bech32FromString cardanoMultiplatformLib str
       }
   FormBuilder.textInput props
@@ -165,7 +165,7 @@ mkContractForm = do
       onSubmit = _.result >>> case _ of
         Just (V (Right result)) -> do
 
-           case changeAddresses of
+          case changeAddresses of
             Nothing -> do
               traceM "No change addresses"
               pure unit
@@ -277,5 +277,4 @@ mkContractForm = do
 --   let onChange = handler targetValue (setValue <<< const <<< fromMaybe "")
 --   pure (value /\ onChange)
 -- 
-
 
