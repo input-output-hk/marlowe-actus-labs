@@ -8,12 +8,15 @@ import CardanoMultiplatformLib as CardanoMultiplatformLib
 import Component.App (mkApp)
 import Component.ContractList (mkContractList)
 import Component.EventList (mkEventList)
+import Component.Types (ContractHeaderResource)
 import Contrib.Data.Argonaut (JsonParser)
 import Control.Monad.Reader (runReaderT)
 import Control.Monad.Reader.Class (asks)
 import Data.Argonaut (Json, decodeJson, (.:))
+import Data.Array (filter)
 import Data.Either (Either, either)
-import Data.Maybe (Maybe(..))
+import Data.Map (lookup)
+import Data.Maybe (Maybe(..), isJust)
 import Data.Newtype (un)
 import Data.Tuple.Nested ((/\))
 import Debug (traceM)
@@ -26,9 +29,10 @@ import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Effect.Exception (error, throw)
 import JS.Unsafe.Stringify (unsafeStringify)
+import Marlowe.Actus.Metadata (actusMetadataKey)
 import Marlowe.Runtime.Web as Marlowe.Runtime.Web
 import Marlowe.Runtime.Web.Client (foldMapMPages, foldMapMPages', getPage')
-import Marlowe.Runtime.Web.Types (ResourceLink(..), ServerURL(..), api)
+import Marlowe.Runtime.Web.Types (ContractHeader(..), Metadata(..), ResourceLink(..), ServerURL(..), api)
 import React.Basic (createContext)
 import React.Basic.DOM.Client (createRoot, renderRoot)
 import React.Basic.DOM.Simplified.Generated as DOM
@@ -97,7 +101,10 @@ main configJson = do
       launchAff_ do
         -- contracts <- foldMapMPages' config.marloweWebServerUrl api (pure <<< _.page) >>= liftEither >>> liftEffect
         -- FIXME: this is a temporary hack to get the first page of contracts to speed up development
-        contracts <- getPage' config.marloweWebServerUrl api Nothing >>= liftEither >>> liftEffect <#> _.page
+        let
+          isActus :: ContractHeaderResource -> Boolean
+          isActus { resource: ContractHeader { metadata: Metadata md } } = isJust $ lookup actusMetadataKey md
+        contracts <- filter isActus <$> (getPage' config.marloweWebServerUrl api Nothing >>= liftEither >>> liftEffect <#> _.page)
         -- let contracts = []
 
         CardanoMultiplatformLib.importLib >>= case _ of
