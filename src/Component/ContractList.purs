@@ -28,6 +28,7 @@ import Data.Newtype (unwrap)
 import Data.Newtype as Newtype
 import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\))
+import Data.String (length, take)
 import Data.Validation.Semigroup (V(..))
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
@@ -219,8 +220,8 @@ mkContractList = do
                         DOM.tr {}
                           [ DOM.td {} [ text $ maybe "" (_.contractId <<< unwrap <<< _.contractTerms <<< unwrap) md ]
                           , DOM.td {} [ text $ maybe "" (show <<< _.contractType <<< unwrap <<< _.contractTerms <<< unwrap) md ]
-                          , DOM.td {} [ text $ maybe "" (displayParty <<< _.party <<< unwrap) md ]
-                          , DOM.td {} [ text $ maybe "" (displayParty <<< _.counterParty <<< unwrap) md ]
+                          , DOM.td {} [ textWithTooltip (map (displayParty <<< _.party <<< unwrap) md) ]
+                          , DOM.td {} [ textWithTooltip (map (displayParty <<< _.counterParty <<< unwrap) md) ]
                           , DOM.td {} [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
                           , DOM.td {} $ do
                               let
@@ -235,6 +236,17 @@ mkContractList = do
               ]
         ]
   where
+  textWithTooltip (Just message) =
+    overlayTrigger
+      { overlay: tooltip {} (DOOM.text $ message)
+      , placement: OverlayTrigger.placement.bottom
+      } $ DOM.td {} [ text $ ellipsis message ]
+  textWithTooltip Nothing = text ""
+
+  ellipsis :: String -> String
+  ellipsis s | length s > 24 = take 24 s <> "..."
+  ellipsis s = s
+
   displayParty :: Party -> String
   displayParty (Role role) = role
   displayParty (Address address) = address
