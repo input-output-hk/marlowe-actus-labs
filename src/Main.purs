@@ -51,7 +51,7 @@ decodeConfig json = do
   pure { marloweWebServerUrl: ServerURL marloweWebServerUrl, develMode }
 
 iterateForeverM :: forall a. (a -> Aff a) -> a -> Aff Unit
-iterateForeverM f = void <<< iterateUntilM (const true) f
+iterateForeverM f = void <<< iterateUntilM (const false) f
 
 contractsById :: Array ContractHeader -> Map TxOutRef ContractHeader
 contractsById = Contrib.Map.fromFoldableBy $ _.contractId <<< Newtype.unwrap
