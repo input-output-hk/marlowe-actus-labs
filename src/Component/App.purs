@@ -31,7 +31,7 @@ mkApp = do
   walletInfoCtx <- asks _.walletInfoCtx
 
   -- FIXME: This gonna be replaced by a contract event emitter
-  (contractEvents :: Subscription.Emitter ContractEvent) <- asks _.contractEvents
+  (contractEmitter :: Subscription.Emitter ContractEvent) <- asks _.contractEmitter
   let contracts = []
 
   liftEffect $ component "App" \_ -> React.do

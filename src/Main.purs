@@ -9,27 +9,22 @@ import Component.App (mkApp)
 import Component.Types (ContractEvent(..))
 import Contrib.Data.Argonaut (JsonParser)
 import Contrib.Data.Map as Contrib.Map
-import Control.Monad.Cont (ContT(..), runContT)
-import Control.Monad.Cont as Cont
+import Control.Monad.Loops (iterateUntilM)
 import Control.Monad.Reader (runReaderT)
 import Data.Argonaut (Json, decodeJson, (.:))
 import Data.Either (Either, either)
 import Data.Map (Map)
-import Data.Map as Map
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype as Newtype
 import Data.Traversable (for_)
-import Data.Tuple (snd)
-import Data.Tuple.Nested (type (/\), (/\))
 import Effect (Effect)
-import Effect.Aff (Aff, launchAff_)
-import Effect.Aff as Aff
+import Effect.Aff (Aff, Fiber, Milliseconds(..), delay, forkAff, launchAff_)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Class.Console as Console
 import Effect.Exception (throw)
-import Effect.Timer as Timer
 import Halogen.Subscription as Subscription
 import Marlowe.Runtime.Web as Marlowe.Runtime.Web
+import Marlowe.Runtime.Web.Client (foldMapMContractPages)
 import Marlowe.Runtime.Web.Client as Client
 import Marlowe.Runtime.Web.Types (ContractHeader, ServerURL(..), TxOutRef, api)
 import React.Basic (createContext)
@@ -55,40 +50,11 @@ decodeConfig json = do
   develMode <- obj .: "develMode"
   pure { marloweWebServerUrl: ServerURL marloweWebServerUrl, develMode }
 
-bracket :: forall a r. Aff a -> (a -> Aff Unit) -> ContT r Aff a
-bracket aquire = ContT <<< Aff.bracket aquire
+iterateForeverM :: forall a. (a -> Aff a) -> a -> Aff Unit
+iterateForeverM f = void <<< iterateUntilM (const true) f
 
-type IntervalEvent = Unit
-
-setIntervalEmitter :: forall r. Int -> ContT r Aff (Subscription.Emitter IntervalEvent)
-setIntervalEmitter interval = do
-  { emitter, listener } <- liftEffect Subscription.create
-  let
-    aquire :: Aff Timer.IntervalId
-    aquire = liftEffect $ Timer.setInterval interval (Subscription.notify listener unit)
-
-    cleanup :: Timer.IntervalId -> Aff Unit
-    cleanup = liftEffect <<< Timer.clearInterval
-  _ :: Timer.IntervalId <- bracket aquire cleanup
-  pure emitter
-
-subscribe :: forall a any r. Subscription.Emitter a -> (a -> Effect any) -> ContT r Aff Unit
-subscribe emitter subscriber =
-  void $ bracket (liftEffect $ Subscription.subscribe emitter subscriber) (liftEffect <<< Subscription.unsubscribe)
-
-type GetContractsEvent =
-  { additions :: Map TxOutRef ContractHeader
-  , deletions :: Map TxOutRef ContractHeader
-  , updates :: Map TxOutRef { old :: ContractHeader, new :: ContractHeader }
-  }
-
-contractScanner :: Map TxOutRef ContractHeader -> Map TxOutRef ContractHeader /\ GetContractsEvent -> Map TxOutRef ContractHeader /\ GetContractsEvent
-contractScanner new (old /\ _) =
-  new /\
-    { additions: Contrib.Map.additions old new
-    , deletions: Contrib.Map.deletions old new
-    , updates: Contrib.Map.updates old new
-    }
+contractsById :: Array ContractHeader -> Map TxOutRef ContractHeader
+contractsById = Contrib.Map.fromFoldableBy $ _.contractId <<< Newtype.unwrap
 
 main :: Json -> Effect Unit
 main configJson = do
@@ -104,28 +70,28 @@ main configJson = do
   container :: Element <- maybe (throw "Could not find element with id 'app-root'") pure =<<
     (getElementById "app-root" $ toNonElementParentNode doc)
   reactRoot <- createRoot container
-  launchAff_ $ flip runContT pure do
-    intervals <- setIntervalEmitter 1_000
-    initialContracts :: Array ContractHeader <- Cont.lift $ liftEither =<< Client.getContracts' config.marloweWebServerUrl api Nothing
-    { emitter: contractsEmitter, listener: contractsListener :: Subscription.Listener (Map TxOutRef ContractHeader) } <- liftEffect Subscription.create
+  launchAff_ do
 
-    subscribe intervals \_ -> launchAff_ $
-      liftEffect <<< (Subscription.notify contractsListener <<< Contrib.Map.fromFoldableBy (_.contractId <<< Newtype.unwrap) <=< liftEither)
-        =<< Client.getContracts' config.marloweWebServerUrl api Nothing
+    initialContracts :: Map TxOutRef ContractHeader <-
+      contractsById <$> (liftEither =<< Client.getContracts' config.marloweWebServerUrl api Nothing)
+    { emitter: contractEmitter, listener: contractListener :: Subscription.Listener ContractEvent } <-
+      liftEffect Subscription.create
 
-    let
-      getContractsEvents :: Subscription.Emitter GetContractsEvent
-      getContractsEvents = map snd $ Subscription.fold contractScanner contractsEmitter $
-        Contrib.Map.fromFoldableBy (_.contractId <<< Newtype.unwrap) initialContracts
-          /\ { additions: Map.empty, deletions: Map.empty, updates: Map.empty }
-    { emitter: contractEmitter, listener: contractListener :: Subscription.Listener ContractEvent } <- liftEffect Subscription.create
+    _ :: Fiber Unit <- forkAff $ flip iterateForeverM initialContracts \previousContracts -> do
+      nextContracts :: Map TxOutRef ContractHeader <-
+        map contractsById $ liftEither =<< foldMapMContractPages config.marloweWebServerUrl api Nothing \pageContracts -> do
+          liftEffect do
+            let
+              cs :: Map TxOutRef ContractHeader
+              cs = contractsById pageContracts
+            for_ (Contrib.Map.additions previousContracts cs) $ Subscription.notify contractListener <<< Addition
+            for_ (Contrib.Map.updates previousContracts cs) $ Subscription.notify contractListener <<< Update
+          pure pageContracts
+      liftEffect $ for_ (Contrib.Map.deletions previousContracts nextContracts) $ Subscription.notify contractListener <<< Deletion
+      delay $ Milliseconds 5_000.0
+      pure previousContracts
 
-    subscribe getContractsEvents \e -> do
-      for_ e.additions $ Subscription.notify contractListener <<< Addition
-      for_ e.deletions $ Subscription.notify contractListener <<< Deletion
-      for_ e.updates $ Subscription.notify contractListener <<< Update
-
-    Cont.lift CardanoMultiplatformLib.importLib >>= case _ of
+    CardanoMultiplatformLib.importLib >>= case _ of
       Nothing -> liftEffect $ logger "Cardano serialization lib loading failed"
       Just cardanoMultiplatformLib -> do
         walletInfoCtx <- liftEffect $ createContext Nothing
@@ -134,7 +100,7 @@ main configJson = do
             { cardanoMultiplatformLib
             , walletInfoCtx
             , logger
-            , contractEvents: contractEmitter
+            , contractEmitter
             , runtime
             }
 

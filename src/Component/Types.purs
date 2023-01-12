@@ -41,7 +41,7 @@ type MkContext =
   , walletInfoCtx :: ReactContext (Maybe (WalletInfo Wallet.Api))
   -- FIXME: use more advanced logger so we use levels and setup app verbosity.
   , logger :: String -> Effect Unit
-  , contractEvents :: Subscription.Emitter ContractEvent
+  , contractEmitter :: Subscription.Emitter ContractEvent
   , runtime :: Runtime
   }
 
