@@ -229,7 +229,7 @@ mkContractList = do
                               overlayTrigger
                                 { overlay: tooltipJSX
                                 , placement: OverlayTrigger.placement.bottom
-                                } $ DOM.td {} [ show status ]
+                                } $ DOM.span {} [ show status ]
                           ]
                   )
                   contractList
@@ -246,4 +246,4 @@ mkContractList = do
         { overlay: tooltip {} (DOOM.text $ msg)
         , placement: OverlayTrigger.placement.bottom
         }
-        $ DOM.td {} [ body ]
+        $ DOM.span {} [ body ]
