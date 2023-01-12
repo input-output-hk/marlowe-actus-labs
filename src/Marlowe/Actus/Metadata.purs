@@ -241,8 +241,8 @@ instance DecodeJson Metadata where
     cycleOfDividendPayment <- rmap (_ >>= decodeCycle) (obj .:? "dvcl")
     cycleAnchorDateOfDividendPayment <- Decoders.getFieldOptional' decodeDateTime obj "dvanx"
     nextDividendPaymentAmount <- Decoders.getFieldOptional' decodeDecimal obj "dvnxt"
-    PartyParts party <- obj .: "pa"
-    PartyParts counterParty <- obj .: "cp"
+    PartyParts party <- obj .: "pa1"
+    PartyParts counterParty <- obj .: "cp1"
     pure $
       { contractTerms: ContractTerms
           { contractId

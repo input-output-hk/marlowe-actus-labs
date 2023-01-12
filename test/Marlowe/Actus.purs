@@ -46,9 +46,9 @@ spec = do
             cashFlows = genProjectedCashflows (party /\ counterparty) riskFactors $ contract
             marloweContract = genContract cashFlows
 
-            payin = IDeposit party party (Token "" "") $ unsafePartial $ fromJust $ fromString "10000000000"
-            interest = IDeposit counterparty counterparty (Token "" "") $ unsafePartial $ fromJust $ fromString "200000000"
-            payout = IDeposit counterparty counterparty (Token "" "") $ unsafePartial $ fromJust $ fromString "10000000000"
+            payin = IDeposit party party (Token "" "DjedUSD") $ unsafePartial $ fromJust $ fromString "10000000000"
+            interest = IDeposit counterparty counterparty (Token "" "DjedUSD") $ unsafePartial $ fromJust $ fromString "200000000"
+            payout = IDeposit counterparty counterparty (Token "" "DjedUSD") $ unsafePartial $ fromJust $ fromString "10000000000"
 
             inputs = toUnfoldable
               [ payin
@@ -69,7 +69,7 @@ spec = do
             output = playTrace unixEpoch marloweContract (toUnfoldable [ TransactionInput { interval, inputs } ])
 
           case output of
-            Error _ -> fail "PlayTrace error"
+            Error err -> fail $ "PlayTrace error: " <> show err
             TransactionOutput out -> do
               shouldEqual (isClose out.txOutContract) true
               shouldEqual (totalPayments (Party party) out.txOutPayments) (fromInt 12000)
@@ -78,7 +78,7 @@ spec = do
 totalPayments :: Payee -> List Payment -> BigInt
 totalPayments payee = fromMarloweFixedPoint <<< sum <<< map m <<< filter f
   where
-  m (Payment _ _ (Token "" "") amt) = amt
+  m (Payment _ _ (Token "" "DjedUSD") amt) = amt
   m _ = fromInt 0
   f (Payment _ pay _ _) = pay == payee
   fromMarloweFixedPoint i = i `quot` (fromInt marloweFixedPoint)
