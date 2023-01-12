@@ -3,10 +3,8 @@ module Marlowe.Runtime.Web.Types where
 import Prelude
 
 import Contrib.Data.Argonaut (JsonParser, JsonParserResult, decodeFromString)
-import Contrib.Data.Argonaut.Generic.Record (DecodeJsonFieldFn, decodeNewtypedRecord)
-import Contrib.Data.Argonaut.Generic.Record (class DecodeRecord, DecodeJsonFieldFn, decodeRecord)
-import Data.Argonaut (class DecodeJson, Json, JsonDecodeError, decodeJson)
-import Data.Argonaut (class DecodeJson, class EncodeJson, Json, JsonDecodeError(..), decodeJson, encodeJson)
+import Contrib.Data.Argonaut.Generic.Record (class DecodeRecord, DecodeJsonFieldFn, decodeRecord, decodeNewtypedRecord)
+import Data.Argonaut (class DecodeJson, Json, class EncodeJson, JsonDecodeError(..), decodeJson, encodeJson)
 import Data.Argonaut.Decode.Combinators ((.:))
 import Data.Argonaut.Decode.Decoders (decodeMaybe)
 import Data.Bifunctor (rmap)
@@ -16,21 +14,17 @@ import Data.DateTime.ISO
 import Data.Either (Either)
 import Data.Either (Either, note)
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep (class Generic)
 import Data.Int as Int
 import Data.JSDate as JSDate
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
-import Data.Newtype (class Newtype, un)
-import Data.Newtype (class Newtype, unwrap)
+import Data.Newtype (class Newtype, un, unwrap)
 import Data.Profunctor.Strong ((***))
 import Data.String as String
 import Data.Traversable (for)
 import Data.Tuple.Nested (type (/\), (/\))
-import Debug (traceM)
 import Effect.Unsafe (unsafePerformEffect)
-import Fetch.Core.Request (Request)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Language.Marlowe.Core.V1.Semantics.Types as V1

@@ -6,7 +6,7 @@ import Component.ConnectWallet (mkConnectWallet)
 import Component.ConnectWallet as ConnectWallet
 import Component.ContractList (mkContractList)
 import Component.EventList (mkEventList)
-import Component.Types (ContractHeaderResource, MkComponentM, WalletInfo(..))
+import Component.Types (ContractEvent, MkComponentM, WalletInfo(..))
 import Component.Widgets (link, linkWithIcon)
 import Contrib.React.Bootstrap.Icons as Icons
 import Control.Monad.Reader.Class (asks)
@@ -14,6 +14,7 @@ import Data.Maybe (Maybe(..))
 import Data.Monoid as Monoid
 import Data.Tuple.Nested ((/\))
 import Effect.Class (liftEffect)
+import Halogen.Subscription as Subscription
 import React.Basic (JSX)
 import React.Basic.DOM as DOOM
 import React.Basic.DOM.Simplified.Generated as DOM
@@ -30,7 +31,8 @@ mkApp = do
   walletInfoCtx <- asks _.walletInfoCtx
 
   -- FIXME: This gonna be replaced by a contract event emitter
-  (contracts :: Array ContractHeaderResource) <- asks _.contracts
+  (contractEmitter :: Subscription.Emitter ContractEvent) <- asks _.contractEmitter
+  let contracts = []
 
   liftEffect $ component "App" \_ -> React.do
     possibleWalletInfo /\ setWalletInfo <- useState' Nothing

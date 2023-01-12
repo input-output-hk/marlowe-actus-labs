@@ -10,30 +10,28 @@ import Control.Monad.Loops (unfoldrM)
 import Control.Monad.Trans.Class (lift)
 import Data.Argonaut (class DecodeJson, JsonDecodeError, decodeJson, stringify)
 import Data.Argonaut.Decode ((.:))
-import Data.Array (fold)
-import Data.Bifunctor (lmap)
+import Data.Bifunctor (lmap, rmap)
 import Data.Either (Either(..))
-import Data.Foldable (length)
+import Data.Foldable (fold)
 import Data.Generic.Rep (class Generic)
 import Data.HTTP.Method (Method(..))
 import Data.List (List)
 import Data.List as List
-import Data.Map (Map, fromFoldable, lookup)
-import Data.Maybe (Maybe(..))
+import Data.Map (fromFoldable, lookup)
+import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.String.CaseInsensitive (CaseInsensitiveString(..))
 import Data.Tuple.Nested ((/\))
 import Debug (traceM)
-import Effect.Aff (Aff, Error)
+import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Fetch (RequestMode(..))
 import Fetch.Core.Headers (Headers, toArray)
-import Foreign.Object (Object)
-import Foreign.Object as Object
-import Marlowe.Runtime.Web.Types (class EncodeHeaders, class EncodeJsonBody, class ToResourceLink, IndexEndpoint(..), ResourceEndpoint(..), ResourceLink(..), ResourceWithLinks, ServerURL(..), ResourceWithLinksRow, decodeResourceWithLink, encodeHeaders, encodeJsonBody, toResourceLink)
+import Marlowe.Runtime.Web.Types (class EncodeHeaders, class EncodeJsonBody, class ToResourceLink, ContractEndpoint, GetContractsResponse, IndexEndpoint(..), ResourceEndpoint(..), ResourceLink(..), ResourceWithLinks, ResourceWithLinksRow, ServerURL(..), decodeResourceWithLink, encodeHeaders, encodeJsonBody, toResourceLink)
 import Prim.Row (class Lacks) as Row
 import Record as R
+import Safe.Coerce (coerce)
 import Type.Prelude (Proxy(..))
 import Type.Row.Homogeneous (class Homogeneous) as Row
 
@@ -42,7 +40,6 @@ data ClientError
   | ResponseDecodingError JsonDecodeError
 
 derive instance Generic ClientError _
-
 instance Show ClientError where
   show = genericShow
 
@@ -92,20 +89,48 @@ getPage
   -> Maybe Range
   -> Aff (GetResourceResponse ({ page :: a, nextRange :: Maybe Range }))
 getPage serverUrl path possibleRange = runExceptT do
-  { headers, payload, status } <- ExceptT case possibleRange of
-    Nothing ->
-      getResource serverUrl path { "Range": "contractId" }
-    Just (Range range) -> do
-      res <- getResource serverUrl path { "Range": range }
-      pure res
-  let
-    toHeaders :: Headers -> Map CaseInsensitiveString String
-    toHeaders = toArray >>> map (lmap CaseInsensitiveString) >>> fromFoldable
+  { headers, payload, status } <- ExceptT
+    $ getResource serverUrl path
+    $ maybe { "Range": "contractId" } ({ "Range": _ } <<< coerce) possibleRange
+  pure
+    { page: payload
+    , nextRange:
+        if status == 206 then map Range $ lookup (CaseInsensitiveString "Next-Range")
+          $ fromFoldable
+          $ map (lmap CaseInsensitiveString)
+          $ toArray headers
+        else Nothing
+    }
 
-    nextRange = case status, lookup (CaseInsensitiveString "Next-Range") (toHeaders headers) of
-      206, Just nr -> Just (Range nr)
-      _, _ -> Nothing
-  pure { page: payload, nextRange }
+-- TODO generalize
+getContracts
+  :: ServerURL
+  -> ResourceLink (Array (ResourceWithLinks GetContractsResponse (contract :: ContractEndpoint)))
+  -> Maybe Range
+  -> Aff (Either ClientError (Array GetContractsResponse))
+getContracts serverUrl resourceLink = map (rmap (map _.resource <<< fold <<< map _.page)) <<< getPages serverUrl resourceLink
+
+-- TODO generalize
+getContracts'
+  :: forall endpoint
+   . ToResourceLink endpoint (Array (ResourceWithLinks GetContractsResponse (contract :: ContractEndpoint)))
+  => ServerURL
+  -> endpoint
+  -> Maybe Range
+  -> Aff (Either ClientError (Array GetContractsResponse))
+getContracts' serverUrl endpoint = getContracts serverUrl (toResourceLink endpoint)
+
+-- TODO generalize
+foldMapMContractPages
+  :: forall endpoint
+   . ToResourceLink endpoint (Array (ResourceWithLinks GetContractsResponse (contract :: ContractEndpoint)))
+  => ServerURL
+  -> endpoint
+  -> Maybe Range
+  -> (Array GetContractsResponse -> Aff (Array GetContractsResponse))
+  -> Aff (Either ClientError (Array GetContractsResponse))
+foldMapMContractPages serverUrl endpoint start f =
+  foldMapMPages' serverUrl endpoint (f <<< map _.resource <<< _.page) start
 
 data FoldPageStep = FetchPage (Maybe Range) | StopFetching
 
@@ -117,18 +142,17 @@ foldMapMPages
   => ServerURL
   -> ResourceLink a
   -> ({ page :: a, currRange :: Maybe Range } -> m b)
+  -> Maybe Range
   -> m (GetResourceResponse b)
-foldMapMPages serverUrl path f = do
-  let
-    seed = FetchPage Nothing
-  bs <- runExceptT $ flip unfoldrM seed case _ of
+foldMapMPages serverUrl path f startRange = do
+  bs <- runExceptT $ flip unfoldrM (FetchPage startRange) case _ of
     StopFetching -> pure Nothing
     FetchPage currRange -> do
       { page, nextRange } <- ExceptT $ liftAff $ getPage serverUrl path currRange
       b <- lift $ f { page, currRange }
-      case nextRange of
-        Just _ -> pure $ Just (b /\ FetchPage nextRange)
-        Nothing -> pure $ Just (b /\ StopFetching)
+      pure $ Just case nextRange of
+        Just _ -> b /\ FetchPage nextRange
+        Nothing -> b /\ StopFetching
   pure (fold <$> bs)
 
 getPages
@@ -137,14 +161,8 @@ getPages
   => MonadAff m
   => ServerURL
   -> ResourceLink a
-  -> m
-       ( GetResourceResponse
-           ( List
-               { page :: a
-               , currRange :: Maybe Range
-               }
-           )
-       )
+  -> Maybe Range
+  -> m (GetResourceResponse (List { page :: a, currRange :: Maybe Range }))
 getPages serverUrl path = foldMapMPages serverUrl path (pure <<< List.singleton)
 
 getResource'
@@ -178,11 +196,8 @@ foldMapMPages'
   => ToResourceLink t a
   => ServerURL
   -> t
-  -> ( { currRange :: Maybe Range
-       , page :: a
-       }
-       -> m b
-     )
+  -> ({ currRange :: Maybe Range, page :: a } -> m b)
+  -> Maybe Range
   -> m (Either ClientError b)
 foldMapMPages' serverUrl path = foldMapMPages serverUrl (toResourceLink path)
 
