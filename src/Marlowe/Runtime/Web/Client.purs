@@ -120,6 +120,18 @@ getContracts'
   -> Aff (Either ClientError (Array GetContractsResponse))
 getContracts' serverUrl endpoint = getContracts serverUrl (toResourceLink endpoint)
 
+-- TODO generalize
+foldMapMContractPages
+  :: forall endpoint
+   . ToResourceLink endpoint (Array (ResourceWithLinks GetContractsResponse (contract :: ContractEndpoint)))
+  => ServerURL
+  -> endpoint
+  -> Maybe Range
+  -> (Array GetContractsResponse -> Aff (Array GetContractsResponse))
+  -> Aff (Either ClientError (Array GetContractsResponse))
+foldMapMContractPages serverUrl endpoint start f =
+  foldMapMPages' serverUrl endpoint (f <<< map _.resource <<< _.page) start
+
 data FoldPageStep = FetchPage (Maybe Range) | StopFetching
 
 foldMapMPages
