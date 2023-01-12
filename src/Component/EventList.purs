@@ -108,7 +108,10 @@ mkEventList (Runtime runtime) = do
                       pure unit
 
                 pure unit
-              Left _ -> pure unit
+              Left err -> do
+                -- Note: this happens, when the contract is in status `Unsigned`
+                traceM err
+                pure unit
 
         updateState _ { newInput = Nothing }
 

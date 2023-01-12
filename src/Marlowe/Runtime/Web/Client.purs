@@ -5,6 +5,7 @@ import Prelude
 import Contrib.Data.Argonaut (JsonParser)
 import Contrib.Data.Argonaut.Generic.Record (class DecodeRecord, DecodeJsonFieldFn)
 import Contrib.Fetch (FetchError, fetchEither, jsonBody)
+import Control.Alt ((<|>))
 import Control.Monad.Except (ExceptT(..), runExceptT, throwError)
 import Control.Monad.Loops (unfoldrM)
 import Control.Monad.Trans.Class (lift)
@@ -80,7 +81,7 @@ getResource (ServerURL serverUrl) (ResourceLink path) extraHeaders = do
 
   runExceptT do
     res@{ status, headers: resHeaders } <- ExceptT $ fetchEither url { headers: reqHeaders, mode: Cors } allowedStatusCodes FetchError
-    lift (jsonBody res) >>= decodeResponse >>> case _ of
+    lift (jsonBody res) >>= (\json -> decodeResponse json <|> decodeJson json) >>> case _ of
       Left err -> throwError (ResponseDecodingError err)
       Right payload -> pure { payload, headers: resHeaders, status }
 
