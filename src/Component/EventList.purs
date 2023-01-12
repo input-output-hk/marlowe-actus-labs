@@ -28,6 +28,7 @@ import Marlowe.Actus (defaultRiskFactors, evalVal, toMarloweCashflow)
 import Marlowe.Actus.Metadata (actusMetadataKey)
 import Marlowe.Actus.Metadata as M
 import Marlowe.Runtime.Web (post')
+import Marlowe.Runtime.Web.Client (GetResourceResponse, getResource)
 import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), IndexEndpoint(..), Metadata(..), PostTransactionsRequest(..), PostTransactionsResponse(..), ResourceEndpoint(..), ResourceLink(..), Runtime(..), TransactionsEndpoint(..))
 import Marlowe.Runtime.Web.Types as RT
 import Marlowe.Time (unixEpoch)
@@ -69,43 +70,45 @@ mkEventList (Runtime runtime) = do
       onEdit { party, token, value, endpoint } = handler_ do
         updateState _ { newInput = Just { party, token, value, endpoint } }
 
-      onApplyInputs { party, token, value, endpoint: ContractEndpoint (ResourceEndpoint (ResourceLink link)) } = handler_ do
+      onApplyInputs { party, token, value, endpoint: ContractEndpoint (ResourceEndpoint link) } = handler_ do
         now <- nowDateTime
-        let
-          -- FIXME: just a stub
-          inputs = singleton $ IDeposit party party token value
-
-          invalidBefore = now
-          invalidHereafter = fromMaybe now $ adjust (Duration.Minutes 2.0) now
-
-          changeAddress = RT.Address ""
-          addresses = []
-          collateralUTxOs = []
-
-          metadata = mempty
-
-          req = PostTransactionsRequest
-            { inputs
-            , invalidBefore
-            , invalidHereafter
-            , metadata
-            , changeAddress
-            , addresses
-            , collateralUTxOs
-            }
-
         launchAff_ $
-          let
-            transactionEndpoint = TransactionsEndpoint (IndexEndpoint (ResourceLink link))
-          in
-            post' runtime.serverURL transactionEndpoint req
-              >>= case _ of
-                Right ({ resource: PostTransactionsResponse res }) -> do
-                  traceM res
-                  pure unit
-                Left _ -> do
-                  traceM "error"
-                  pure unit
+          getResource runtime.serverURL link {}
+            >>= case _ of
+              Right { payload: { links: { transactions } } } -> do
+                let
+                  inputs = singleton $ IDeposit party party token value
+
+                  invalidBefore = now
+                  invalidHereafter = fromMaybe now $ adjust (Duration.Minutes 2.0) now
+
+                  changeAddress = partyToAddress party
+                  addresses = []
+                  collateralUTxOs = []
+
+                  metadata = mempty
+
+                  req = PostTransactionsRequest
+                    { inputs
+                    , invalidBefore
+                    , invalidHereafter
+                    , metadata
+                    , changeAddress
+                    , addresses
+                    , collateralUTxOs
+                    }
+
+                post' runtime.serverURL transactions req
+                  >>= case _ of
+                    Right ({ resource: PostTransactionsResponse res }) -> do
+                      traceM res
+                      pure unit
+                    Left _ -> do
+                      traceM "error"
+                      pure unit
+
+                pure unit
+              Left _ -> pure unit
 
         updateState _ { newInput = Nothing }
 
@@ -222,6 +225,10 @@ currencyToToken = Token ""
 partyToString :: Party -> String
 partyToString (V1.Address addr) = addr
 partyToString (V1.Role role) = role
+
+partyToAddress :: Party -> RT.Address
+partyToAddress (V1.Address addr) = RT.Address addr
+partyToAddress (V1.Role _) = RT.Address "" -- FIXME
 
 actusMetadata
   :: { links :: { contract :: ContractEndpoint }

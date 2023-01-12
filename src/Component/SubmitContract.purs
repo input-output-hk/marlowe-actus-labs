@@ -145,15 +145,15 @@ mkSubmitContract = do
               let
                 WalletInfo { wallet: walletApi } = connectedWallet
               Wallet.signTx walletApi txCborHex false >>= case _ of
-                Right wintessSet -> do
+                Right witnessSet -> do
                   let
-                    witnessSetCbor = cborHexToCbor wintessSet
+                    witnessSetCbor = cborHexToCbor witnessSet
                   tx <- liftEffect $ addWitnessSet cardanoMultiplatformLib txCbor witnessSetCbor
                   txCbor' <- liftEffect $ Transaction.transactionObject.to_bytes tx
                   let
                     txCborHex' = cborToCborHex txCbor'
 
-                  txId <- Wallet.submitTx walletApi txCborHex
+                  txId <- Wallet.submitTx walletApi txCborHex'
 
                   traceM "Submitted transaction"
                   traceM txId
