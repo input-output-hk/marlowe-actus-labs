@@ -21,7 +21,7 @@ import CardanoMultiplatformLib.Lib (Lib) as Exports
 import CardanoMultiplatformLib.Lib as Lib
 import CardanoMultiplatformLib.Transaction (TransactionWitnessSetObject)
 import CardanoMultiplatformLib.Transaction as Transaction
-import CardanoMultiplatformLib.Types (Bech32, Cbor, unsafeBech32)
+import CardanoMultiplatformLib.Types (Bech32, Cbor, CborHex, cborHexToCbor, unsafeBech32)
 import CardanoMultiplatformLib.Types (CborHex(..), Bech32, cborToCborHex, cborHexToHex, bech32ToString) as Exports
 import Control.Monad.Error.Class (throwError)
 import Control.Monad.Except (catchError)

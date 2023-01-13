@@ -82,6 +82,13 @@ createContract party counterParty terms = do
       terms
   genContract cashflowsMarlowe
 
+walletChangeAddress :: CardanoMultiplatformLib.Lib -> Wallet.Api -> Aff (Maybe Bech32)
+walletChangeAddress lib wallet = do
+  Wallet.getChangeAddress wallet >>= case _ of
+    Right address ->
+      map Just $ liftEffect $ runGarbageCollector lib $ bech32FromBytes (cborHexToCbor address) NoProblem.undefined
+    Left err -> pure Nothing
+
 
 walletAddresses :: CardanoMultiplatformLib.Lib -> Wallet.Api -> Aff (Array Bech32)
 walletAddresses cardanoMultiplatformLib wallet = do
@@ -100,12 +107,9 @@ walletAddresses cardanoMultiplatformLib wallet = do
           addressObj <- allocate $ transactionOutputObject.address txOutObj
           liftEffect $ addressObject.to_bech32 addressObj NoProblem.undefined
 
-        addresses' <- for addresses \addr -> do
+        addresses' <- for addresses \addrCborHex -> do
           _Address <- asksLib _."Address"
-          let
-            addr' = cborHexToCbor addr
-          addressObj <- allocate $ address.from_bytes _Address addr'
-          liftEffect $ addressObject.to_bech32 addressObj NoProblem.undefined
+          bech32FromBytes (cborHexToCbor addrCborHex) NoProblem.undefined
 
         pure $ Array.nub $ utxoAddresses' <> addresses'
     _, _ -> do
@@ -210,60 +214,12 @@ mkContractForm = do
     useEffectOnce $ do
       case connectedWallet of
         WalletInfo { wallet } -> launchAff_ do
-          let
-            walletAddressToBech32 addressCborHex = do
-              let
-                addressCbor = cborHexToCbor addressCborHex
-              (map Just $ runGarbageCollector cardanoMultiplatformLib $ bech32FromBytes addressCbor NoProblem.undefined) `catchError` \_ -> pure Nothing
-
-          possibleAddress <- Wallet.getChangeAddress wallet
-
-          possibleUsedAddresses <- Wallet.getUsedAddresses wallet
-          possibleUTxOs <- Wallet.getUtxos wallet
-
-          case possibleAddress, possibleUsedAddresses, possibleUTxOs of
-            Right address, Right addresses, Right (Just utxos) -> do
-
-              utxoAddresses <- liftEffect $ runGarbageCollector cardanoMultiplatformLib do
-                _TransactionUnspentOutput <- asksLib _."TransactionUnspentOutput"
-                addresses <- for utxos \utxo -> do
-                  let
-                    utxo' = cborHexToCbor utxo
-                  unspentTxOutObj <- allocate $ transactionUnspentOutput.from_bytes _TransactionUnspentOutput utxo'
-                  txOutObj <- allocate $ transactionUnspentOutputObject.output unspentTxOutObj
-                  addressObj <- allocate $ transactionOutputObject.address txOutObj
-                  liftEffect $ addressObject.to_bech32 addressObj NoProblem.undefined
-                pure $ Array.nub addresses
-
-              traceM "UTXO addresses"
-              traceM utxoAddresses
-
-              -- setChangeAddresses $ Just addresses
-              liftEffect $ walletAddressToBech32 address >>= case _, Map.lookup (FieldId "party") formState.fields of
-                Just address', Just { onChange } -> do
-
-                  traceM "Address"
-                  traceM address'
-
-                  onChange [ bech32ToString address' ]
-                addr, field -> do
-                  traceM "No address"
-                  traceM addr
-                  traceM field
-                  pure unit
-
-              liftEffect $ do
-                -- addresses' <- Array.catMaybes <$> for addresses \address -> do
-                --   walletAddressToBech32 address
-                -- traceM "Used addresses"
-                -- traceM addresses'
-
-                setChangeAddresses $ Just utxoAddresses
-            _, _, _ -> do
-              traceM "Failed to get change address"
-              traceM possibleAddress
-              traceM "Used addresses"
-              traceM possibleUsedAddresses
+          addrs <- walletAddresses cardanoMultiplatformLib wallet
+          liftEffect $ setChangeAddresses $ Just addrs
+          walletChangeAddress cardanoMultiplatformLib wallet >>= case _, Map.lookup (FieldId "party") formState.fields of
+            Just changeAddress, Just { onChange } -> do
+               liftEffect $ onChange [ bech32ToString changeAddress ]
+            _, _ -> pure unit
       pure (pure unit)
     pure $ do
       let
