@@ -32,7 +32,7 @@ import Data.Undefined.NoProblem as NoProblem
 import Data.Validation.Semigroup (V(..))
 import Debug (traceM)
 import Effect (Effect)
-import Effect.Aff (launchAff_)
+import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
 import Language.Marlowe.Core.V1.Semantics.Types (Party)
 import Language.Marlowe.Core.V1.Semantics.Types as V1
@@ -49,6 +49,7 @@ import React.Basic.DOM as R
 import React.Basic.DOM.Simplified.Generated as DOM
 import React.Basic.Hooks (component, useEffectOnce, useState', (/\))
 import React.Basic.Hooks as React
+import Wallet (Wallet)
 import Wallet as Wallet
 
 type FormSpec m = UseForm.Form m Unit -- JSX
@@ -80,6 +81,35 @@ createContract party counterParty terms = do
       (defaultRiskFactors terms)
       terms
   genContract cashflowsMarlowe
+
+
+walletAddresses :: CardanoMultiplatformLib.Lib -> Wallet.Api -> Aff (Array Bech32)
+walletAddresses cardanoMultiplatformLib wallet = do
+  possibleUsedAddresses <- Wallet.getUsedAddresses wallet
+  possibleUTxOs <- Wallet.getUtxos wallet
+
+  case possibleUsedAddresses, possibleUTxOs of
+    Right addresses, Right (Just utxos) -> do
+      liftEffect $ runGarbageCollector cardanoMultiplatformLib do
+        _TransactionUnspentOutput <- asksLib _."TransactionUnspentOutput"
+        utxoAddresses' <- for utxos \utxo -> do
+          let
+            utxo' = cborHexToCbor utxo
+          unspentTxOutObj <- allocate $ transactionUnspentOutput.from_bytes _TransactionUnspentOutput utxo'
+          txOutObj <- allocate $ transactionUnspentOutputObject.output unspentTxOutObj
+          addressObj <- allocate $ transactionOutputObject.address txOutObj
+          liftEffect $ addressObject.to_bech32 addressObj NoProblem.undefined
+
+        addresses' <- for addresses \addr -> do
+          _Address <- asksLib _."Address"
+          let
+            addr' = cborHexToCbor addr
+          addressObj <- allocate $ address.from_bytes _Address addr'
+          liftEffect $ addressObject.to_bech32 addressObj NoProblem.undefined
+
+        pure $ Array.nub $ utxoAddresses' <> addresses'
+    _, _ -> do
+      pure []
 
 initialJson :: String
 initialJson = String.joinWith "\n"
