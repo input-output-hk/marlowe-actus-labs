@@ -12,6 +12,7 @@ module CardanoMultiplatformLib.Types
   , Bech32
   , bech32ToString
   , unsafeBech32
+  , TransactionHash
   ) where
 
 import Prelude
@@ -69,3 +70,5 @@ bech32ToString (Bech32 str) = str
 
 unsafeBech32 :: String -> Bech32
 unsafeBech32 = Bech32
+
+

@@ -6,8 +6,9 @@ import Prelude
 import Actus.Domain (CT(..), CashFlow, ContractTerms(..))
 import Actus.Domain.ContractTerms (ContractTerms)
 import CardanoMultiplatformLib (CborHex(..), Lib, allocate, runGarbageCollector, transactionWitnessSetFromBytes)
+import CardanoMultiplatformLib as CardanoMultiplatformLib
 import CardanoMultiplatformLib.Lib as Lib
-import CardanoMultiplatformLib.Transaction (TransactionObject(..), TransactionWitnessSetObject(..))
+import CardanoMultiplatformLib.Transaction (TransactionHashObject, TransactionObject(..), TransactionWitnessSetObject(..))
 import CardanoMultiplatformLib.Transaction as Transaction
 import CardanoMultiplatformLib.Types (Cbor, cborHexToCbor, cborToCborHex)
 import Component.ContractForm (initialJson, mkContractForm)
@@ -116,6 +117,23 @@ addWitnessSet cardanoMultiplatformLib txCbor witnessSetCbor = runGarbageCollecto
 --         }
 --       req = PutContractRequest textEnvelope
 --     void $ Client.put' (runtime.serverURL) contractEndpoint req
+
+walletSignTx :: CardanoMultiplatformLib.Lib -> Wallet.Api -> CborHex TransactionObject -> Aff (Maybe (CborHex TransactionHashObject))
+walletSignTx lib wallet txCborHex = do
+  Wallet.signTx wallet txCborHex false >>= case _ of
+    Right witnessSet -> do
+      let
+        witnessSetCbor = cborHexToCbor witnessSet
+        txCbor = cborHexToCbor txCborHex
+      tx <- liftEffect $ addWitnessSet lib txCbor witnessSetCbor
+      txCbor' <- liftEffect $ Transaction.transactionObject.to_bytes tx
+      let
+        txCborHex' = cborToCborHex txCbor'
+      Wallet.submitTx wallet txCborHex' >>= case _ of
+        Right txId -> pure $ Just txId
+        Left _ -> do
+          pure Nothing
+    _ -> pure Nothing
 
 mkSubmitContract :: MkComponentM (Props -> JSX)
 mkSubmitContract = do

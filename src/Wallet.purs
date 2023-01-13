@@ -3,7 +3,7 @@ module Wallet
   , Bytes(..)
   , Cbor(..)
   , Coin
-  , Hash32(..)
+  , HashObject32(..)
   , Transaction(..)
   , TransactionUnspentOutput
   , Value(..)
@@ -35,7 +35,7 @@ module Wallet
 import Prelude
 
 import CardanoMultiplatformLib (AddressObject, CborHex)
-import CardanoMultiplatformLib.Transaction (TransactionObject, TransactionUnspentOutputObject, TransactionWitnessSetObject)
+import CardanoMultiplatformLib.Transaction (TransactionObject, TransactionUnspentOutputObject, TransactionWitnessSetObject, TransactionHashObject)
 import Control.Monad.Except (runExceptT)
 import Data.Either (Either(..))
 import Data.Foldable (fold)
@@ -66,7 +66,7 @@ data Transaction
 
 data Value
 
-data Hash32
+data HashObject32
 
 newtype Cbor :: forall k. k -> Type
 newtype Cbor a = Cbor String
@@ -87,7 +87,7 @@ type Api = JSObject
   , getRewardAddresses :: EffectMth0 (Promise (Array (CborHex AddressObject)))
   , signTx :: EffectMth2 (CborHex TransactionObject) Boolean (Promise (CborHex TransactionWitnessSetObject))
   , signData :: EffectMth2 (CborHex AddressObject) Bytes (Promise Bytes)
-  , submitTx :: EffectMth1 (CborHex TransactionObject) (Promise (Cbor Hash32))
+  , submitTx :: EffectMth1 (CborHex TransactionObject) (Promise (CborHex TransactionHashObject))
   )
 
 _Api
@@ -101,7 +101,7 @@ _Api
      , getUtxos :: Api -> Effect (Promise (Nullable (Array (CborHex TransactionUnspentOutputObject))))
      , signData :: Api -> CborHex AddressObject -> Bytes -> Effect (Promise Bytes)
      , signTx :: Api -> CborHex TransactionObject -> Boolean -> Effect (Promise (CborHex TransactionWitnessSetObject))
-     , submitTx :: Api -> CborHex TransactionObject -> Effect (Promise (Cbor Hash32))
+     , submitTx :: Api -> CborHex TransactionObject -> Effect (Promise (CborHex TransactionHashObject))
      }
 _Api = mkFFI (Proxy :: Proxy Api)
 
@@ -256,6 +256,6 @@ toAffEitherE coerce f = liftEffect f >>= toAffEither coerce
 signTx :: Api -> CborHex TransactionObject -> Boolean -> Aff (Either Foreign (CborHex TransactionWitnessSetObject))
 signTx api cbor = toAffEitherE rejectionToForeign <<< _Api.signTx api cbor
 
-submitTx :: Api -> CborHex TransactionObject -> Aff (Either Foreign (Cbor Hash32))
+submitTx :: Api -> CborHex TransactionObject -> Aff (Either Foreign (CborHex TransactionHashObject))
 submitTx api = toAffEitherE rejectionToForeign <<< _Api.submitTx api
 

@@ -475,3 +475,5 @@ transactionUnspentOutputObject
      }
 transactionUnspentOutputObject = mkNewtypedFFI (Proxy :: Proxy TransactionUnspentOutputObject)
 
+-- Just a stub
+foreign import data TransactionHashObject :: Type
