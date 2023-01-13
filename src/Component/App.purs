@@ -22,9 +22,8 @@ import React.Basic.Hooks as React
 
 mkApp :: MkComponentM (Unit -> JSX)
 mkApp = do
-  runtime <- asks _.runtime
   contractListComponent <- mkContractList
-  eventListComponent <- liftEffect $ mkEventList runtime
+  eventListComponent <- mkEventList
   connectWallet <- mkConnectWallet
 
   walletInfoCtx <- asks _.walletInfoCtx
@@ -92,7 +91,7 @@ mkApp = do
             ]
       , DOM.div { className: "container-xl" } $
           [ contractListComponent { contractList: contracts, connectedWallet: possibleWalletInfo }
-          , DOM.div { className: "col" } $ eventListComponent contracts
+          , DOM.div { className: "col" } $ eventListComponent { contractList: contracts, connectedWallet: possibleWalletInfo }
           ]
       ]
 

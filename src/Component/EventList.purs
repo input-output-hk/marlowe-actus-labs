@@ -4,9 +4,13 @@ import Prelude
 
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain (CashFlow(..), evalVal')
+import CardanoMultiplatformLib as CardanoMultiplatformLib
+import Component.ConnectWallet (mkConnectWallet)
+import Component.ContractForm (walletAddresses)
 import Component.Modal (mkModal)
-import Component.Types (ContractHeaderResource)
+import Component.Types (ContractHeaderResource, MkComponentM, WalletInfo(..))
 import Component.Widgets (link)
+import Control.Monad.Reader.Class (asks)
 import Data.Argonaut (decodeJson)
 import Data.Array (catMaybes, concat, fromFoldable, singleton)
 import Data.BigInt.Argonaut as BigInt
@@ -20,6 +24,7 @@ import Data.Time.Duration as Duration
 import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (launchAff_)
+import Effect.Class (liftEffect)
 import Effect.Now (nowDateTime)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input(..), Party, Token(..), Value)
 import Language.Marlowe.Core.V1.Semantics.Types as V1
@@ -37,6 +42,8 @@ import React.Basic.DOM.Simplified.Generated as DOM
 import React.Basic.Events (handler_)
 import React.Basic.Hooks (JSX, component, useState, (/\))
 import React.Basic.Hooks as React
+import Wallet (Wallet)
+import Wallet as Wallet
 
 data NewInput
   = Creating
@@ -54,10 +61,18 @@ type EventListState =
         }
   }
 
-mkEventList :: Runtime -> Effect (Array ContractHeaderResource -> JSX)
-mkEventList (Runtime runtime) = do
-  modal <- mkModal
-  component "EventList" \contractList -> React.do
+type Props =
+  { contractList :: Array ContractHeaderResource
+  , connectedWallet :: Maybe (WalletInfo Wallet.Api)
+  }
+
+mkEventList :: MkComponentM (Props -> JSX)
+mkEventList = do
+  Runtime runtime <- asks _.runtime
+  modal <- liftEffect mkModal
+  cardanoMultiplatformLib <- asks _.cardanoMultiplatformLib
+
+  liftEffect $ component "EventList" \{contractList, connectedWallet} -> React.do
     let
       actusContracts = concat $ map endpointAndMetadata contractList
 
@@ -67,19 +82,21 @@ mkEventList (Runtime runtime) = do
       onEdit { party, token, value, endpoint } = handler_ do
         updateState _ { newInput = Just { party, token, value, endpoint } }
 
-      onApplyInputs { party, token, value, endpoint: ContractEndpoint (ResourceEndpoint link) } = handler_ do
+      onApplyInputs { party, token, value, endpoint: ContractEndpoint (ResourceEndpoint link) } cw = handler_ do
         now <- nowDateTime
         launchAff_ $
           getResource runtime.serverURL link {}
             >>= case _, partyToBech32 party of
               Right { payload: { links: { transactions } } }, Just changeAddress -> do
+
+                addresses <- walletAddresses cardanoMultiplatformLib cw
+
                 let
                   inputs = singleton $ IDeposit party party token value
 
                   invalidBefore = now
                   invalidHereafter = fromMaybe now $ adjust (Duration.Minutes 2.0) now
 
-                  addresses = []
                   collateralUTxOs = []
 
                   metadata = mempty
@@ -114,8 +131,8 @@ mkEventList (Runtime runtime) = do
 
     pure $
       DOM.div {}
-        [ case state.newInput of
-            Just input@{ token, value, party } -> modal $
+        [ case state.newInput, connectedWallet of
+            Just input@{ token, value, party }, Just (WalletInfo { wallet: cw }) -> modal $
               { body:
                   DOM.form {} $
                     [ DOM.div { className: "form-group" }
@@ -160,12 +177,12 @@ mkEventList (Runtime runtime) = do
                       }
                   , DOM.button
                       { className: "btn btn-primary"
-                      , onClick: onApplyInputs input { value = BigInt.abs value }
+                      , onClick: onApplyInputs input { value = BigInt.abs value } cw
                       }
                       [ R.text "Submit" ]
                   ]
               }
-            Nothing -> mempty
+            _,_ -> mempty
         , DOM.table { className: "table table-hover" } $
             [ DOM.thead {} $
                 [ DOM.tr {}
