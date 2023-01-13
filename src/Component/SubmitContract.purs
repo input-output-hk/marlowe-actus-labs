@@ -13,7 +13,6 @@ import CardanoMultiplatformLib.Transaction as Transaction
 import CardanoMultiplatformLib.Types (Cbor, cborHexToCbor, cborToCborHex)
 import Component.ContractForm (initialJson, mkContractForm)
 import Component.ContractForm as ContractForm
-import Component.EventList (decodeMetadata)
 import Component.Modal (mkModal)
 import Component.Modal as Modal
 import Component.Types (ContractHeaderResource, MkComponentM, WalletInfo(..))

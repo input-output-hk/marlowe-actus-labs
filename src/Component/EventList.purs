@@ -8,6 +8,7 @@ import CardanoMultiplatformLib as CardanoMultiplatformLib
 import Component.ConnectWallet (mkConnectWallet)
 import Component.ContractForm (walletAddresses)
 import Component.Modal (mkModal)
+import Component.SubmitContract (walletSignTx)
 import Component.Types (ContractHeaderResource, MkComponentM, WalletInfo(..))
 import Component.Widgets (link)
 import Control.Monad.Reader.Class (asks)
@@ -33,7 +34,7 @@ import Marlowe.Actus.Metadata (actusMetadataKey)
 import Marlowe.Actus.Metadata as M
 import Marlowe.Runtime.Web (post')
 import Marlowe.Runtime.Web.Client (getResource)
-import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), Metadata(..), PostTransactionsRequest(..), PostTransactionsResponse(..), ResourceEndpoint(..), Runtime(..), partyToBech32)
+import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), Metadata(..), PostTransactionsRequest(..), PostTransactionsResponse(..), ResourceEndpoint(..), Runtime(..), TextEnvelope(..), partyToBech32)
 import React.Basic (fragment) as DOOM
 import React.Basic.DOM (text)
 import React.Basic.DOM (text) as DOOM
@@ -72,7 +73,7 @@ mkEventList = do
   modal <- liftEffect mkModal
   cardanoMultiplatformLib <- asks _.cardanoMultiplatformLib
 
-  liftEffect $ component "EventList" \{contractList, connectedWallet} -> React.do
+  liftEffect $ component "EventList" \{ contractList, connectedWallet } -> React.do
     let
       actusContracts = concat $ map endpointAndMetadata contractList
 
@@ -94,7 +95,7 @@ mkEventList = do
                 let
                   inputs = singleton $ IDeposit party party token value
 
-                  invalidBefore = now
+                  invalidBefore = fromMaybe now $ adjust (Duration.Minutes (-2.0)) now
                   invalidHereafter = fromMaybe now $ adjust (Duration.Minutes 2.0) now
 
                   collateralUTxOs = []
@@ -113,8 +114,19 @@ mkEventList = do
 
                 post' runtime.serverURL transactions req
                   >>= case _ of
-                    Right ({ resource: PostTransactionsResponse res }) -> do
-                      traceM res
+                    Right ({ resource: PostTransactionsResponse postTransactionsResponse }) -> do
+                      traceM postTransactionsResponse
+                      let
+                        { txBody: tx } = postTransactionsResponse
+                        TextEnvelope { cborHex: txCborHex } = tx
+                      walletSignTx cardanoMultiplatformLib cw txCborHex >>= case _ of
+                        Just res -> do
+                          traceM res
+                          pure unit
+                        Nothing -> do
+                           traceM "error submitting transaction"
+                           pure unit
+
                       pure unit
                     Left _ -> do
                       traceM "error"
@@ -182,7 +194,7 @@ mkEventList = do
                       [ R.text "Submit" ]
                   ]
               }
-            _,_ -> mempty
+            _, _ -> mempty
         , DOM.table { className: "table table-hover" } $
             [ DOM.thead {} $
                 [ DOM.tr {}
