@@ -34,9 +34,11 @@ import Web.HTML (window)
 data WalletBrand
   = Yoroi
   | Nami
+  | Eternl
 instance Show WalletBrand where
   show Yoroi = "Yoroi"
   show Nami = "Nami"
+  show Eternl = "Eternl"
 
 autoConnectWallet :: WalletBrand -> (WalletInfo Wallet.Api -> Effect Unit) -> Aff Unit
 autoConnectWallet walletBrand onSuccess = liftEffect (window >>= Wallet.cardano) >>= case _ of
@@ -47,6 +49,7 @@ autoConnectWallet walletBrand onSuccess = liftEffect (window >>= Wallet.cardano)
       extractWallet = case walletBrand of
         Nami -> Wallet.nami
         Yoroi -> Wallet.yoroi
+        Eternl -> Wallet.eternl
     liftEffect (extractWallet cardano) >>= traverse walletInfo >>= case _ of
       Nothing -> do
         liftEffect $ throw $ "Unable to extract wallet " <> show walletBrand

@@ -69,7 +69,7 @@ mkConnectWallet = do
       liftEffect (Wallet.cardano =<< window) >>= case _ of
         Nothing -> pure unit
         Just cardano -> launchAff_ do
-          -- eternl <- liftEffect (Wallet.eternl cardano) >>= traverse walletInfo
+          eternl <- liftEffect (Wallet.eternl cardano) >>= traverse walletInfo
           -- gerowallet <- liftEffect (Wallet.gerowallet cardano) >>= traverse walletInfo
           lace <- liftEffect (Wallet.lace cardano) >>= traverse walletInfo
           nami <- liftEffect (Wallet.nami cardano) >>= traverse walletInfo

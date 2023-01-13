@@ -92,9 +92,9 @@ walletChangeAddress lib wallet = do
 
 walletAddresses :: CardanoMultiplatformLib.Lib -> Wallet.Api -> Aff (Array Bech32)
 walletAddresses cardanoMultiplatformLib wallet = do
-  -- possibleUsedAddresses <- Wallet.getUsedAddresses wallet
-  let
-    possibleUsedAddresses = Right []
+  possibleUsedAddresses <- Wallet.getUsedAddresses wallet
+  -- let
+  --   possibleUsedAddresses = Right []
   possibleUTxOs <- Wallet.getUtxos wallet
 
   case possibleUsedAddresses, possibleUTxOs of
