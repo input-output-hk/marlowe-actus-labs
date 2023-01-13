@@ -6,7 +6,7 @@ import Actus.Core (genProjectedCashflows)
 import Actus.Domain (CashFlow(..), evalVal')
 import CardanoMultiplatformLib as CardanoMultiplatformLib
 import Component.ConnectWallet (mkConnectWallet)
-import Component.ContractForm (walletAddresses)
+import Component.ContractForm (walletAddresses, walletChangeAddress)
 import Component.Modal (mkModal)
 import Component.SubmitContract (walletSignTx)
 import Component.Types (ContractHeaderResource, MkComponentM, WalletInfo(..))
@@ -67,6 +67,9 @@ type Props =
   , connectedWallet :: Maybe (WalletInfo Wallet.Api)
   }
 
+testingApply :: Boolean
+testingApply = false
+
 mkEventList :: MkComponentM (Props -> JSX)
 mkEventList = do
   Runtime runtime <- asks _.runtime
@@ -85,9 +88,11 @@ mkEventList = do
 
       onApplyInputs { party, token, value, endpoint: ContractEndpoint (ResourceEndpoint link) } cw = handler_ do
         now <- nowDateTime
-        launchAff_ $
+        -- FIXME: move aff flow into `useAff` on the component level
+        launchAff_ $ do
+          possibleChangeAddress <- walletChangeAddress cardanoMultiplatformLib cw
           getResource runtime.serverURL link {}
-            >>= case _, partyToBech32 party of
+            >>= case _, possibleChangeAddress of
               Right { payload: { links: { transactions } } }, Just changeAddress -> do
 
                 addresses <- walletAddresses cardanoMultiplatformLib cw

@@ -119,20 +119,36 @@ addWitnessSet cardanoMultiplatformLib txCbor witnessSetCbor = runGarbageCollecto
 
 walletSignTx :: CardanoMultiplatformLib.Lib -> Wallet.Api -> CborHex TransactionObject -> Aff (Maybe (CborHex TransactionHashObject))
 walletSignTx lib wallet txCborHex = do
+  let
+    txCbor = cborHexToCbor txCborHex
+    { "Transaction": _Transaction } = Lib.props lib
+  liftEffect $ runGarbageCollector lib do
+    txObj <- allocate $ Transaction.transaction.from_bytes _Transaction txCbor
+    traceM txObj
+    traceM "Transaction successfully decoded from the CBOR"
+
+    json <- liftEffect $ Transaction.transactionObject.to_json txObj
+    traceM $ json
+
   Wallet.signTx wallet txCborHex false >>= case _ of
     Right witnessSet -> do
       let
         witnessSetCbor = cborHexToCbor witnessSet
-        txCbor = cborHexToCbor txCborHex
       tx <- liftEffect $ addWitnessSet lib txCbor witnessSetCbor
       txCbor' <- liftEffect $ Transaction.transactionObject.to_bytes tx
       let
         txCborHex' = cborToCborHex txCbor'
+      traceM "Submitting the transaction"
       Wallet.submitTx wallet txCborHex' >>= case _ of
         Right txId -> pure $ Just txId
-        Left _ -> do
+        Left err -> do
+          traceM "Wallet submit error"
+          traceM err
           pure Nothing
-    _ -> pure Nothing
+    Left err -> do
+      traceM "Wallet signTx error"
+      traceM err
+      pure Nothing
 
 mkSubmitContract :: MkComponentM (Props -> JSX)
 mkSubmitContract = do

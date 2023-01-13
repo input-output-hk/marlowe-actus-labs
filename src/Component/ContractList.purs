@@ -17,6 +17,7 @@ import Contrib.React.Bootstrap (overlayTrigger, tooltip)
 import Contrib.React.Bootstrap.Icons as Icons
 import Contrib.React.Bootstrap.Types as OverlayTrigger
 import Control.Alt ((<|>))
+import Control.Monad.Error.Class (throwError)
 import Control.Monad.Reader.Class (asks)
 import Data.Array as Array
 import Data.Decimal (Decimal)
@@ -30,8 +31,10 @@ import Data.Newtype as Newtype
 import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\))
 import Data.Validation.Semigroup (V(..))
-import Effect.Aff (launchAff_)
+import Effect (Effect)
+import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
+import Effect.Exception (error, throw)
 import JS.Unsafe.Stringify (unsafeStringify)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party)
 import Language.Marlowe.Core.V1.Semantics.Types as V1
