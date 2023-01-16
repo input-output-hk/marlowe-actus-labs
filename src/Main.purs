@@ -19,7 +19,7 @@ import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype as Newtype
 import Data.Traversable (for_)
 import Effect (Effect)
-import Effect.Aff (Fiber, Milliseconds(..), delay, forkAff, launchAff_)
+import Effect.Aff (Aff, Fiber, Milliseconds(..), delay, forkAff, launchAff_)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Class.Console as Console
 import Effect.Exception (throw)
@@ -28,8 +28,8 @@ import Effect.Ref as Ref
 import Halogen.Subscription as Subscription
 import Marlowe.Runtime.Web as Marlowe.Runtime.Web
 import Marlowe.Runtime.Web.Client (foldMapMContractPages)
-import Marlowe.Runtime.Web.Client as Client
 import Marlowe.Runtime.Web.Types (ContractHeader, ServerURL(..), TxOutRef, api)
+import Prim.TypeError (class Warn, Text)
 import React.Basic (createContext)
 import React.Basic.DOM.Client (createRoot, renderRoot)
 import Web.DOM (Element)
@@ -56,6 +56,36 @@ decodeConfig json = do
 contractsById :: Array ContractHeader -> Map TxOutRef ContractHeader
 contractsById = Contrib.Map.fromFoldableBy $ _.contractId <<< Newtype.unwrap
 
+pushPullContractsStreams
+  :: Warn (Text "pushPullContractsStreams is deprecated, use web socket based implementation instead!")
+  => Milliseconds
+  -> ServerURL
+  -> Aff { contractEmitter :: Subscription.Emitter ContractEvent, getContracts :: Effect (Map TxOutRef ContractHeader) }
+pushPullContractsStreams waitBetween serverUrl = do
+  contracts :: Ref (Map TxOutRef ContractHeader) <- liftEffect $ Ref.new Map.empty
+
+  { emitter: contractEmitter, listener: contractListener :: Subscription.Listener ContractEvent } <-
+    liftEffect Subscription.create
+
+  _ :: Fiber Unit <- forkAff $ whileM_ (pure true) do
+    previousContracts <- liftEffect $ Ref.read contracts
+    nextContracts :: Map TxOutRef ContractHeader <-
+      map contractsById $ liftEither =<< foldMapMContractPages serverUrl api Nothing \pageContracts -> do
+        liftEffect do
+          let
+            cs :: Map TxOutRef ContractHeader
+            cs = contractsById pageContracts
+          Ref.modify_ (Map.union cs) contracts
+          for_ (Contrib.Map.additions previousContracts cs) $ Subscription.notify contractListener <<< Addition
+          for_ (Contrib.Map.updates previousContracts cs) $ Subscription.notify contractListener <<< Update
+        pure pageContracts
+    liftEffect do
+      Ref.write nextContracts contracts
+      for_ (Contrib.Map.deletions previousContracts nextContracts) $ Subscription.notify contractListener <<< Deletion
+    delay waitBetween
+
+  pure { contractEmitter, getContracts: Ref.read contracts }
+
 main :: Json -> Effect Unit
 main configJson = do
   config <- liftEither $ decodeConfig configJson
@@ -72,28 +102,7 @@ main configJson = do
   reactRoot <- createRoot container
   launchAff_ do
 
-    contracts :: Ref (Map TxOutRef ContractHeader) <-
-      liftEffect <<< Ref.new =<< contractsById <$> (liftEither =<< Client.getContracts' config.marloweWebServerUrl api Nothing)
-
-    { emitter: contractEmitter, listener: contractListener :: Subscription.Listener ContractEvent } <-
-      liftEffect Subscription.create
-
-    _ :: Fiber Unit <- forkAff $ whileM_ (pure true) do
-      previousContracts <- liftEffect $ Ref.read contracts
-      nextContracts :: Map TxOutRef ContractHeader <-
-        map contractsById $ liftEither =<< foldMapMContractPages config.marloweWebServerUrl api Nothing \pageContracts -> do
-          liftEffect do
-            let
-              cs :: Map TxOutRef ContractHeader
-              cs = contractsById pageContracts
-            Ref.modify_ (Map.union cs) contracts
-            for_ (Contrib.Map.additions previousContracts cs) $ Subscription.notify contractListener <<< Addition
-            for_ (Contrib.Map.updates previousContracts cs) $ Subscription.notify contractListener <<< Update
-          pure pageContracts
-      liftEffect do
-        Ref.write nextContracts contracts
-        for_ (Contrib.Map.deletions previousContracts nextContracts) $ Subscription.notify contractListener <<< Deletion
-      delay $ Milliseconds 1_000.0
+    { contractEmitter, getContracts } <- pushPullContractsStreams (Milliseconds 1_000.0) config.marloweWebServerUrl
 
     CardanoMultiplatformLib.importLib >>= case _ of
       Nothing -> liftEffect $ logger "Cardano serialization lib loading failed"
@@ -105,7 +114,7 @@ main configJson = do
             , walletInfoCtx
             , logger
             , contractEmitter
-            , getContracts: Ref.read contracts
+            , getContracts
             , runtime
             }
 
