@@ -1,10 +1,9 @@
 module Marlowe.Runtime.Web.Types where
 
-import Data.DateTime.ISO (ISO(..))
 import Prelude
 
 import CardanoMultiplatformLib (Bech32, CborHex, bech32ToString)
-import CardanoMultiplatformLib.Transaction (TransactionObject)
+import CardanoMultiplatformLib.Transaction (TransactionObject, TransactionWitnessSetObject)
 import CardanoMultiplatformLib.Types (unsafeBech32)
 import Contrib.Data.Argonaut (JsonParser, JsonParserResult, decodeFromString)
 import Contrib.Data.Argonaut.Generic.Record (class DecodeRecord, DecodeJsonFieldFn, decodeRecord, decodeNewtypedRecord)
@@ -12,6 +11,7 @@ import Data.Argonaut (class DecodeJson, class EncodeJson, Json, JsonDecodeError(
 import Data.Argonaut.Decode.Combinators ((.:))
 import Data.Argonaut.Decode.Decoders (decodeMaybe)
 import Data.DateTime (DateTime)
+import Data.DateTime.ISO (ISO(..))
 import Data.Either (Either, note)
 import Data.Generic.Rep (class Generic)
 import Data.Int as Int
@@ -29,6 +29,7 @@ import Foreign.Object (Object)
 import Foreign.Object as Object
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Record as Record
+import Type.Prelude (Proxy(..))
 import Type.Row.Homogeneous as Row
 
 newtype TxId = TxId String
@@ -205,6 +206,17 @@ instance EncodeJson (TextEnvelope a) where
 
 decodeTransactionObjectTextEnvelope :: JsonParser (TextEnvelope TransactionObject)
 decodeTransactionObjectTextEnvelope = unsafeDecodeTextEnvelope
+
+class HasTextEnvelope :: Type -> Constraint
+class HasTextEnvelope a where
+  textEnvelopeType :: forall proxy. proxy a -> String
+
+instance HasTextEnvelope TransactionWitnessSetObject where
+  textEnvelopeType _ = "WitnessesBabbage"
+
+toTextEnvelope :: forall a. HasTextEnvelope a => CborHex a -> String -> TextEnvelope a
+toTextEnvelope cborHex description = TextEnvelope
+  { type_: textEnvelopeType cborHex, description, cborHex }
 
 newtype TxBody = TxBody String
 
@@ -423,8 +435,7 @@ derive instance Eq ContractsEndpoint
 derive instance Newtype ContractsEndpoint _
 derive newtype instance DecodeJson ContractsEndpoint
 
--- FIXME: just a stub
-newtype PutContractRequest = PutContractRequest (TextEnvelope Tx)
+newtype PutContractRequest = PutContractRequest (TextEnvelope TransactionWitnessSetObject)
 
 instance EncodeHeaders PutContractRequest () where
   encodeHeaders (PutContractRequest _) = {}
@@ -489,9 +500,13 @@ derive instance Eq TransactionsEndpoint
 derive instance Newtype TransactionsEndpoint _
 derive newtype instance DecodeJson TransactionsEndpoint
 
-newtype PutTransactionRequest = PutTransactionRequest
-  { txBody :: TextEnvelope TxBody
-  }
+newtype PutTransactionRequest = PutTransactionRequest (TextEnvelope TransactionWitnessSetObject)
+
+instance EncodeHeaders PutTransactionRequest () where
+  encodeHeaders (PutTransactionRequest _) = {}
+
+instance EncodeJsonBody PutTransactionRequest where
+  encodeJsonBody (PutTransactionRequest textEnvelope) = encodeJson textEnvelope
 
 type GetTransactionResponse = Tx
 

@@ -4,7 +4,9 @@ import Prelude
 
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain (CashFlow(..), evalVal')
+import CardanoMultiplatformLib (CborHex)
 import CardanoMultiplatformLib as CardanoMultiplatformLib
+import CardanoMultiplatformLib.Transaction (TransactionWitnessSetObject(..))
 import Component.ConnectWallet (mkConnectWallet)
 import Component.ContractForm (walletAddresses, walletChangeAddress)
 import Component.Modal (mkModal)
@@ -24,7 +26,7 @@ import Data.Newtype (unwrap)
 import Data.Time.Duration as Duration
 import Debug (traceM)
 import Effect (Effect)
-import Effect.Aff (launchAff_)
+import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Now (nowDateTime)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input(..), Party, Token(..), Value)
@@ -33,8 +35,8 @@ import Marlowe.Actus (defaultRiskFactors, evalVal, toMarloweCashflow)
 import Marlowe.Actus.Metadata (actusMetadataKey)
 import Marlowe.Actus.Metadata as M
 import Marlowe.Runtime.Web (post')
-import Marlowe.Runtime.Web.Client (getResource)
-import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), Metadata(..), PostTransactionsRequest(..), PostTransactionsResponse(..), ResourceEndpoint(..), Runtime(..), TextEnvelope(..), partyToBech32)
+import Marlowe.Runtime.Web.Client (getResource, put')
+import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), Metadata(..), PostTransactionsRequest(..), PostTransactionsResponse(..), PutTransactionRequest(..), ResourceEndpoint(..), Runtime(..), ServerURL(..), TextEnvelope(..), TransactionEndpoint(..), partyToBech32, toTextEnvelope)
 import React.Basic (fragment) as DOOM
 import React.Basic.DOM (text)
 import React.Basic.DOM (text) as DOOM
@@ -69,6 +71,16 @@ type Props =
 
 testingApply :: Boolean
 testingApply = false
+
+
+submit :: CborHex TransactionWitnessSetObject -> ServerURL -> TransactionEndpoint -> Aff _
+submit witnesses serverUrl transactionEndpoint = do
+  let
+    textEnvelope = toTextEnvelope witnesses ""
+
+    req = PutTransactionRequest textEnvelope
+  put' serverUrl transactionEndpoint req
+
 
 mkEventList :: MkComponentM (Props -> JSX)
 mkEventList = do
@@ -117,20 +129,29 @@ mkEventList = do
                     , collateralUTxOs
                     }
 
+                traceM "APPLYING INPUTS"
                 post' runtime.serverURL transactions req
                   >>= case _ of
-                    Right ({ resource: PostTransactionsResponse postTransactionsResponse }) -> do
+                    Right ({ resource: PostTransactionsResponse postTransactionsResponse, links: { transaction: transactionsEndpoint }}) -> do
                       traceM postTransactionsResponse
                       let
                         { txBody: tx } = postTransactionsResponse
                         TextEnvelope { cborHex: txCborHex } = tx
-                      walletSignTx cardanoMultiplatformLib cw txCborHex >>= case _ of
-                        Just res -> do
-                          traceM res
+                      -- walletSignTx cardanoMultiplatformLib cw txCborHex >>= case _ of
+                      Wallet.signTx cw txCborHex true >>= case _ of
+                        Right witnessSet -> do
+                          submit witnessSet runtime.serverURL transactionsEndpoint >>= case _ of
+                            Right _ -> do
+                              traceM "Successfully submitted the transaction"
+                              -- liftEffect $ onSuccess contractEndpoint
+                            Left err -> do
+                              traceM "Error while submitting the transaction"
+                              traceM err
+
+
+                        Left err -> do
+                          traceM err
                           pure unit
-                        Nothing -> do
-                           traceM "error submitting transaction"
-                           pure unit
 
                       pure unit
                     Left _ -> do

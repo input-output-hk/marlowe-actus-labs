@@ -75,7 +75,7 @@ mkApp = do
     configuringWallet /\ setConfiguringWallet <- useState' false
 
     let
-      debugWallet = Just Yoroi
+      debugWallet = Just Nami
     useAff unit $ for debugWallet \walletBrand ->
       autoConnectWallet walletBrand \walletInfo -> do
         liftEffect $ setWalletInfo $ Just walletInfo
