@@ -6,64 +6,40 @@ import Prelude
 
 import CardanoMultiplatformLib as CardanoMultiplatformLib
 import Component.App (mkApp)
-import Component.ContractList (mkContractList)
-import Component.EventList (mkEventList)
+import Component.Types (ContractEvent(..))
 import Contrib.Data.Argonaut (JsonParser)
+import Contrib.Data.Map as Contrib.Map
 import Control.Monad.Reader (runReaderT)
-import Control.Monad.Reader.Class (asks)
+import Control.Monad.Rec.Loops (whileM_)
 import Data.Argonaut (Json, decodeJson, (.:))
 import Data.Either (Either, either)
-import Data.Maybe (Maybe(..))
-import Data.Newtype (un)
-import Data.Tuple.Nested ((/\))
-import Debug (traceM)
+import Data.Map (Map)
+import Data.Map as Map
+import Data.Maybe (Maybe(..), maybe)
+import Data.Newtype as Newtype
+import Data.Traversable (for_)
 import Effect (Effect)
-import Effect.Aff (Aff, launchAff_)
-import Effect.Aff (Milliseconds(..), delay, launchAff_)
-import Effect.Aff (launchAff_)
-import Effect.Class (liftEffect)
-import Effect.Class (liftEffect)
+import Effect.Aff (Aff, Fiber, Milliseconds(..), delay, forkAff, launchAff_)
+import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Class.Console as Console
-import Effect.Exception (error, throw)
+import Effect.Exception (throw)
+import Effect.Ref (Ref)
+import Effect.Ref as Ref
+import Halogen.Subscription as Subscription
 import Marlowe.Runtime.Web as Marlowe.Runtime.Web
-import Marlowe.Runtime.Web.Client (foldMapMPages, foldMapMPages', getPage')
-import Marlowe.Runtime.Web.Types (ResourceLink(..), ServerURL(..), api)
+import Marlowe.Runtime.Web.Client (foldMapMContractPages)
+import Marlowe.Runtime.Web.Types (ContractHeader, ServerURL(..), TxOutRef, api)
+import Prim.TypeError (class Warn, Text)
 import React.Basic (createContext)
 import React.Basic.DOM.Client (createRoot, renderRoot)
-import React.Basic.DOM.Simplified.Generated as DOM
-import React.Basic.Hooks (component, provider, useState)
-import Wallet as Wallet
 import Web.DOM (Element)
 import Web.DOM.NonElementParentNode (getElementById)
 import Web.HTML (HTMLDocument, window)
 import Web.HTML.HTMLDocument (toNonElementParentNode)
 import Web.HTML.Window (document)
 
--- | TODO: move this testing code to a separate "app"
-testWallet :: Effect Unit
-testWallet = launchAff_ do
-  delay (Milliseconds 3_000.0)
-  mC <- liftEffect (Wallet.cardano =<< window)
-  case mC of
-    Nothing -> Console.log "nay"
-    Just c -> do
-      liftEffect (Wallet.nami c)
-        >>= case _ of
-          Nothing -> Console.log "boo"
-          Just nami -> do
-            api <- Wallet.enable nami
-            Console.log <<< ("getBalance: " <> _) <<< show =<< Wallet.getBalance api
-            Console.log <<< ("getChangeAddress: " <> _) <<< show =<< Wallet.getChangeAddress api
-            Console.log <<< ("getRewardAddresses: " <> _) <<< show =<< Wallet.getRewardAddresses api
-            Console.log <<< ("getUnusedAddresses: " <> _) <<< show =<< Wallet.getUnusedAddresses api
-            Console.log <<< ("getUsedAddresses: " <> _) <<< show =<< Wallet.getUsedAddresses api
-            Console.log <<< ("getUtxos: " <> _) <<< show =<< Wallet.getUtxos api
-
-liftEitherWith :: forall a err. (err -> String) -> Either err a -> Effect a
-liftEitherWith showErr = either (throw <<< showErr) pure
-
-liftEither :: forall a err. Show err => Either err a -> Effect a
-liftEither = either (throw <<< show) pure
+liftEither :: forall a m err. MonadEffect m => Show err => Either err a -> m a
+liftEither = either (liftEffect <<< throw <<< show) pure
 
 type Config =
   { marloweWebServerUrl :: ServerURL
@@ -77,6 +53,39 @@ decodeConfig json = do
   develMode <- obj .: "develMode"
   pure { marloweWebServerUrl: ServerURL marloweWebServerUrl, develMode }
 
+contractsById :: Array ContractHeader -> Map TxOutRef ContractHeader
+contractsById = Contrib.Map.fromFoldableBy $ _.contractId <<< Newtype.unwrap
+
+pushPullContractsStreams
+  :: Warn (Text "pushPullContractsStreams is deprecated, use web socket based implementation instead!")
+  => Milliseconds
+  -> ServerURL
+  -> Aff { contractEmitter :: Subscription.Emitter ContractEvent, getContracts :: Effect (Map TxOutRef ContractHeader) }
+pushPullContractsStreams waitBetween serverUrl = do
+  contracts :: Ref (Map TxOutRef ContractHeader) <- liftEffect $ Ref.new Map.empty
+
+  { emitter: contractEmitter, listener: contractListener :: Subscription.Listener ContractEvent } <-
+    liftEffect Subscription.create
+
+  _ :: Fiber Unit <- forkAff $ whileM_ (pure true) do
+    previousContracts <- liftEffect $ Ref.read contracts
+    nextContracts :: Map TxOutRef ContractHeader <-
+      map contractsById $ liftEither =<< foldMapMContractPages serverUrl api Nothing \pageContracts -> do
+        liftEffect do
+          let
+            cs :: Map TxOutRef ContractHeader
+            cs = contractsById pageContracts
+          Ref.modify_ (Map.union cs) contracts
+          for_ (Contrib.Map.additions previousContracts cs) $ Subscription.notify contractListener <<< Addition
+          for_ (Contrib.Map.updates previousContracts cs) $ Subscription.notify contractListener <<< Update
+        pure pageContracts
+    liftEffect do
+      Ref.write nextContracts contracts
+      for_ (Contrib.Map.deletions previousContracts nextContracts) $ Subscription.notify contractListener <<< Deletion
+    delay waitBetween
+
+  pure { contractEmitter, getContracts: Ref.read contracts }
+
 main :: Json -> Effect Unit
 main configJson = do
   config <- liftEither $ decodeConfig configJson
@@ -88,29 +97,26 @@ main configJson = do
     runtime = Marlowe.Runtime.Web.runtime config.marloweWebServerUrl
 
   doc :: HTMLDocument <- document =<< window
-  root :: Maybe Element <- getElementById "app-root" $ toNonElementParentNode doc
-  case root of
-    Nothing -> throw "Could not find element with id 'app-root'"
-    Just container -> do
-      reactRoot <- createRoot container
-      launchAff_ do
-        -- contracts <- foldMapMPages' config.marloweWebServerUrl api (pure <<< _.page) >>= liftEither >>> liftEffect
-        -- FIXME: this is a temporary hack to get the first page of contracts to speed up development
-        contracts <- getPage' config.marloweWebServerUrl api Nothing >>= liftEither >>> liftEffect <#> _.page
-        -- let contracts = []
+  container :: Element <- maybe (throw "Could not find element with id 'app-root'") pure =<<
+    (getElementById "app-root" $ toNonElementParentNode doc)
+  reactRoot <- createRoot container
+  launchAff_ do
 
-        CardanoMultiplatformLib.importLib >>= case _ of
-          Nothing -> liftEffect $ logger "Cardano serialization lib loading failed"
-          Just cardanoMultiplatformLib -> do
-            walletInfoCtx <- liftEffect $ createContext Nothing
-            let
-              mkAppCtx =
-                { cardanoMultiplatformLib
-                , walletInfoCtx
-                , logger
-                , contracts
-                , runtime
-                }
+    { contractEmitter, getContracts } <- pushPullContractsStreams (Milliseconds 1_000.0) config.marloweWebServerUrl
 
-            app <- liftEffect $ runReaderT mkApp mkAppCtx
-            liftEffect $ renderRoot reactRoot $ app unit
+    CardanoMultiplatformLib.importLib >>= case _ of
+      Nothing -> liftEffect $ logger "Cardano serialization lib loading failed"
+      Just cardanoMultiplatformLib -> do
+        walletInfoCtx <- liftEffect $ createContext Nothing
+        let
+          mkAppCtx =
+            { cardanoMultiplatformLib
+            , walletInfoCtx
+            , logger
+            , contractEmitter
+            , getContracts
+            , runtime
+            }
+
+        app <- liftEffect $ runReaderT mkApp mkAppCtx
+        liftEffect $ renderRoot reactRoot $ app unit

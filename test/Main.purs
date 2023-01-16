@@ -20,6 +20,7 @@ import Node.Encoding (Encoding(..))
 import Node.FS.Aff (readTextFile)
 import Node.Process (getEnv)
 import Test.Actus.Domain.ContractTerms as ContractTerms
+import Test.Contrib.Data.Map as Test.Contrib.Data.Map
 import Test.Marlowe.Actus as MarloweActus
 import Test.Marlowe.Actus.Metadata as Metadata
 import Test.Marlowe.Runtime.Web (_MARLOWE_WEB_SERVER_URL)
@@ -48,6 +49,7 @@ main = do
         TestFramework.spec testsANN
         MarloweActus.spec
         Web.spec serverUrlStr
+        Test.Contrib.Data.Map.spec
 
   where
   readFile file = do
