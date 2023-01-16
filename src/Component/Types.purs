@@ -4,12 +4,13 @@ import Prelude
 
 import CardanoMultiplatformLib as CardanoMultiplatformLib
 import Control.Monad.Reader (ReaderT)
+import Data.Map (Map)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
 import Effect (Effect)
 import Halogen.Subscription as Subscription
 import Marlowe.Runtime.Web (Runtime)
-import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractHeader, ResourceWithLinks)
+import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractHeader, ResourceWithLinks, TxOutRef)
 import React.Basic (ReactContext)
 import Wallet as Wallet
 
@@ -42,6 +43,7 @@ type MkContext =
   -- FIXME: use more advanced logger so we use levels and setup app verbosity.
   , logger :: String -> Effect Unit
   , contractEmitter :: Subscription.Emitter ContractEvent
+  , getContracts :: Effect (Map TxOutRef ContractHeader)
   , runtime :: Runtime
   }
 
