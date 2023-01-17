@@ -17,10 +17,12 @@ import Contrib.React.Bootstrap (overlayTrigger, tooltip)
 import Contrib.React.Bootstrap.Icons as Icons
 import Contrib.React.Bootstrap.Types as OverlayTrigger
 import Control.Alt ((<|>))
+import Control.Monad.Error.Class (throwError)
 import Control.Monad.Reader.Class (asks)
 import Data.Array as Array
 import Data.Decimal (Decimal)
 import Data.Either (Either(..))
+import Data.Foldable (foldMap)
 import Data.FormURLEncoded.Query as Query
 import Data.List (List)
 import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
@@ -29,10 +31,13 @@ import Data.Newtype as Newtype
 import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\))
 import Data.Validation.Semigroup (V(..))
-import Effect.Aff (launchAff_)
+import Effect (Effect)
+import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
+import Effect.Exception (error, throw)
 import JS.Unsafe.Stringify (unsafeStringify)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party(..))
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party)
+import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Runtime.Web.Types (ContractHeader(..), Metadata, TxOutRef, txOutRefToString)
 import Polyform.Validator (runValidator)
 import React.Basic.DOM (text)
@@ -46,7 +51,6 @@ import Record as Record
 import Type.Prelude (Proxy(..))
 import Wallet as Wallet
 import Web.HTML (window)
-import Web.HTML.Window as Window
 
 type ContractId = TxOutRef
 
@@ -149,11 +153,11 @@ mkContractList = do
     pure $
       DOOM.div_
         [ case state.newContract, connectedWallet <|> internalConnectedWallet of
-            Just Creating, _ -> contractForm
+            Just Creating, Just cw -> contractForm
               { onDismiss: updateState _ { newContract = Nothing }
               , onSuccess: onNewContract
               , inModal: true
-              , connectedWallet
+              , connectedWallet: cw
               }
             Just (Submitting contractData), Just wallet -> submitContract
               { onDismiss: updateState _ { newContract = Nothing }
@@ -219,8 +223,8 @@ mkContractList = do
                         DOM.tr {}
                           [ DOM.td {} [ text $ maybe "" (_.contractId <<< unwrap <<< _.contractTerms <<< unwrap) md ]
                           , DOM.td {} [ text $ maybe "" (show <<< _.contractType <<< unwrap <<< _.contractTerms <<< unwrap) md ]
-                          , DOM.td {} [ text $ maybe "" (displayParty <<< _.party <<< unwrap) md ]
-                          , DOM.td {} [ text $ maybe "" (displayParty <<< _.counterParty <<< unwrap) md ]
+                          , DOM.td {} [ foldMap (displayParty <<< _.party <<< unwrap) md ]
+                          , DOM.td {} [ foldMap (displayParty <<< _.counterParty <<< unwrap) md ]
                           , DOM.td {} [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
                           , DOM.td {} $ do
                               let
@@ -228,13 +232,21 @@ mkContractList = do
                               overlayTrigger
                                 { overlay: tooltipJSX
                                 , placement: OverlayTrigger.placement.bottom
-                                } $ DOM.td {} [ show status ]
+                                } $ DOM.span {} [ show status ]
                           ]
                   )
                   contractList
               ]
         ]
   where
-  displayParty :: Party -> String
-  displayParty (Role role) = role
-  displayParty (Address address) = address
+  displayParty :: Party -> JSX
+  displayParty = case _ of
+    V1.Role role -> render role (DOOM.text role)
+    V1.Address addr -> render addr (DOM.div { className: "text-truncate w-16rem" } [ DOOM.text addr ])
+    where
+    render msg body =
+      overlayTrigger
+        { overlay: tooltip {} (DOOM.text $ msg)
+        , placement: OverlayTrigger.placement.bottom
+        }
+        $ DOM.span {} [ body ]

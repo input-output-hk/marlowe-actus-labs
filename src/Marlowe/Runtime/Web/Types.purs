@@ -2,16 +2,16 @@ module Marlowe.Runtime.Web.Types where
 
 import Prelude
 
+import CardanoMultiplatformLib (Bech32, CborHex, bech32ToString)
+import CardanoMultiplatformLib.Transaction (TransactionObject, TransactionWitnessSetObject)
+import CardanoMultiplatformLib.Types (unsafeBech32)
 import Contrib.Data.Argonaut (JsonParser, JsonParserResult, decodeFromString)
 import Contrib.Data.Argonaut.Generic.Record (class DecodeRecord, DecodeJsonFieldFn, decodeRecord, decodeNewtypedRecord)
-import Data.Argonaut (class DecodeJson, Json, class EncodeJson, JsonDecodeError(..), decodeJson, encodeJson)
+import Data.Argonaut (class DecodeJson, class EncodeJson, Json, JsonDecodeError(..), decodeJson, encodeJson)
 import Data.Argonaut.Decode.Combinators ((.:))
 import Data.Argonaut.Decode.Decoders (decodeMaybe)
-import Data.Bifunctor (rmap)
 import Data.DateTime (DateTime)
-import Data.DateTime.Instant (fromDateTime, toDateTime)
-import Data.DateTime.ISO
-import Data.Either (Either)
+import Data.DateTime.ISO (ISO(..))
 import Data.Either (Either, note)
 import Data.Generic.Rep (class Generic)
 import Data.Int as Int
@@ -28,8 +28,8 @@ import Effect.Unsafe (unsafePerformEffect)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Language.Marlowe.Core.V1.Semantics.Types as V1
-import Marlowe.Time (instantFromJson, instantToJson)
 import Record as Record
+import Type.Prelude (Proxy(..))
 import Type.Row.Homogeneous as Row
 
 newtype TxId = TxId String
@@ -177,15 +177,10 @@ derive instance Eq ContractHeader
 instance DecodeJson ContractHeader where
   decodeJson = decodeNewtypedRecord metadataFieldDecoder
 
-newtype CborHex = CborHex String
-
-derive instance Eq CborHex
-derive newtype instance DecodeJson CborHex
-
 newtype TextEnvelope (a :: Type) = TextEnvelope
   { type_ :: String
   , description :: String
-  , cborHex :: CborHex
+  , cborHex :: CborHex a
   }
 
 derive instance Generic (TextEnvelope a) _
@@ -206,8 +201,22 @@ unsafeDecodeTextEnvelope json = TextEnvelope <$> do
   cborHex <- obj .: "cborHex"
   pure { type_, description, cborHex }
 
-decodeTxBodyTextEnvelope :: JsonParser (TextEnvelope TxBody)
-decodeTxBodyTextEnvelope = unsafeDecodeTextEnvelope
+instance EncodeJson (TextEnvelope a) where
+  encodeJson (TextEnvelope { type_, description, cborHex }) = encodeJson { "type": type_, description, cborHex }
+
+decodeTransactionObjectTextEnvelope :: JsonParser (TextEnvelope TransactionObject)
+decodeTransactionObjectTextEnvelope = unsafeDecodeTextEnvelope
+
+class HasTextEnvelope :: Type -> Constraint
+class HasTextEnvelope a where
+  textEnvelopeType :: forall proxy. proxy a -> String
+
+instance HasTextEnvelope TransactionWitnessSetObject where
+  textEnvelopeType _ = "WitnessesBabbage"
+
+toTextEnvelope :: forall a. HasTextEnvelope a => CborHex a -> String -> TextEnvelope a
+toTextEnvelope cborHex description = TextEnvelope
+  { type_: textEnvelopeType cborHex, description, cborHex }
 
 newtype TxBody = TxBody String
 
@@ -220,7 +229,7 @@ type ContractStateRow = ContractHeadersRowBase
   , currentContract :: Maybe V1.Contract
   , state :: Maybe V1.State
   , utxo :: Maybe TxOutRef
-  , txBody :: Maybe (TextEnvelope TxBody)
+  , txBody :: Maybe (TextEnvelope TransactionObject)
   )
 
 newtype ContractState = ContractState { | ContractStateRow }
@@ -235,7 +244,7 @@ instance DecodeJson ContractState where
     decoders =
       metadataFieldDecoder
         `Record.merge`
-          { txBody: map (decodeMaybe decodeTxBodyTextEnvelope) :: Maybe _ -> Maybe _ }
+          { txBody: map (decodeMaybe decodeTransactionObjectTextEnvelope) :: Maybe _ -> Maybe _ }
 
 type TxRowBase r =
   ( contractId :: TxOutRef
@@ -278,7 +287,7 @@ type TxRow = TxRowBase
   , consumingTx :: Maybe TxId
   , invalidBefore :: DateTime
   , invalidHereafter :: DateTime
-  , txBody :: Maybe (TextEnvelope TxBody)
+  , txBody :: Maybe (TextEnvelope TransactionObject)
   )
 
 newtype Tx = Tx { | TxRow }
@@ -291,25 +300,17 @@ instance DecodeJson Tx where
     decodeNewtypedRecord
       { invalidBefore: map decodeUTCDateTime :: Maybe _ -> Maybe _
       , invalidHereafter: map decodeUTCDateTime :: Maybe _ -> Maybe _
-      , txBody: map (decodeMaybe decodeTxBodyTextEnvelope) :: Maybe _ -> Maybe _
+      , txBody: map (decodeMaybe decodeTransactionObjectTextEnvelope) :: Maybe _ -> Maybe _
       }
 
 newtype ServerURL = ServerURL String
 
-newtype Address = Address String
+bech32ToParty :: Bech32 -> V1.Party
+bech32ToParty bech32 = V1.Address (bech32ToString bech32)
 
-derive instance Newtype Address _
-
-addressToString :: Address -> String
-addressToString = un Address
-
-addressToParty :: Address -> V1.Party
-addressToParty (Address address) = V1.Address address
-
-instance EncodeJson Address where
-  encodeJson = encodeJson <<< addressToString
-
--- Base types for typed API endpoints
+partyToBech32 :: V1.Party -> Maybe Bech32
+partyToBech32 (V1.Address str) = Just $ unsafeBech32 str
+partyToBech32 _ = Nothing
 
 newtype ResourceLink :: Type -> Type
 newtype ResourceLink resource = ResourceLink String
@@ -382,8 +383,8 @@ newtype PostContractsRequest = PostContractsRequest
   -- , roles :: Maybe RolesConfig
   , contract :: V1.Contract
   , minUTxODeposit :: V1.Ada
-  , changeAddress :: Address
-  , addresses :: Array Address
+  , changeAddress :: Bech32
+  , addresses :: Array Bech32
   , collateralUTxOs :: Array TxOutRef
   }
 
@@ -404,24 +405,26 @@ type PostContractsHeadersRow =
 
 instance EncodeHeaders PostContractsRequest PostContractsHeadersRow where
   encodeHeaders (PostContractsRequest { changeAddress, addresses }) =
-    { "X-Change-Address": addressToString changeAddress
-    , "X-Address": String.joinWith "," (map addressToString addresses)
+    { "X-Change-Address": bech32ToString changeAddress
+    , "X-Address": String.joinWith "," (map bech32ToString addresses)
     -- FIXME: Empty collateral causes request rejection so ... this header record representation
     -- gonna be hard to maintain and we should switch to `Object String` probably and use
     -- lower level fetch API.
     -- , "X-Collateral-UTxO": String.joinWith "," (map txOutRefToString collateralUTxOs)
     }
 
+-- FIXME: paluh. Change `txBody` to `tx` because we send(ing) on our branch the actual transaction and not
+-- just the body.
 newtype PostContractsResponse = PostContractsResponse
   { contractId :: TxOutRef
-  , txBody :: TextEnvelope TxBody
+  , txBody :: TextEnvelope TransactionObject
   }
 
 derive instance Newtype PostContractsResponse _
 
 instance DecodeJson PostContractsResponse where
   decodeJson = decodeNewtypedRecord
-    { txBody: map decodeTxBodyTextEnvelope :: Maybe _ -> Maybe _ }
+    { txBody: map decodeTransactionObjectTextEnvelope :: Maybe _ -> Maybe _ }
 
 type GetContractsResponse = ContractHeader
 
@@ -432,8 +435,13 @@ derive instance Eq ContractsEndpoint
 derive instance Newtype ContractsEndpoint _
 derive newtype instance DecodeJson ContractsEndpoint
 
--- FIXME: just a stub
-newtype PutContractRequest = PutContractRequest Int
+newtype PutContractRequest = PutContractRequest (TextEnvelope TransactionWitnessSetObject)
+
+instance EncodeHeaders PutContractRequest () where
+  encodeHeaders (PutContractRequest _) = {}
+
+instance EncodeJsonBody PutContractRequest where
+  encodeJsonBody (PutContractRequest textEnvelope) = encodeJson textEnvelope
 
 type GetContractResponse = ContractState
 
@@ -449,8 +457,8 @@ newtype PostTransactionsRequest = PostTransactionsRequest
   , invalidBefore :: DateTime
   , invalidHereafter :: DateTime
   , metadata :: Metadata
-  , changeAddress :: Address
-  , addresses :: Array Address
+  , changeAddress :: Bech32
+  , addresses :: Array Bech32
   , collateralUTxOs :: Array TxOutRef
   }
 
@@ -463,10 +471,10 @@ instance EncodeJsonBody PostTransactionsRequest where
     , version: V1
     }
 
-instance EncodeHeaders PostTransactionsRequest PostContractsHeadersRow where -- TODO: Rename PostContractsHeaderRow
-  encodeHeaders (PostTransactionsRequest { changeAddress, addresses, collateralUTxOs }) =
-    { "X-Change-Address": addressToString changeAddress
-    , "X-Address": String.joinWith "," (map addressToString addresses)
+instance EncodeHeaders PostTransactionsRequest PostContractsHeadersRow where
+  encodeHeaders (PostTransactionsRequest { changeAddress, addresses }) = -- , collateralUTxOs }) =
+    { "X-Change-Address": bech32ToString changeAddress
+    , "X-Address": String.joinWith "," (map bech32ToString addresses)
     -- FIXME: Check comment above regarding the same header and contraacts endpoint request.
     -- , "X-Collateral-UTxO": String.joinWith "," (map txOutRefToString collateralUTxOs)
     }
@@ -474,14 +482,14 @@ instance EncodeHeaders PostTransactionsRequest PostContractsHeadersRow where -- 
 newtype PostTransactionsResponse = PostTransactionsResponse
   { contractId :: TxOutRef
   , transactionId :: TxId
-  , txBody :: TextEnvelope TxBody
+  , txBody :: TextEnvelope TransactionObject
   }
 
 derive instance Newtype PostTransactionsResponse _
 
 instance DecodeJson PostTransactionsResponse where
   decodeJson = decodeNewtypedRecord
-    { txBody: map decodeTxBodyTextEnvelope :: Maybe _ -> Maybe _ }
+    { txBody: map decodeTransactionObjectTextEnvelope :: Maybe _ -> Maybe _ }
 
 type GetTransactionsResponse = TxHeader
 
@@ -492,9 +500,13 @@ derive instance Eq TransactionsEndpoint
 derive instance Newtype TransactionsEndpoint _
 derive newtype instance DecodeJson TransactionsEndpoint
 
-newtype PutTransactionRequest = PutTransactionRequest
-  { txBody :: TextEnvelope TxBody
-  }
+newtype PutTransactionRequest = PutTransactionRequest (TextEnvelope TransactionWitnessSetObject)
+
+instance EncodeHeaders PutTransactionRequest () where
+  encodeHeaders (PutTransactionRequest _) = {}
+
+instance EncodeJsonBody PutTransactionRequest where
+  encodeJsonBody (PutTransactionRequest textEnvelope) = encodeJson textEnvelope
 
 type GetTransactionResponse = Tx
 

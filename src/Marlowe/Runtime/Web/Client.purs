@@ -5,6 +5,7 @@ import Prelude
 import Contrib.Data.Argonaut (JsonParser)
 import Contrib.Data.Argonaut.Generic.Record (class DecodeRecord, DecodeJsonFieldFn)
 import Contrib.Fetch (FetchError, fetchEither, jsonBody)
+import Control.Alt ((<|>))
 import Control.Monad.Except (ExceptT(..), runExceptT, throwError)
 import Control.Monad.Loops (unfoldrM)
 import Control.Monad.Trans.Class (lift)
@@ -77,7 +78,7 @@ getResource (ServerURL serverUrl) (ResourceLink path) extraHeaders = do
 
   runExceptT do
     res@{ status, headers: resHeaders } <- ExceptT $ fetchEither url { headers: reqHeaders, mode: Cors } allowedStatusCodes FetchError
-    lift (jsonBody res) >>= decodeResponse >>> case _ of
+    lift (jsonBody res) >>= (\json -> decodeResponse json <|> decodeJson json) >>> case _ of
       Left err -> throwError (ResponseDecodingError err)
       Right payload -> pure { payload, headers: resHeaders, status }
 
@@ -280,3 +281,21 @@ put (ServerURL serverUrl) (ResourceEndpoint (ResourceLink path)) req = runExcept
         $ R.insert (Proxy :: Proxy "Content-Type") "application/json"
         $ (encodeHeaders req :: { | extraHeaders })
   void $ ExceptT $ fetchEither url { method: PUT, body, headers } allowedStatusCodes identity
+
+put'
+  :: forall links putRequest getResponse extraHeaders t
+   . EncodeHeaders putRequest extraHeaders
+  => EncodeJsonBody putRequest
+  => Newtype t (ResourceEndpoint putRequest getResponse links)
+  => Row.Homogeneous extraHeaders String
+  => Row.Homogeneous ("Accept" :: String, "Content-Type" :: String | extraHeaders) String
+  => Row.Lacks "Accept" extraHeaders
+  => Row.Lacks "Content-Type" extraHeaders
+  => ServerURL
+  -> t
+  -> putRequest
+  -> Aff (Either FetchError Unit)
+put' serverUrl endpoint req = do
+  let
+    endpoint' = unwrap endpoint
+  put serverUrl endpoint' req

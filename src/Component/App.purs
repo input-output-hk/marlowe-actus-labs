@@ -2,7 +2,7 @@ module Component.App where
 
 import Prelude
 
-import Component.ConnectWallet (mkConnectWallet)
+import Component.ConnectWallet (mkConnectWallet, walletInfo)
 import Component.ConnectWallet as ConnectWallet
 import Component.ContractList (mkContractList)
 import Component.EventList (mkEventList)
@@ -12,20 +12,59 @@ import Contrib.React.Bootstrap.Icons as Icons
 import Control.Monad.Reader.Class (asks)
 import Data.Maybe (Maybe(..))
 import Data.Monoid as Monoid
+import Data.Newtype as Newtype
+import Data.Traversable (for, traverse)
 import Data.Tuple.Nested ((/\))
+import Effect (Effect)
+import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
+import Effect.Exception (throw)
 import Halogen.Subscription as Subscription
 import React.Basic (JSX)
 import React.Basic.DOM as DOOM
 import React.Basic.DOM.Simplified.Generated as DOM
 import React.Basic.Hooks (component, provider, useState')
 import React.Basic.Hooks as React
+import React.Basic.Hooks.Aff (useAff)
+import Record as Record
+import Type.Prelude (Proxy(..))
+import Wallet as Wallet
+import Web.HTML (window)
+
+-- | Debugging helpers which allow us to automatically connect wallet
+data WalletBrand
+  = Yoroi
+  | Nami
+  | Eternl
+
+instance Show WalletBrand where
+  show Yoroi = "Yoroi"
+  show Nami = "Nami"
+  show Eternl = "Eternl"
+
+autoConnectWallet :: WalletBrand -> (WalletInfo Wallet.Api -> Effect Unit) -> Aff Unit
+autoConnectWallet walletBrand onSuccess = liftEffect (window >>= Wallet.cardano) >>= case _ of
+  Nothing -> do
+    liftEffect $ throw $ "Missing \"cardano\" window attr"
+  Just cardano -> do
+    let
+      extractWallet = case walletBrand of
+        Nami -> Wallet.nami
+        Yoroi -> Wallet.yoroi
+        Eternl -> Wallet.eternl
+    liftEffect (extractWallet cardano) >>= traverse walletInfo >>= case _ of
+      Nothing -> do
+        liftEffect $ throw $ "Unable to extract wallet " <> show walletBrand
+      Just walletInfo@(WalletInfo { wallet }) -> do
+        walletApi <- Wallet.enable wallet
+        let
+          walletInfo' = Newtype.over WalletInfo (Record.set (Proxy :: Proxy "wallet") walletApi) walletInfo
+        liftEffect $ onSuccess walletInfo'
 
 mkApp :: MkComponentM (Unit -> JSX)
 mkApp = do
-  runtime <- asks _.runtime
   contractListComponent <- mkContractList
-  eventListComponent <- liftEffect $ mkEventList runtime
+  eventListComponent <- mkEventList
   connectWallet <- mkConnectWallet
 
   walletInfoCtx <- asks _.walletInfoCtx
@@ -37,6 +76,12 @@ mkApp = do
   liftEffect $ component "App" \_ -> React.do
     possibleWalletInfo /\ setWalletInfo <- useState' Nothing
     configuringWallet /\ setConfiguringWallet <- useState' false
+
+    let
+      debugWallet = Just Nami
+    useAff unit $ for debugWallet \walletBrand ->
+      autoConnectWallet walletBrand \walletInfo -> do
+        liftEffect $ setWalletInfo $ Just walletInfo
 
     pure $ provider walletInfoCtx possibleWalletInfo
       [ DOM.nav { className: "navbar mb-lg-4 navbar-expand-sm navbar-light bg-light py-0" } $
@@ -94,7 +139,7 @@ mkApp = do
             ]
       , DOM.div { className: "container-xl" } $
           [ contractListComponent { contractList: contracts, connectedWallet: possibleWalletInfo }
-          , DOM.div { className: "col" } $ eventListComponent contracts
+          , DOM.div { className: "col" } $ eventListComponent { contractList: contracts, connectedWallet: possibleWalletInfo }
           ]
       ]
 

@@ -79,6 +79,7 @@
   , "typelevel"
   , "typelevel-eval"
   , "typelevel-prelude"
+  , "undefined-is-not-a-problem"
   , "unfoldable"
   , "safe-coerce"
   , "unsafe-coerce"

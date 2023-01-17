@@ -2,11 +2,14 @@ module CardanoMultiplatformLib.Transaction where
 
 import Prelude
 
-import CardanoMultiplatformLib.Types (JsonString)
+import CardanoMultiplatformLib.Address (AddressObject)
+import CardanoMultiplatformLib.Types (Cbor, JsonString)
+import Data.Argonaut (Json)
 import Data.ArrayBuffer.Types (Uint8Array)
 import Data.Newtype (class Newtype)
+import Data.Undefined.NoProblem (Opt)
 import Effect (Effect)
-import JS.Object (EffectMth0, EffectMth1, EffectMth2, JSObject)
+import JS.Object (EffectMth0, EffectMth1, EffectMth2, EffectMth3, JSObject)
 import JS.Object.Generic (mkNewtypedFFI)
 import Type.Prelude (Proxy(..))
 
@@ -63,28 +66,33 @@ import Type.Prelude (Proxy(..))
 --   static new(body: TransactionBody, witness_set: TransactionWitnessSet, auxiliary_data?: AuxiliaryData): Transaction;
 -- }
 
+newtype AuxiliaryData = AuxiliaryData (JSObject ())
+
+derive instance Newtype AuxiliaryData _
+
 newtype Transaction = Transaction
   ( JSObject
-      ( from_bytes :: EffectMth1 Uint8Array TransactionObject
+      ( from_bytes :: EffectMth1 (Cbor TransactionObject) TransactionObject
       , from_json :: EffectMth1 JsonString TransactionObject
-      , new :: EffectMth2 TransactionBodyObject TransactionWitnessSetObject TransactionObject
+      , new :: EffectMth3 TransactionBodyObject TransactionWitnessSetObject (Opt AuxiliaryData) TransactionObject
       )
   )
 
 derive instance Newtype Transaction _
 
 transaction
-  :: { from_bytes :: Transaction -> Uint8Array -> Effect TransactionObject
+  :: { from_bytes :: Transaction -> Cbor TransactionObject -> Effect TransactionObject
      , from_json :: Transaction -> JsonString -> Effect TransactionObject
-     , new :: Transaction -> TransactionBodyObject -> TransactionWitnessSetObject -> Effect TransactionObject
+     , new :: Transaction -> TransactionBodyObject -> TransactionWitnessSetObject -> Opt AuxiliaryData -> Effect TransactionObject
      }
 transaction = mkNewtypedFFI (Proxy :: Proxy Transaction)
 
 newtype TransactionObject = TransactionObject
   ( JSObject
       ( free :: EffectMth0 Unit
-      , to_bytes :: EffectMth0 Uint8Array
+      , to_bytes :: EffectMth0 (Cbor TransactionObject)
       , to_json :: EffectMth0 JsonString
+      , auxiliary_data :: EffectMth0 (Opt AuxiliaryData)
       -- | Clone the tx body
       , body :: EffectMth0 TransactionBodyObject
       )
@@ -94,8 +102,9 @@ derive instance Newtype TransactionObject _
 
 transactionObject
   :: { free :: TransactionObject -> Effect Unit
-     , to_bytes :: TransactionObject -> Effect Uint8Array
+     , to_bytes :: TransactionObject -> Effect (Cbor TransactionObject)
      , to_json :: TransactionObject -> Effect JsonString
+     , auxiliary_data :: TransactionObject -> Effect (Opt AuxiliaryData)
      , body :: TransactionObject -> Effect TransactionBodyObject
      }
 transactionObject = mkNewtypedFFI (Proxy :: Proxy TransactionObject)
@@ -190,11 +199,19 @@ transactionBody
      }
 transactionBody = mkNewtypedFFI (Proxy :: Proxy TransactionBody)
 
-newtype TransactionBodyObject = TransactionBodyObject (JSObject (free :: EffectMth0 Unit))
+newtype TransactionBodyObject = TransactionBodyObject
+  ( JSObject
+      ( free :: EffectMth0 Unit
+      , to_js_value :: EffectMth0 Json -- TransactionBodyJSON
+      )
+  )
 
 derive instance Newtype TransactionBodyObject _
 
-transactionBodyObject :: { free :: TransactionBodyObject -> Effect Unit }
+transactionBodyObject
+  :: { free :: TransactionBodyObject -> Effect Unit
+     , to_js_value :: TransactionBodyObject -> Effect Json
+     }
 transactionBodyObject = mkNewtypedFFI (Proxy :: Proxy TransactionBodyObject)
 
 -- export class TransactionWitnessSet {
@@ -285,18 +302,18 @@ transactionBodyObject = mkNewtypedFFI (Proxy :: Proxy TransactionBodyObject)
 
 newtype TransactionWitnessSet = TransactionWitnessSet
   ( JSObject
-      ( from_bytes :: EffectMth1 Uint8Array TransactionWitnessSetObject
+      ( from_bytes :: EffectMth1 (Cbor TransactionWitnessSetObject) TransactionWitnessSetObject
       , from_json :: EffectMth1 JsonString TransactionWitnessSetObject
       )
   )
 
 derive instance Newtype TransactionWitnessSet _
 
-transactionWitness
-  :: { from_bytes :: TransactionWitnessSet -> Uint8Array -> Effect TransactionWitnessSetObject
+transactionWitnessSet
+  :: { from_bytes :: TransactionWitnessSet -> (Cbor TransactionWitnessSetObject) -> Effect TransactionWitnessSetObject
      , from_json :: TransactionWitnessSet -> JsonString -> Effect TransactionWitnessSetObject
      }
-transactionWitness = mkNewtypedFFI (Proxy :: Proxy TransactionWitnessSet)
+transactionWitnessSet = mkNewtypedFFI (Proxy :: Proxy TransactionWitnessSet)
 
 newtype TransactionWitnessSetObject = TransactionWitnessSetObject (JSObject (free :: EffectMth0 Unit))
 
@@ -306,3 +323,157 @@ transactionWitnessObject
   :: { free :: TransactionWitnessSetObject -> Effect Unit
      }
 transactionWitnessObject = mkNewtypedFFI (Proxy :: Proxy TransactionWitnessSetObject)
+
+-- export class TransactionOutput {
+--   free(): void;
+-- /**
+-- * @returns {Uint8Array}
+-- */
+--   to_bytes(): Uint8Array;
+-- /**
+-- * @param {Uint8Array} bytes
+-- * @returns {TransactionOutput}
+-- */
+--   static from_bytes(bytes: Uint8Array): TransactionOutput;
+-- /**
+-- * @returns {string}
+-- */
+--   to_json(): string;
+-- /**
+-- * @returns {TransactionOutputJSON}
+-- */
+--   to_js_value(): TransactionOutputJSON;
+-- /**
+-- * @param {string} json
+-- * @returns {TransactionOutput}
+-- */
+--   static from_json(json: string): TransactionOutput;
+-- /**
+-- * @returns {Address}
+-- */
+--   address(): Address;
+-- /**
+-- * @returns {Value}
+-- */
+--   amount(): Value;
+-- /**
+-- * @returns {Datum | undefined}
+-- */
+--   datum(): Datum | undefined;
+-- /**
+-- * @param {Datum} data
+-- */
+--   set_datum(data: Datum): void;
+-- /**
+-- * @returns {ScriptRef | undefined}
+-- */
+--   script_ref(): ScriptRef | undefined;
+-- /**
+-- * @param {ScriptRef} script_ref
+-- */
+--   set_script_ref(script_ref: ScriptRef): void;
+-- /**
+-- * @param {Address} address
+-- * @param {Value} amount
+-- * @returns {TransactionOutput}
+-- */
+--   static new(address: Address, amount: Value): TransactionOutput;
+-- }
+foreign import data ValueObject :: Type
+
+newtype TransactionOutput = TransactionOutput
+  ( JSObject
+      ( from_bytes :: EffectMth1 (Cbor TransactionOutputObject) TransactionOutputObject
+      , from_json :: EffectMth1 JsonString TransactionOutputObject
+      , new :: EffectMth2 AddressObject ValueObject TransactionOutputObject
+      )
+  )
+
+derive instance Newtype TransactionOutput _
+
+transactionOutput
+  :: { from_bytes :: TransactionOutput -> (Cbor TransactionOutputObject) -> Effect TransactionOutputObject
+     , from_json :: TransactionOutput -> JsonString -> Effect TransactionOutputObject
+     , new :: TransactionOutput -> AddressObject -> ValueObject -> Effect TransactionOutputObject
+     }
+transactionOutput = mkNewtypedFFI (Proxy :: Proxy TransactionOutput)
+
+newtype TransactionOutputObject = TransactionOutputObject
+  ( JSObject
+      ( free :: EffectMth0 Unit
+      , address :: EffectMth0 AddressObject
+      )
+  )
+
+derive instance Newtype TransactionOutputObject _
+
+transactionOutputObject
+  :: { free :: TransactionOutputObject -> Effect Unit
+     , address :: TransactionOutputObject -> Effect AddressObject
+     }
+transactionOutputObject = mkNewtypedFFI (Proxy :: Proxy TransactionOutputObject)
+
+-- export class TransactionUnspentOutput {
+--   free(): void;
+-- /**
+-- * @returns {Uint8Array}
+-- */
+--   to_bytes(): Uint8Array;
+-- /**
+-- * @param {Uint8Array} bytes
+-- * @returns {TransactionUnspentOutput}
+-- */
+--   static from_bytes(bytes: Uint8Array): TransactionUnspentOutput;
+-- /**
+-- * @param {TransactionInput} input
+-- * @param {TransactionOutput} output
+-- * @returns {TransactionUnspentOutput}
+-- */
+--   static new(input: TransactionInput, output: TransactionOutput): TransactionUnspentOutput;
+-- /**
+-- * @returns {TransactionInput}
+-- */
+--   input(): TransactionInput;
+-- /**
+-- * @returns {TransactionOutput}
+-- */
+--   output(): TransactionOutput;
+-- }
+
+-- FIXME: missing binding.
+foreign import data TransactionInputObject :: Type
+
+newtype TransactionUnspentOutput = TransactionUnspentOutput
+  ( JSObject
+      ( from_bytes :: EffectMth1 (Cbor TransactionUnspentOutputObject) TransactionUnspentOutputObject
+      , new :: EffectMth2 TransactionInputObject TransactionOutput TransactionUnspentOutputObject
+      )
+  )
+
+derive instance Newtype TransactionUnspentOutput _
+
+transactionUnspentOutput
+  :: { from_bytes :: TransactionUnspentOutput -> (Cbor TransactionUnspentOutputObject) -> Effect TransactionUnspentOutputObject
+     , new :: TransactionUnspentOutput -> TransactionInputObject -> TransactionOutput -> Effect TransactionUnspentOutputObject
+     }
+transactionUnspentOutput = mkNewtypedFFI (Proxy :: Proxy TransactionUnspentOutput)
+
+newtype TransactionUnspentOutputObject = TransactionUnspentOutputObject
+  ( JSObject
+      ( free :: EffectMth0 Unit
+      , input :: EffectMth0 TransactionInputObject
+      , output :: EffectMth0 TransactionOutputObject
+      )
+  )
+
+derive instance Newtype TransactionUnspentOutputObject _
+
+transactionUnspentOutputObject
+  :: { free :: TransactionUnspentOutputObject -> Effect Unit
+     , input :: TransactionUnspentOutputObject -> Effect TransactionInputObject
+     , output :: TransactionUnspentOutputObject -> Effect TransactionOutputObject
+     }
+transactionUnspentOutputObject = mkNewtypedFFI (Proxy :: Proxy TransactionUnspentOutputObject)
+
+-- Just a stub
+foreign import data TransactionHashObject :: Type

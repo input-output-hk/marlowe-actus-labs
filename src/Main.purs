@@ -13,9 +13,9 @@ import Control.Monad.Reader (runReaderT)
 import Control.Monad.Rec.Loops (whileM_)
 import Data.Argonaut (Json, decodeJson, (.:))
 import Data.Either (Either, either)
+import Data.Maybe (Maybe(..), maybe)
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype as Newtype
 import Data.Traversable (for_)
 import Effect (Effect)
@@ -23,12 +23,12 @@ import Effect.Aff (Aff, Fiber, Milliseconds(..), delay, forkAff, launchAff_)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Class.Console as Console
 import Effect.Exception (throw)
+import Marlowe.Runtime.Web as Marlowe.Runtime.Web
+import Marlowe.Runtime.Web.Types (ContractHeader, ServerURL(..), TxOutRef, api)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
 import Halogen.Subscription as Subscription
-import Marlowe.Runtime.Web as Marlowe.Runtime.Web
 import Marlowe.Runtime.Web.Client (foldMapMContractPages)
-import Marlowe.Runtime.Web.Types (ContractHeader, ServerURL(..), TxOutRef, api)
 import Prim.TypeError (class Warn, Text)
 import React.Basic (createContext)
 import React.Basic.DOM.Client (createRoot, renderRoot)

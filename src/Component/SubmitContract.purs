@@ -5,11 +5,14 @@ import Prelude
 
 import Actus.Domain (CT(..), CashFlow, ContractTerms(..))
 import Actus.Domain.ContractTerms (ContractTerms)
+import CardanoMultiplatformLib (CborHex(..), Lib, allocate, runGarbageCollector, transactionWitnessSetFromBytes)
+import CardanoMultiplatformLib as CardanoMultiplatformLib
 import CardanoMultiplatformLib.Lib as Lib
+import CardanoMultiplatformLib.Transaction (TransactionHashObject, TransactionObject(..), TransactionWitnessSet(..), TransactionWitnessSetObject(..))
 import CardanoMultiplatformLib.Transaction as Transaction
+import CardanoMultiplatformLib.Types (Cbor, cborHexToCbor, cborToCborHex)
 import Component.ContractForm (initialJson, mkContractForm)
 import Component.ContractForm as ContractForm
-import Component.EventList (decodeMetadata)
 import Component.Modal (mkModal)
 import Component.Modal as Modal
 import Component.Types (ContractHeaderResource, MkComponentM, WalletInfo(..))
@@ -33,17 +36,20 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
 import Data.Newtype (unwrap)
 import Data.Tuple.Nested (type (/\))
+import Data.Undefined.NoProblem as NoProblem
 import Data.Validation.Semigroup (V(..))
 import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
+import HexString (hexToString)
 import HexString as HexString
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party(..))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus.Metadata (Metadata(..), actusMetadataKey, encodeMetadataObject)
-import Marlowe.Runtime.Web.Client (ClientError(..), foldMapMPages, foldMapMPages', getResource, post, post')
-import Marlowe.Runtime.Web.Types (CborHex(..), ContractEndpoint(..), ContractHeader(..), ContractsEndpoint(..), Metadata, PostContractsRequest(..), PostContractsResponse(..), Runtime(..), ServerURL(..), TextEnvelope(..), TxOutRef, txOutRefToString)
+import Marlowe.Runtime.Web.Client (ClientError(..), foldMapMPages, foldMapMPages', getResource, post, post', put')
+import Marlowe.Runtime.Web.Client as Client
+import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), ContractsEndpoint(..), Metadata, PostContractsRequest(..), PostContractsResponse(..), PutContractRequest(..), Runtime(..), ServerURL(..), TextEnvelope(..), TxOutRef, toTextEnvelope, txOutRefToString)
 import Marlowe.Runtime.Web.Types as RT
 import Polyform.Validator (runValidator)
 import React.Basic as DOOM
@@ -70,6 +76,83 @@ data SubmissionStep
   | Signing (Either String PostContractsResponse)
   | Signed (Either ClientError PostContractsResponse)
 
+addWitnessSet :: Lib -> Cbor TransactionObject -> Cbor TransactionWitnessSetObject -> Effect TransactionObject
+addWitnessSet cardanoMultiplatformLib txCbor witnessSetCbor = runGarbageCollector cardanoMultiplatformLib do
+  let
+    lib = Lib.props cardanoMultiplatformLib
+  tx <- allocate $ Transaction.transaction.from_bytes lib."Transaction" txCbor
+  body <- allocate $ Transaction.transactionObject.body tx
+  -- auxData <- allocate $ Transaction.transactionObject.auxiliary_data tx
+
+  -- FIXME: paluh. Memory leak.
+  auxData <- liftEffect $ Transaction.transactionObject.auxiliary_data tx
+
+  tws <- transactionWitnessSetFromBytes witnessSetCbor
+
+  -- allocate $ Transaction.transaction.new lib."Transaction" body tws auxData -- NoProblem.undefined
+  -- FIXME: paluh. Memory leak. We are not able to use allocate here.
+  liftEffect $ Transaction.transaction.new lib."Transaction" body tws auxData -- NoProblem.undefined
+
+--       ---
+--       body' <- allocate $ Transaction.transactionObject.body tx'
+
+--       traceM "body"
+--       bodyJson <- liftEffect $ Transaction.transactionBodyObject.to_js_value body
+--       traceM bodyJson
+
+--       traceM "body'"
+--       bodyJson' <- liftEffect $ Transaction.transactionBodyObject.to_js_value body'
+--       traceM bodyJson'
+
+--       traceM (bodyJson' == bodyJson)
+
+--       bytes <- liftEffect $ Transaction.transactionObject.to_bytes tx'
+--       pure $ HexString.encode bytes
+--     let
+--       textEnvelope = TextEnvelope
+--         { type_: "Tx BabbageEra"
+--         , cborHex: CborHex $ hexToString signedTransactionHex
+--         , description: ""
+--         }
+--       req = PutContractRequest textEnvelope
+--     void $ Client.put' (runtime.serverURL) contractEndpoint req
+
+walletSignTx :: CardanoMultiplatformLib.Lib -> Wallet.Api -> CborHex TransactionObject -> Aff (Maybe (CborHex TransactionWitnessSetObject))
+walletSignTx lib wallet txCborHex = do
+  let
+    txCbor = cborHexToCbor txCborHex
+    { "Transaction": _Transaction } = Lib.props lib
+
+  -- DEBUGGING
+  liftEffect $ runGarbageCollector lib do
+    txObj <- allocate $ Transaction.transaction.from_bytes _Transaction txCbor
+    traceM txObj
+    traceM "Transaction successfully decoded from the CBOR"
+
+    json <- liftEffect $ Transaction.transactionObject.to_json txObj
+    traceM $ json
+
+  Wallet.signTx wallet txCborHex false >>= case _ of
+    Right witnessSet -> do
+      pure $ Just witnessSet
+    -- let
+    --   witnessSetCbor = cborHexToCbor witnessSet
+    -- tx <- liftEffect $ addWitnessSet lib txCbor witnessSetCbor
+    -- txCbor' <- liftEffect $ Transaction.transactionObject.to_bytes tx
+    -- let
+    --   txCborHex' = cborToCborHex txCbor'
+    -- traceM "Submitting the transaction"
+    -- Wallet.submitTx wallet txCborHex' >>= case _ of
+    --   Right txId -> pure $ Just txId
+    --   Left err -> do
+    --     traceM "Wallet submit error"
+    --     traceM err
+    --     pure Nothing
+    Left err -> do
+      traceM "Wallet signTx error"
+      traceM err
+      pure Nothing
+
 mkSubmitContract :: MkComponentM (Props -> JSX)
 mkSubmitContract = do
   Runtime runtime <- asks _.runtime
@@ -80,39 +163,50 @@ mkSubmitContract = do
     step /\ setStep <- useState' Creating
     let
       onSubmit = handler preventDefault \_ -> do
+        traceM "ON SUBMIT CLICKED"
         launchAff_ $ do
-          submit contractData runtime.serverURL runtime.root >>= case _ of
+          create contractData runtime.serverURL runtime.root >>= case _ of
             Right res@{ resource: PostContractsResponse postContractsResponse, links: { contract: contractEndpoint } } -> do
               traceM "Response"
               traceM res
               let
-                { contractId, txBody } = postContractsResponse
-                TextEnvelope { cborHex: CborHex cborHex } = txBody
+                { contractId, txBody: tx } = postContractsResponse
+                TextEnvelope { cborHex: txCborHex } = tx
                 lib = Lib.props cardanoMultiplatformLib
-              traceM cborHex
-              case HexString.decode <$> HexString.hex cborHex of
-                Just txBytes -> do
-                  traceM "DECODED HEX BYTES OF THE TX BODY"
-                  tx <- liftEffect $ Transaction.transaction.from_bytes lib."Transaction" txBytes
+                txCbor = cborHexToCbor txCborHex
+              traceM "Successfully created a transaction"
+              let
+                WalletInfo { wallet: walletApi } = connectedWallet
+              Wallet.signTx walletApi txCborHex false >>= case _ of
+                Right witnessSet -> do
+                  submit witnessSet runtime.serverURL contractEndpoint >>= case _ of
+                    Right _ -> do
+                      traceM "Successfully submitted the transaction"
+                      liftEffect $ onSuccess contractEndpoint
+                    Left err -> do
+                      traceM "Error while submitting the transaction"
+                      traceM err
+                -- let
+                --   witnessSetCbor = cborHexToCbor witnessSet
+                -- tx <- liftEffect $ addWitnessSet cardanoMultiplatformLib txCbor witnessSetCbor
+                -- txCbor' <- liftEffect $ Transaction.transactionObject.to_bytes tx
+                -- let
+                --   txCborHex' = cborToCborHex txCbor'
 
-                  traceM "Successfully created a transaction"
-                  let
-                    WalletInfo { wallet: walletApi } = connectedWallet
-                  witnesses <- Wallet.signTx walletApi (Wallet.Cbor cborHex) false `catchError` \err -> do
-                    traceM "Error signing the transaction: "
-                    traceM err
-                    throwError err
-                  traceM "SIGNED"
-                  traceM witnesses
-                  case witnesses of
-                    Right w -> do
-                      pure unit
-                    Left e -> do
-                      traceM "Error from the wallet signTx"
-                      traceM e
+                -- txId <- Wallet.submitTx walletApi txCborHex'
 
-                Nothing ->
-                  traceM "Hex decoding failed"
+                -- traceM "Submitted transaction"
+                -- traceM txId
+                -- case txId of
+                --   Right id -> do
+                --     traceM "Successfully submitted transaction"
+                --     traceM id
+                --   Left err -> do
+                --     traceM "Failed to create transaction"
+                Left err -> do
+                  traceM "Failed to sign transaction"
+                  traceM err
+
             Left err ->
               traceM $ "Error: " <> show err
     pure $ do
@@ -168,10 +262,10 @@ mkSubmitContract = do
           , footer
           ]
 
-submit :: ContractForm.Result -> ServerURL -> ContractsEndpoint -> Aff _
-submit contractData serverUrl contractsEndpoint = do
+create :: ContractForm.Result -> ServerURL -> ContractsEndpoint -> Aff _
+create contractData serverUrl contractsEndpoint = do
   let
-    { contractTerms, contract, party, counterParty, changeAddress } = contractData
+    { contractTerms, contract, party, counterParty, changeAddress, usedAddresses } = contractData
     metadata = RT.Metadata $ Map.singleton actusMetadataKey $ encodeJson $ Metadata
       { contractTerms: contractTerms
       , party
@@ -185,26 +279,26 @@ submit contractData serverUrl contractsEndpoint = do
       , contract
       , minUTxODeposit: V1.Lovelace (BigInt.fromInt 2_000_000)
       , changeAddress: changeAddress
-      , addresses: [ changeAddress ]
+      , addresses: usedAddresses <> [ changeAddress ]
       , collateralUTxOs: []
       }
 
   post' serverUrl contractsEndpoint req
 
--- FIXME: paluh. Submission testing.
---  >>= case _ of
---    Right res -> do
---      pure unit
---    Left (FetchError (InvalidStatusCode res)) -> do
---      traceM "STATUS CODE ERROR"
---      traceM $ res.status
---      traceM $ res.statusText
---      body <- res.text
---      traceM "BODY:"
---      traceM body
---    Left _ -> do
---      traceM "OTHER error"
---      pure unit
+submit :: CborHex TransactionWitnessSetObject -> ServerURL -> ContractEndpoint -> Aff _
+submit witnesses serverUrl contractEndpoint = do
+  let
+    -- { contractTerms, contract, party, counterParty, changeAddress, usedAddresses } = contractData
+    -- metadata = RT.Metadata $ Map.singleton actusMetadataKey $ encodeJson $ Metadata
+    --   { contractTerms: contractTerms
+    --   , party
+    --   , counterParty
+    --   }
+    textEnvelope = toTextEnvelope witnesses ""
+
+    req = PutContractRequest textEnvelope
+
+  put' serverUrl contractEndpoint req
 
 partyToString (V1.Address addr) = addr
 partyToString (V1.Role role) = role
