@@ -135,19 +135,19 @@ walletSignTx lib wallet txCborHex = do
   Wallet.signTx wallet txCborHex false >>= case _ of
     Right witnessSet -> do
       pure $ Just witnessSet
-      -- let
-      --   witnessSetCbor = cborHexToCbor witnessSet
-      -- tx <- liftEffect $ addWitnessSet lib txCbor witnessSetCbor
-      -- txCbor' <- liftEffect $ Transaction.transactionObject.to_bytes tx
-      -- let
-      --   txCborHex' = cborToCborHex txCbor'
-      -- traceM "Submitting the transaction"
-      -- Wallet.submitTx wallet txCborHex' >>= case _ of
-      --   Right txId -> pure $ Just txId
-      --   Left err -> do
-      --     traceM "Wallet submit error"
-      --     traceM err
-      --     pure Nothing
+    -- let
+    --   witnessSetCbor = cborHexToCbor witnessSet
+    -- tx <- liftEffect $ addWitnessSet lib txCbor witnessSetCbor
+    -- txCbor' <- liftEffect $ Transaction.transactionObject.to_bytes tx
+    -- let
+    --   txCborHex' = cborToCborHex txCbor'
+    -- traceM "Submitting the transaction"
+    -- Wallet.submitTx wallet txCborHex' >>= case _ of
+    --   Right txId -> pure $ Just txId
+    --   Left err -> do
+    --     traceM "Wallet submit error"
+    --     traceM err
+    --     pure Nothing
     Left err -> do
       traceM "Wallet signTx error"
       traceM err
@@ -186,23 +186,23 @@ mkSubmitContract = do
                     Left err -> do
                       traceM "Error while submitting the transaction"
                       traceM err
-                  -- let
-                  --   witnessSetCbor = cborHexToCbor witnessSet
-                  -- tx <- liftEffect $ addWitnessSet cardanoMultiplatformLib txCbor witnessSetCbor
-                  -- txCbor' <- liftEffect $ Transaction.transactionObject.to_bytes tx
-                  -- let
-                  --   txCborHex' = cborToCborHex txCbor'
+                -- let
+                --   witnessSetCbor = cborHexToCbor witnessSet
+                -- tx <- liftEffect $ addWitnessSet cardanoMultiplatformLib txCbor witnessSetCbor
+                -- txCbor' <- liftEffect $ Transaction.transactionObject.to_bytes tx
+                -- let
+                --   txCborHex' = cborToCborHex txCbor'
 
-                  -- txId <- Wallet.submitTx walletApi txCborHex'
+                -- txId <- Wallet.submitTx walletApi txCborHex'
 
-                  -- traceM "Submitted transaction"
-                  -- traceM txId
-                  -- case txId of
-                  --   Right id -> do
-                  --     traceM "Successfully submitted transaction"
-                  --     traceM id
-                  --   Left err -> do
-                  --     traceM "Failed to create transaction"
+                -- traceM "Submitted transaction"
+                -- traceM txId
+                -- case txId of
+                --   Right id -> do
+                --     traceM "Successfully submitted transaction"
+                --     traceM id
+                --   Left err -> do
+                --     traceM "Failed to create transaction"
                 Left err -> do
                   traceM "Failed to sign transaction"
                   traceM err

@@ -72,7 +72,6 @@ type Props =
 testingApply :: Boolean
 testingApply = false
 
-
 submit :: CborHex TransactionWitnessSetObject -> ServerURL -> TransactionEndpoint -> Aff _
 submit witnesses serverUrl transactionEndpoint = do
   let
@@ -80,7 +79,6 @@ submit witnesses serverUrl transactionEndpoint = do
 
     req = PutTransactionRequest textEnvelope
   put' serverUrl transactionEndpoint req
-
 
 mkEventList :: MkComponentM (Props -> JSX)
 mkEventList = do
@@ -132,7 +130,7 @@ mkEventList = do
                 traceM "APPLYING INPUTS"
                 post' runtime.serverURL transactions req
                   >>= case _ of
-                    Right ({ resource: PostTransactionsResponse postTransactionsResponse, links: { transaction: transactionsEndpoint }}) -> do
+                    Right ({ resource: PostTransactionsResponse postTransactionsResponse, links: { transaction: transactionsEndpoint } }) -> do
                       traceM postTransactionsResponse
                       let
                         { txBody: tx } = postTransactionsResponse
@@ -143,11 +141,10 @@ mkEventList = do
                           submit witnessSet runtime.serverURL transactionsEndpoint >>= case _ of
                             Right _ -> do
                               traceM "Successfully submitted the transaction"
-                              -- liftEffect $ onSuccess contractEndpoint
+                            -- liftEffect $ onSuccess contractEndpoint
                             Left err -> do
                               traceM "Error while submitting the transaction"
                               traceM err
-
 
                         Left err -> do
                           traceM err

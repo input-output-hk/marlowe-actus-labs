@@ -36,6 +36,7 @@ data WalletBrand
   = Yoroi
   | Nami
   | Eternl
+
 instance Show WalletBrand where
   show Yoroi = "Yoroi"
   show Nami = "Nami"

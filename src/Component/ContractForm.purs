@@ -89,7 +89,6 @@ walletChangeAddress lib wallet = do
       map Just $ liftEffect $ runGarbageCollector lib $ bech32FromBytes (cborHexToCbor address) NoProblem.undefined
     Left err -> pure Nothing
 
-
 walletAddresses :: CardanoMultiplatformLib.Lib -> Wallet.Api -> Aff (Array Bech32)
 walletAddresses cardanoMultiplatformLib wallet = do
   possibleUsedAddresses <- Wallet.getUsedAddresses wallet
@@ -220,7 +219,7 @@ mkContractForm = do
           liftEffect $ setChangeAddresses $ Just addrs
           walletChangeAddress cardanoMultiplatformLib wallet >>= case _, Map.lookup (FieldId "party") formState.fields of
             Just changeAddress, Just { onChange } -> do
-               liftEffect $ onChange [ bech32ToString changeAddress ]
+              liftEffect $ onChange [ bech32ToString changeAddress ]
             _, _ -> pure unit
       pure (pure unit)
     pure $ do
