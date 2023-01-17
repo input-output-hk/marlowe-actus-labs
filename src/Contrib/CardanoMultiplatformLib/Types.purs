@@ -70,4 +70,3 @@ bech32ToString (Bech32 str) = str
 unsafeBech32 :: String -> Bech32
 unsafeBech32 = Bech32
 
-
