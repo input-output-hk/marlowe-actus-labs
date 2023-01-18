@@ -10,7 +10,6 @@ import CardanoMultiplatformLib.Transaction (TransactionWitnessSetObject(..))
 import Component.ConnectWallet (mkConnectWallet)
 import Component.ContractForm (walletAddresses, walletChangeAddress)
 import Component.Modal (mkModal)
-import Component.SubmitContract (walletSignTx)
 import Component.Types (ContractHeaderResource, MkComponentM, WalletInfo(..))
 import Component.Widgets (link)
 import Control.Monad.Reader.Class (asks)
@@ -137,7 +136,6 @@ mkEventList = do
                       let
                         { txBody: tx } = postTransactionsResponse
                         TextEnvelope { cborHex: txCborHex } = tx
-                      -- walletSignTx cardanoMultiplatformLib cw txCborHex >>= case _ of
                       Wallet.signTx cw txCborHex true >>= case _ of
                         Right witnessSet -> do
                           submit witnessSet runtime.serverURL transactionsEndpoint >>= case _ of

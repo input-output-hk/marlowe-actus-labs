@@ -1,42 +1,34 @@
 module Main
   ( main
+  , testWallet
   ) where
 
 import Prelude
 
 import CardanoMultiplatformLib as CardanoMultiplatformLib
 import Component.App (mkApp)
-import Component.ContractList (mkContractList)
-import Component.EventList (mkEventList)
+import Component.MessageHub (mkMessageHub)
 import Component.Types (ContractHeaderResource)
 import Contrib.Data.Argonaut (JsonParser)
 import Control.Monad.Reader (runReaderT)
-import Control.Monad.Reader.Class (asks)
 import Data.Argonaut (Json, decodeJson, (.:))
 import Data.Array (filter)
 import Data.Either (Either, either)
 import Data.Map (lookup)
 import Data.Maybe (Maybe(..), isJust)
-import Data.Newtype (un)
 import Data.Tuple.Nested ((/\))
-import Debug (traceM)
 import Effect (Effect)
-import Effect.Aff (Aff, launchAff_)
-import Effect.Aff (Milliseconds(..), delay, launchAff_)
-import Effect.Aff (launchAff_)
-import Effect.Class (liftEffect)
+import Effect.Aff (Milliseconds(Milliseconds), delay, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
-import Effect.Exception (error, throw)
+import Effect.Exception (throw)
 import JS.Unsafe.Stringify (unsafeStringify)
 import Marlowe.Actus.Metadata (actusMetadataKey)
 import Marlowe.Runtime.Web as Marlowe.Runtime.Web
-import Marlowe.Runtime.Web.Client (foldMapMPages, foldMapMPages', getPage')
-import Marlowe.Runtime.Web.Types (ContractHeader(..), Metadata(..), ResourceLink(..), ServerURL(..), api)
+import Marlowe.Runtime.Web.Client (getPage')
+import Marlowe.Runtime.Web.Types (ContractHeader(..), Metadata(..), ServerURL(..), api)
 import React.Basic (createContext)
 import React.Basic.DOM.Client (createRoot, renderRoot)
-import React.Basic.DOM.Simplified.Generated as DOM
-import React.Basic.Hooks (component, provider, useState)
 import Wallet as Wallet
 import Web.DOM (Element)
 import Web.DOM.NonElementParentNode (getElementById)
@@ -63,9 +55,6 @@ testWallet = launchAff_ do
             Console.log <<< ("getUnusedAddresses: " <> _) <<< unsafeStringify =<< Wallet.getUnusedAddresses api
             Console.log <<< ("getUsedAddresses: " <> _) <<< unsafeStringify =<< Wallet.getUsedAddresses api
             Console.log <<< ("getUtxos: " <> _) <<< unsafeStringify =<< Wallet.getUtxos api
-
-liftEitherWith :: forall a err. (err -> String) -> Either err a -> Effect a
-liftEitherWith showErr = either (throw <<< showErr) pure
 
 liftEither :: forall a err. Show err => Either err a -> Effect a
 liftEither = either (throw <<< show) pure
@@ -111,6 +100,7 @@ main configJson = do
           Nothing -> liftEffect $ logger "Cardano serialization lib loading failed"
           Just cardanoMultiplatformLib -> do
             walletInfoCtx <- liftEffect $ createContext Nothing
+            msgHubComponent /\ msgHub <- liftEffect $ mkMessageHub
             let
               mkAppCtx =
                 { cardanoMultiplatformLib
@@ -118,7 +108,8 @@ main configJson = do
                 , logger
                 , contracts
                 , runtime
+                , msgHub
                 }
 
             app <- liftEffect $ runReaderT mkApp mkAppCtx
-            liftEffect $ renderRoot reactRoot $ app unit
+            liftEffect $ renderRoot reactRoot $ msgHubComponent [ app unit ]
