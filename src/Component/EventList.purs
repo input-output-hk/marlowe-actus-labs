@@ -264,30 +264,31 @@ cashFlowAndEndpoint { serverURL } { resource: ContractHeader { metadata }, links
       getResource serverURL link {}
         >>= case _ of
           Right { payload: { links: { transactions: TransactionsEndpoint (IndexEndpoint link') } } } -> do
-            getResource serverURL link' {}
+            numberOfTransactions <- getResource serverURL link' {}
               >>= case _ of
-                Right { payload: arr } ->
-                  let
-                    numberOfTransactions = length arr
-                    -- TODO: more reliable detection of active cashflows
-                    projectedCashFlows = drop numberOfTransactions $ fromFoldable $ genProjectedCashflows (party /\ counterParty) (defaultRiskFactors contractTerms) contractTerms
-                  in
-                    pure $ catMaybes $
-                      map
-                        ( \cf@(CashFlow { currency, amount }) -> do
-                            value <- evalVal' amount
-                            if value == (BigInt.fromInt 0) then Nothing
-                            else pure $
-                              { cashflow: toMarloweCashflow cf
-                              , party: if value < (BigInt.fromInt 0) then party else counterParty
-                              , token: currencyToToken currency
-                              , value
-                              , transactions: TransactionsEndpoint (IndexEndpoint link')
-                              }
-                        )
-                        projectedCashFlows
-                _ -> pure mempty
-          _ -> pure mempty
+                Right { payload: arr } -> pure $ length arr
+                _ -> pure 0
+
+            let
+              -- TODO: more reliable detection of active cashflows
+              projectedCashFlows = drop numberOfTransactions $ fromFoldable $ genProjectedCashflows (party /\ counterParty) (defaultRiskFactors contractTerms) contractTerms
+
+            pure $ catMaybes $
+              map
+                ( \cf@(CashFlow { currency, amount }) -> do
+                    value <- evalVal' amount
+                    if value == (BigInt.fromInt 0) then Nothing
+                    else pure $
+                      { cashflow: toMarloweCashflow cf
+                      , party: if value < (BigInt.fromInt 0) then party else counterParty
+                      , token: currencyToToken currency
+                      , value
+                      , transactions: TransactionsEndpoint (IndexEndpoint link')
+                      }
+                )
+                projectedCashFlows
+
+          _ -> pure mempty -- FIXME: notification
     Nothing -> pure mempty
 
 -- FIXME: proper mapping
