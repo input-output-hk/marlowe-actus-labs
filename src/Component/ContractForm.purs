@@ -4,7 +4,7 @@ import Prelude
 
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain (ContractTerms)
-import CardanoMultiplatformLib (Bech32(..), address, addressObject, allocate, asksLib, bech32FromBytes, bech32FromString, bech32ToString, cborHexToHex, runGarbageCollector)
+import CardanoMultiplatformLib (Bech32, addressObject, allocate, asksLib, bech32FromBytes, bech32FromString, bech32ToString, runGarbageCollector)
 import CardanoMultiplatformLib as CardanoMultiplatformLib
 import CardanoMultiplatformLib.Transaction (transactionOutputObject, transactionUnspentOutput, transactionUnspentOutputObject)
 import CardanoMultiplatformLib.Types (cborHexToCbor)
@@ -16,7 +16,6 @@ import Contrib.React.Basic.Hooks.UseForm (useForm)
 import Contrib.React.Basic.Hooks.UseForm as UseForm
 import Contrib.React.Bootstrap.FormBuilder (FormBuilder, BootstrapForm)
 import Contrib.React.Bootstrap.FormBuilder as FormBuilder
-import Control.Monad.Error.Class (catchError)
 import Control.Monad.Reader.Class (asks)
 import Data.Argonaut (decodeJson, parseJson)
 import Data.Array as Array
@@ -38,10 +37,9 @@ import Language.Marlowe.Core.V1.Semantics.Types (Party)
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus (defaultRiskFactors, genContract)
 import Marlowe.Runtime.Web.Types (TxOutRef, bech32ToParty)
-import Marlowe.Runtime.Web.Types (bech32ToParty) as RT
 import Polyform.Batteries (rawError)
 import Polyform.Batteries as Batteries
-import Polyform.Validator (liftFnEither, liftFnMEither, liftFnMMaybe) as Validator
+import Polyform.Validator (liftFnEither, liftFnMMaybe) as Validator
 import React.Basic (JSX)
 import React.Basic (fragment) as DOOM
 import React.Basic.DOM (text) as DOOM
@@ -49,7 +47,6 @@ import React.Basic.DOM as R
 import React.Basic.DOM.Simplified.Generated as DOM
 import React.Basic.Hooks (component, useEffectOnce, useState', (/\))
 import React.Basic.Hooks as React
-import Wallet (Wallet)
 import Wallet as Wallet
 
 type FormSpec m = UseForm.Form m Unit -- JSX
@@ -139,7 +136,7 @@ initialJson = String.joinWith "\n"
   ]
 
 initialAddress :: String
-initialAddress = "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
+initialAddress = "" -- "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
 
 error :: forall errs. String -> Batteries.Errors' (raw :: Array String | errs)
 error = Array.singleton <<< rawError

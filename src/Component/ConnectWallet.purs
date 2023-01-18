@@ -2,11 +2,11 @@ module Component.ConnectWallet where
 
 import Prelude
 
-import Component.Modal (mkModal)
 import Component.Types (MkComponentM, WalletInfo(..))
 import Component.Widgets (link, spinner)
 import Component.Widgets.Form (mkSingleChoiceField)
 import Component.Widgets.Form as Form
+import Contrib.React.Bootstrap.Modal (modal, modalBody, modalFooter, modalHeader)
 import Data.Array as Array
 import Data.Array.ArrayAL (ArrayAL)
 import Data.Array.ArrayAL as ArrayAL
@@ -58,7 +58,7 @@ type Props =
 mkConnectWallet :: MkComponentM (Props -> JSX)
 mkConnectWallet = do
   singleChoiceField <- liftEffect mkSingleChoiceField
-  modal <- liftEffect mkModal
+  -- modal <- liftEffect mkModal
 
   liftEffect $ component "Wallet" \{ currentlyConnected, onWalletConnect, onDismiss, inModal } -> React.do
     -- pure \{ currentlyConnected, onWalletConnect, onDismiss } -> coerceHook React.do
@@ -70,11 +70,11 @@ mkConnectWallet = do
         Nothing -> pure unit
         Just cardano -> launchAff_ do
           eternl <- liftEffect (Wallet.eternl cardano) >>= traverse walletInfo
-          -- gerowallet <- liftEffect (Wallet.gerowallet cardano) >>= traverse walletInfo
-          lace <- liftEffect (Wallet.lace cardano) >>= traverse walletInfo
+          gerowallet <- liftEffect (Wallet.gerowallet cardano) >>= traverse walletInfo
+          -- lace <- liftEffect (Wallet.lace cardano) >>= traverse walletInfo
           nami <- liftEffect (Wallet.nami cardano) >>= traverse walletInfo
           yoroi <- liftEffect (Wallet.yoroi cardano) >>= traverse walletInfo
-          case ArrayAL.fromArray (Proxy :: Proxy 1) (Array.catMaybes [ lace, nami, yoroi ]) of
+          case ArrayAL.fromArray (Proxy :: Proxy 1) (Array.catMaybes [ gerowallet, nami, yoroi, eternl ]) of
             Nothing -> liftEffect $ onWalletConnect NoWallets
             Just wallets -> liftEffect $ do
               setWallets (Just wallets)
@@ -105,16 +105,19 @@ mkConnectWallet = do
       let
         { formBody, formActions } = case possibleWallets of
           Nothing ->
-            { formBody: spinner Nothing
+            { formBody: DOM.div { className: "d-flex justify-content-center" } $ spinner Nothing
             , formActions: mempty
             }
           Just wallets -> do
             let
-              choices = wallets <#> \(WalletInfo { icon, name }) ->
-                Form.choice name $ DOM.span {}
-                  [ DOOM.img { src: icon, alt: name, className: "w-2rem me-2" }
-                  , DOOM.span_ [ DOOM.text name ]
-                  ]
+              choices = wallets <#> \(WalletInfo { icon, name }) -> do
+                let
+                  enabled = name == "nami"
+                  label = DOM.span {}
+                    [ DOOM.img { src: icon, alt: name, className: "w-2rem me-2" }
+                    , DOOM.span_ [ DOOM.text name ]
+                    ]
+                name /\ label /\ enabled
 
             { formBody: singleChoiceField
                 { initialValue: fromMaybe "" (_.name <<< unwrap <$> selectedWallet)
@@ -139,11 +142,17 @@ mkConnectWallet = do
                 ]
             }
       if inModal then modal
-        { onDismiss -- : setConfiguringWallet false
-        , footer: formActions
-        , body: formBody
-        , title: DOOM.text "Connect wallet"
+        { onHide: onDismiss -- : setConfiguringWallet false
+        -- , footer: formActions
+        -- , body: formBody
+        -- , title: DOOM.text "Connect wallet"
+        , show: true
         }
+        [ modalHeader {} $ DOOM.text "Connect wallet"
+        , modalBody {} formBody
+        , modalFooter {} formActions
+        ]
+
       else
         DOM.div { className: "d-flex flex-column align-items-center" }
           [ DOM.div { className: "d-flex flex-column align-items-center" }

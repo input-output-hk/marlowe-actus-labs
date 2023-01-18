@@ -6,6 +6,7 @@ import Data.Int as Int
 import Data.Newtype (class Newtype)
 import Data.Time.Duration (Milliseconds(..), Seconds, fromDuration)
 import Data.Tuple.Nested ((/\), type (/\))
+import Effect (Effect)
 import Effect.Timer (clearTimeout, setTimeout)
 import Halogen.Subscription (Emitter, subscribe, unsubscribe) as HS
 import React.Basic.Hooks (Hook, Ref, UseEffect, UseRef, UseState, useEffect, useState)
@@ -43,12 +44,26 @@ useDebounce value delay = React.do
     pure $ clearTimeout i
   pure debouncedValue
 
-newtype UseEmitter a hooks = UseSignal (UseEffect Unit (UseState a hooks))
+-- | Use this when you want to handle values and state yourself
+newtype UseEmitter hooks = UseEmitter (UseEffect Unit hooks)
 
-derive instance Newtype (UseEmitter a hooks) _
+derive instance Newtype (UseEmitter hooks) _
 
-useEmitter :: forall a. a -> HS.Emitter a -> Hook (UseEmitter a) a
-useEmitter default emitter =
+useEmitter :: forall a. HS.Emitter a -> (a -> Effect Unit) -> Hook UseEmitter Unit
+useEmitter emitter handler =
+  React.coerceHook React.do
+    React.useEffectOnce $ do
+      subscription <- HS.subscribe emitter handler
+      pure $ HS.unsubscribe subscription
+
+
+-- | Use this when you want to have access to the last value emitted
+newtype UseEmitter' a hooks = UseEmitter' (UseEffect Unit (UseState a hooks))
+
+derive instance Newtype (UseEmitter' a hooks) _
+
+useEmitter' :: forall a. a -> HS.Emitter a -> Hook (UseEmitter' a) a
+useEmitter' default emitter =
   React.coerceHook React.do
     value /\ setValue <- React.useState' default
     React.useEffectOnce $ do

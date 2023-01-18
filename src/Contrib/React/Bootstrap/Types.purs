@@ -81,3 +81,13 @@ variant =
   , dark: unsafeCoerce "dark" :: Variant
   , light: unsafeCoerce "light" :: Variant
   }
+
+foreign import data Backdrop :: Type
+
+backdrop :: { static :: Backdrop, true :: Backdrop, false :: Backdrop }
+backdrop =
+  { static: unsafeCoerce "static" :: Backdrop
+  , true: unsafeCoerce true :: Backdrop
+  , false: unsafeCoerce false :: Backdrop
+  }
+

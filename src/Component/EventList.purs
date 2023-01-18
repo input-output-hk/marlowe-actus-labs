@@ -129,7 +129,6 @@ mkEventList = do
                       let
                         { txBody: tx } = postTransactionsResponse
                         TextEnvelope { cborHex: txCborHex } = tx
-                      -- walletSignTx cardanoMultiplatformLib cw txCborHex >>= case _ of
                       Wallet.signTx cw txCborHex true >>= case _ of
                         Right witnessSet -> do
                           submit witnessSet runtime.serverURL transactionsEndpoint >>= case _ of
