@@ -415,21 +415,25 @@ instance EncodeHeaders PostContractsRequest PostContractsHeadersRow where
 
 -- FIXME: paluh. Change `txBody` to `tx` because we send(ing) on our branch the actual transaction and not
 -- just the body.
-newtype PostContractsResponse = PostContractsResponse
+newtype PostContractsResponseContent = PostContractsResponseContent
   { contractId :: TxOutRef
   , txBody :: TextEnvelope TransactionObject
   }
 
-derive instance Newtype PostContractsResponse _
+derive instance Newtype PostContractsResponseContent _
 
-instance DecodeJson PostContractsResponse where
+instance DecodeJson PostContractsResponseContent where
   decodeJson = decodeNewtypedRecord
     { txBody: map decodeTransactionObjectTextEnvelope :: Maybe _ -> Maybe _ }
 
-type GetContractsResponse = ContractHeader
+type PostContractsResponse = ResourceWithLinks PostContractsResponseContent (contract :: ContractEndpoint)
+
+type GetContractsResponseContent = ContractHeader
+
+type GetContractsResponse = ResourceWithLinks GetContractsResponseContent (contract :: ContractEndpoint)
 
 newtype ContractsEndpoint = ContractsEndpoint
-  (IndexEndpoint PostContractsRequest PostContractsResponse GetContractsResponse (contract :: ContractEndpoint))
+  (IndexEndpoint PostContractsRequest PostContractsResponseContent GetContractsResponseContent (contract :: ContractEndpoint))
 
 derive instance Eq ContractsEndpoint
 derive instance Newtype ContractsEndpoint _

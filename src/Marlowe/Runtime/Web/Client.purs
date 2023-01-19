@@ -24,12 +24,11 @@ import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.String.CaseInsensitive (CaseInsensitiveString(..))
 import Data.Tuple.Nested ((/\))
-import Debug (traceM)
 import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Fetch (RequestMode(..))
 import Fetch.Core.Headers (Headers, toArray)
-import Marlowe.Runtime.Web.Types (class EncodeHeaders, class EncodeJsonBody, class ToResourceLink, ContractEndpoint, GetContractsResponse, IndexEndpoint(..), ResourceEndpoint(..), ResourceLink(..), ResourceWithLinks, ResourceWithLinksRow, ServerURL(..), decodeResourceWithLink, encodeHeaders, encodeJsonBody, toResourceLink)
+import Marlowe.Runtime.Web.Types (class EncodeHeaders, class EncodeJsonBody, class ToResourceLink, GetContractsResponse, IndexEndpoint(..), ResourceEndpoint(..), ResourceLink(..), ResourceWithLinks, ResourceWithLinksRow, ServerURL(..), decodeResourceWithLink, encodeHeaders, encodeJsonBody, toResourceLink)
 import Prim.Row (class Lacks) as Row
 import Record as R
 import Safe.Coerce (coerce)
@@ -106,15 +105,15 @@ getPage serverUrl path possibleRange = runExceptT do
 -- TODO generalize
 getContracts
   :: ServerURL
-  -> ResourceLink (Array (ResourceWithLinks GetContractsResponse (contract :: ContractEndpoint)))
+  -> ResourceLink (Array GetContractsResponse)
   -> Maybe Range
   -> Aff (Either ClientError (Array GetContractsResponse))
-getContracts serverUrl resourceLink = map (rmap (map _.resource <<< fold <<< map _.page)) <<< getPages serverUrl resourceLink
+getContracts serverUrl resourceLink = map (rmap (fold <<< map _.page)) <<< getPages serverUrl resourceLink
 
 -- TODO generalize
 getContracts'
   :: forall endpoint
-   . ToResourceLink endpoint (Array (ResourceWithLinks GetContractsResponse (contract :: ContractEndpoint)))
+   . ToResourceLink endpoint (Array GetContractsResponse)
   => ServerURL
   -> endpoint
   -> Maybe Range
@@ -124,14 +123,14 @@ getContracts' serverUrl endpoint = getContracts serverUrl (toResourceLink endpoi
 -- TODO generalize
 foldMapMContractPages
   :: forall endpoint
-   . ToResourceLink endpoint (Array (ResourceWithLinks GetContractsResponse (contract :: ContractEndpoint)))
+   . ToResourceLink endpoint (Array GetContractsResponse)
   => ServerURL
   -> endpoint
   -> Maybe Range
   -> (Array GetContractsResponse -> Aff (Array GetContractsResponse))
   -> Aff (Either ClientError (Array GetContractsResponse))
 foldMapMContractPages serverUrl endpoint start f =
-  foldMapMPages' serverUrl endpoint (f <<< map _.resource <<< _.page) start
+  foldMapMPages' serverUrl endpoint (f <<< _.page) start
 
 data FoldPageStep = FetchPage (Maybe Range) | StopFetching
 
@@ -226,12 +225,6 @@ post (ServerURL serverUrl) (IndexEndpoint (ResourceLink path)) req = runExceptT 
       R.insert (Proxy :: Proxy "Accept") "application/json"
         $ R.insert (Proxy :: Proxy "Content-Type") "application/json"
         $ (encodeHeaders req :: { | extraHeaders })
-
-  traceM "Request body:"
-  traceM body
-
-  traceM "Request headers:"
-  traceM headers
 
   response <- ExceptT $ fetchEither url { method: POST, body, headers } allowedStatusCodes FetchError
   (lift (jsonBody response)) >>= decodeResourceWithLink (map decodeJson :: Maybe _ -> Maybe _) >>> case _ of

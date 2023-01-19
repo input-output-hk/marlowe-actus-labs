@@ -24,7 +24,7 @@ import React.Basic.DOM (div_) as DOOM
 import React.Basic.DOM.Simplified.Generated as DOM
 import React.Basic.Hooks (component, readRef, useContext, useEffect, useRef, useState, useState', writeRef, (/\))
 import React.Basic.Hooks as R
-import Utils.React.Basic.Hooks (useEmitter)
+import Utils.React.Basic.Hooks (useEmitter, useStateRef')
 
 renderMsg :: (MessageId -> Effect Unit) -> String -> Message -> JSX
 renderMsg onClose extraClassName { id, msg } = case msg of
@@ -114,10 +114,7 @@ mkMessageHub = do
       id /\ updateId <- useState 0
       pure $ id /\ (updateId $ add 1)
 
-    idRef <- useRef stateId
-    useEffect stateId do
-      writeRef idRef stateId
-      pure $ pure unit
+    idRef <- useStateRef' stateId
 
     messages /\ updateMessages <- useState List.Nil
     useEmitter emitter case _ of

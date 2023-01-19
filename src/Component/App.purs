@@ -6,26 +6,37 @@ import Component.ConnectWallet (mkConnectWallet, walletInfo)
 import Component.ConnectWallet as ConnectWallet
 import Component.ContractList (mkContractList)
 import Component.EventList (mkEventList)
-import Component.Types (ContractEvent, MessageContent(Success), MessageHub(MessageHub), MkComponentMBase, WalletInfo(..))
 import Component.MessageHub (mkMessageBox, mkMessagePreview)
+import Component.Types (ContractEvent, MessageContent(Success, Info), MessageHub(MessageHub), MkComponentMBase, WalletInfo(..))
 import Component.Widgets (link, linkWithIcon)
+import Contrib.Data.Map (additions, deletions) as Map
+import Contrib.Halogen.Subscription (MinInterval(..))
+import Contrib.Halogen.Subscription (foldMapThrottle) as Subscription
 import Contrib.React.Bootstrap.Icons as Icons
 import Contrib.React.Bootstrap.Offcanvas (offcanvas)
 import Contrib.React.Bootstrap.Offcanvas as Offcanvas
 import Control.Monad.Reader.Class (asks)
 import Data.Array as Array
+import Data.Either (Either(..))
+import Data.Foldable (length)
+import Data.List (List)
 import Data.List as List
+import Data.Map (Map)
+import Data.Map (empty) as Map
 import Data.Maybe (Maybe(..))
 import Data.Monoid as Monoid
 import Data.Newtype as Newtype
+import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for, traverse)
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Effect.Exception (throw)
-import Halogen.Subscription as Subscription
+import Effect.Now (now)
 import Effect.Random (random)
+import Halogen.Subscription (Emitter) as Subscription
+import Marlowe.Runtime.Web.Types (GetContractsResponse, TxOutRef)
 import React.Basic (JSX)
 import React.Basic as ReactContext
 import React.Basic.DOM as DOOM
@@ -35,6 +46,7 @@ import React.Basic.Hooks as React
 import React.Basic.Hooks.Aff (useAff)
 import Record as Record
 import Type.Prelude (Proxy(..))
+import Utils.React.Basic.Hooks (useEmitter, useStateRef)
 import Wallet as Wallet
 import Web.HTML (window)
 
@@ -64,10 +76,13 @@ autoConnectWallet walletBrand onSuccess = liftEffect (window >>= Wallet.cardano)
       Nothing -> do
         liftEffect $ throw $ "Unable to extract wallet " <> show walletBrand
       Just walletInfo@(WalletInfo { wallet }) -> do
-        walletApi <- Wallet.enable_ wallet
-        let
-          walletInfo' = Newtype.over WalletInfo (Record.set (Proxy :: Proxy "wallet") walletApi) walletInfo
-        liftEffect $ onSuccess walletInfo'
+        Wallet.enable wallet >>= case _ of
+          Right walletApi -> do
+            let
+              walletInfo' = Newtype.over WalletInfo (Record.set (Proxy :: Proxy "wallet") walletApi) walletInfo
+            liftEffect $ onSuccess walletInfo'
+          -- FIXME: paluh - handle error
+          Left _ -> pure unit
 
 mkApp :: MkComponentMBase () (Unit -> JSX)
 mkApp = do
@@ -79,9 +94,15 @@ mkApp = do
     connectWallet <- mkConnectWallet
     pure { contractListComponent, eventListComponent, connectWallet, messageBox }
 
-  -- FIXME: This gonna be replaced by a contract event emitter
   (contractEmitter :: Subscription.Emitter ContractEvent) <- asks _.contractEmitter
-  let contracts = []
+
+  throttledEmitter :: Subscription.Emitter (List ContractEvent) <- liftEffect $
+    Subscription.foldMapThrottle (List.singleton) (MinInterval $ Milliseconds 500.0) contractEmitter
+
+  getContracts <- asks _.getContracts
+
+  initialVersion <- liftEffect now
+
   walletInfoCtx <- asks _.walletInfoCtx
   msgHub@(MessageHub msgHubProps) <- asks _.msgHub
 
@@ -89,6 +110,21 @@ mkApp = do
     possibleWalletInfo /\ setWalletInfo <- useState' Nothing
     configuringWallet /\ setConfiguringWallet <- useState' false
     checkingNotifications /\ setCheckingNotifications <- useState' false
+    (version /\ contracts) /\ setContracts <- useState' (initialVersion /\ Map.empty)
+
+    idRef <- useStateRef version contracts
+
+    useEmitter throttledEmitter \contractEvent -> do
+      (currContracts :: Map TxOutRef GetContractsResponse) <- getContracts
+      version <- now
+      let
+        (additionsNumber :: Int) = length $ Map.additions contracts currContracts
+        (deletionsNumber :: Int) = length $ Map.deletions contracts currContracts
+
+      msgHubProps.add $ Info $ DOOM.text $
+        "New contracts: " <> show additionsNumber <> ", deleted contracts: " <> show deletionsNumber
+
+      setContracts (version /\ currContracts)
 
     -- -- This causes a lot of re renders - we avoid it for now by
     -- -- enforcing manual offcanvas toggling.
@@ -190,9 +226,12 @@ mkApp = do
             [ DOM.div { className: "p-3 overflow-auto" } $ messageBox msgHub
             ]
 
-      , DOM.div { className: "container-xl" } $
-          [ subcomponents.contractListComponent { contractList: contracts, connectedWallet: possibleWalletInfo }
-          , DOM.div { className: "col" } $ subcomponents.eventListComponent { contractList: contracts, connectedWallet: possibleWalletInfo }
+      , DOM.div { className: "container-xl" } do
+          let
+            contracts' = Array.fromFoldable contracts
+
+          [ subcomponents.contractListComponent { contractList: contracts', connectedWallet: possibleWalletInfo }
+          , DOM.div { className: "col" } $ subcomponents.eventListComponent { contractList: contracts', connectedWallet: possibleWalletInfo }
           ]
       ]
 

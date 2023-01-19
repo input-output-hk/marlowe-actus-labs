@@ -26,7 +26,7 @@ import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus (defaultRiskFactors, genContract)
 import Marlowe.Actus.Metadata (Metadata(..), actusMetadataKey)
 import Marlowe.Runtime.Web.Client (ClientError(..), foldMapMPages, foldMapMPages', getResource, post, post')
-import Marlowe.Runtime.Web.Types (ContractsEndpoint(..), GetContractsResponse, Metadata, PostContractsRequest(..), PostContractsResponse(..), ServerURL(..), Tx(..), api)
+import Marlowe.Runtime.Web.Types (ContractsEndpoint(..), GetContractsResponse, Metadata, PostContractsRequest(..), PostContractsResponseContent(..), ServerURL(..), Tx(..), api)
 import Marlowe.Runtime.Web.Types as RT
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff (readTextFile)
@@ -53,7 +53,7 @@ spec serverUrl@(ServerURL serverUrlStr) = do
             , collateralUTxOs: []
             }
         post' serverUrl api req >>= case _ of
-          Right ({ resource: PostContractsResponse res, links }) -> do
+          Right ({ resource: PostContractsResponseContent res, links }) -> do
             traceM "NO ERRORS"
             traceM res
             pure unit
@@ -104,7 +104,7 @@ spec serverUrl@(ServerURL serverUrlStr) = do
                , collateralUTxOs: []
                }
            post' serverUrl api req >>= case _ of
-             Right ({ resource: PostContractsResponse res }) -> do
+             Right ({ resource: PostContractsResponseContent res }) -> do
                traceM res
                pure unit
              Left (FetchError (InvalidStatusCode res)) -> do

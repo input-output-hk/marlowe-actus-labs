@@ -26,7 +26,7 @@ import Effect.Class (liftEffect)
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus.Metadata (Metadata(..), actusMetadataKey)
 import Marlowe.Runtime.Web.Client (ClientError, post', put')
-import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractsEndpoint, PostContractsRequest(..), PostContractsResponse(..), PutContractRequest(..), Runtime(..), ServerURL, TextEnvelope(..), toTextEnvelope)
+import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractsEndpoint, PostContractsRequest(..), PostContractsResponseContent(..), PutContractRequest(..), Runtime(..), ServerURL, TextEnvelope(..), toTextEnvelope)
 import Marlowe.Runtime.Web.Types as RT
 import React.Basic (fragment) as DOOM
 import React.Basic.DOM (tbody_, td_, text, tr_) as DOOM
@@ -47,9 +47,9 @@ type Props =
 
 data SubmissionStep
   = Creating
-  | Created (Either String PostContractsResponse)
-  | Signing (Either String PostContractsResponse)
-  | Signed (Either ClientError PostContractsResponse)
+  | Created (Either String PostContractsResponseContent)
+  | Signing (Either String PostContractsResponseContent)
+  | Signed (Either ClientError PostContractsResponseContent)
 
 mkSubmitContract :: MkComponentM (Props -> JSX)
 mkSubmitContract = do
@@ -64,7 +64,7 @@ mkSubmitContract = do
         traceM "ON SUBMIT CLICKED"
         launchAff_ $ do
           create contractData runtime.serverURL runtime.root >>= case _ of
-            Right res@{ resource: PostContractsResponse postContractsResponse, links: { contract: contractEndpoint } } -> do
+            Right res@{ resource: PostContractsResponseContent postContractsResponse, links: { contract: contractEndpoint } } -> do
               traceM "Response"
               traceM res
               let

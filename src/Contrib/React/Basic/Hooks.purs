@@ -9,7 +9,7 @@ import Data.Tuple.Nested ((/\), type (/\))
 import Effect (Effect)
 import Effect.Timer (clearTimeout, setTimeout)
 import Halogen.Subscription (Emitter, subscribe, unsubscribe) as HS
-import React.Basic.Hooks (Hook, Ref, UseEffect, UseRef, UseState, useEffect, useState)
+import React.Basic.Hooks (Hook, Ref, UseEffect, UseRef, UseState, useEffect, useRef, useState, writeRef)
 import React.Basic.Hooks (Render) as RB.Hooks
 import React.Basic.Hooks as React
 
@@ -83,3 +83,22 @@ useFirstRender = React.do
     React.writeRef firstRender false
     pure $ pure unit
   pure firstRender
+
+-- | To avoid "closure capture" in `useEffect` and `useLayoutEffect`
+-- | we need to use `useRef` to store the current value.
+-- | This hook is a shortcut for that.
+newtype UseStateRef v st hooks = UseStateRef (UseEffect v (UseRef st hooks))
+
+derive instance Newtype (UseStateRef v st hooks) _
+
+useStateRef :: forall st v. Eq v => v -> st -> Hook (UseStateRef v st) (Ref st)
+useStateRef version state =
+  React.coerceHook $ React.do
+    stateRef <- useRef state
+    useEffect version do
+      writeRef stateRef state
+      pure $ pure unit
+    pure stateRef
+
+useStateRef' :: forall st. Eq st => st -> Hook (UseStateRef st st) (Ref st)
+useStateRef' st = useStateRef st st
