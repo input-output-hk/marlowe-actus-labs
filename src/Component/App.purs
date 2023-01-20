@@ -148,106 +148,108 @@ mkApp = do
         liftEffect $ setWalletInfo $ Just walletInfo
 
     pure $ provider walletInfoCtx possibleWalletInfo $ Array.singleton $ DOM.div { className: "mt-6" } $
-      (case displayOption of
+      ( case displayOption of
           About -> Array.singleton $ modal $
             { onDismiss: setDisplayOption Default
             , title: DOOM.text "About"
             , body: markdown {} [ DOOM.text about ]
             }
-          Default -> [])
-      <>
-      [ DOM.div { className: "fixed-top" }
-          [ DOM.nav { className: "navbar mb-lg-3 navbar-expand-sm navbar-light bg-light py-0" } $
-              DOM.div { className: "container-xl" }
-                [ DOM.a { href: "#", className: "navbar-brand" } "Marlowe Actus Labs"
-                , DOM.div { className: "navbar-collapse justify-content-end text-end" } $
-                    [ DOM.ul { className: "navbar-nav gap-2" }
-                        [ DOM.li { className: "nav-item" } $
-                            linkWithIcon
-                              { icon: Icons.infoSquare
-                              , label: (DOOM.text "About")
-                              , extraClassNames: "nav-link"
-                              , onClick: setDisplayOption About
-                              }
-                        , DOM.li { className: "nav-item" } $ ReactContext.consumer msgHubProps.ctx \msgs ->
-                            [ linkWithIcon
-                                { icon: if List.null msgs then Icons.bellSlash else Icons.bellFill
-                                , label: DOOM.text "Notifications"
-                                , extraClassNames: "nav-link"
-                                , onClick: setCheckingNotifications true
-                                , disabled: List.null msgs
-                                }
+          Default -> []
+      )
+        <>
+          [ DOM.div { className: "fixed-top" }
+              [ DOM.nav { className: "navbar mb-lg-3 navbar-expand-sm navbar-light bg-light py-0" } $
+                  DOM.div { className: "container-xl" }
+                    [ DOM.a { href: "#", className: "navbar-brand" } "Marlowe Actus Labs"
+                    , DOM.div { className: "navbar-collapse justify-content-end text-end" } $
+                        [ DOM.ul { className: "navbar-nav gap-2" }
+                            [ DOM.li { className: "nav-item" } $
+                                linkWithIcon
+                                  { icon: Icons.infoSquare
+                                  , label: (DOOM.text "About")
+                                  , extraClassNames: "nav-link"
+                                  , onClick: setDisplayOption About
+                                  }
+                            , DOM.li { className: "nav-item" } $ ReactContext.consumer msgHubProps.ctx \msgs ->
+                                [ linkWithIcon
+                                    { icon: if List.null msgs then Icons.bellSlash else Icons.bellFill
+                                    , label: DOOM.text "Notifications"
+                                    , extraClassNames: "nav-link"
+                                    , onClick: setCheckingNotifications true
+                                    , disabled: List.null msgs
+                                    }
+                                ]
+                            -- FIXME: This should be moved to submenu
+                            -- , DOM.li { className: "nav-item" } $
+                            --     linkWithIcon
+                            --       { icon: Icons.cashStack
+                            --       , label: DOOM.text "Cash flows"
+                            --       , extraClassNames: "nav-link"
+                            --       , onClick: pure unit
+                            --       }
+                            , DOM.li { className: "nav-item" } $
+                                case possibleWalletInfo of
+                                  Just (WalletInfo wallet) -> link
+                                    { label: DOOM.span_
+                                        [ DOOM.img { src: wallet.icon, alt: wallet.name, className: "w-1_2rem me-1" }
+                                        , DOOM.span_ [ DOOM.text $ wallet.name <> " wallet" ]
+                                        ]
+                                    , extraClassNames: "nav-link"
+                                    , onClick: setConfiguringWallet true
+                                    }
+                                  Nothing -> linkWithIcon
+                                    { icon: Icons.wallet2
+                                    , label: DOOM.text "Connect Wallet"
+                                    , extraClassNames: "nav-link"
+                                    , onClick: setConfiguringWallet true
+                                    }
                             ]
-                        -- FIXME: This should be moved to submenu
-                        -- , DOM.li { className: "nav-item" } $
-                        --     linkWithIcon
-                        --       { icon: Icons.cashStack
-                        --       , label: DOOM.text "Cash flows"
-                        --       , extraClassNames: "nav-link"
-                        --       , onClick: pure unit
-                        --       }
-                        , DOM.li { className: "nav-item" } $
-                            case possibleWalletInfo of
-                              Just (WalletInfo wallet) -> link
-                                { label: DOOM.span_
-                                    [ DOOM.img { src: wallet.icon, alt: wallet.name, className: "w-1_2rem me-1" }
-                                    , DOOM.span_ [ DOOM.text $ wallet.name <> " wallet" ]
-                                    ]
-                                , extraClassNames: "nav-link"
-                                , onClick: setConfiguringWallet true
-                                }
-                              Nothing -> linkWithIcon
-                                { icon: Icons.wallet2
-                                , label: DOOM.text "Connect Wallet"
-                                , extraClassNames: "nav-link"
-                                , onClick: setConfiguringWallet true
-                                }
-                        ]
-                    ] <> Monoid.guard configuringWallet do
-                      let
-                        jsx = subcomponents.connectWallet
-                          { currentlyConnected: possibleWalletInfo
-                          , onWalletConnect: \result -> do
-                              case result of
-                                ConnectWallet.Connected walletInfo -> do
-                                  let
-                                    WalletInfo { name } = walletInfo
-                                  msgHubProps.add $ Success $ DOOM.text $ "Connected to " <> name
-                                  setWalletInfo (Just walletInfo)
-                                ConnectWallet.ConnectionError _ -> pure unit
-                                ConnectWallet.NoWallets -> pure unit
-                              setConfiguringWallet false
+                        ] <> Monoid.guard configuringWallet do
+                          let
+                            jsx = subcomponents.connectWallet
+                              { currentlyConnected: possibleWalletInfo
+                              , onWalletConnect: \result -> do
+                                  case result of
+                                    ConnectWallet.Connected walletInfo -> do
+                                      let
+                                        WalletInfo { name } = walletInfo
+                                      msgHubProps.add $ Success $ DOOM.text $ "Connected to " <> name
+                                      setWalletInfo (Just walletInfo)
+                                    ConnectWallet.ConnectionError _ -> pure unit
+                                    ConnectWallet.NoWallets -> pure unit
+                                  setConfiguringWallet false
 
-                          , onDismiss: setConfiguringWallet false
-                          , inModal: true
-                          }
-                      [ jsx ]
+                              , onDismiss: setConfiguringWallet false
+                              , inModal: true
+                              }
+                          [ jsx ]
+                    ]
+              , DOM.div { className: "container-xl" }
+                  $ DOM.div { className: "row" }
+                  $ messagePreview msgHub
+              ]
+          , ReactContext.consumer msgHubProps.ctx \msgs ->
+              pure $ offcanvas
+                { onHide: setCheckingNotifications false
+                , placement: Offcanvas.placement.end
+                , show: checkingNotifications -- && (not $ List.null msgs)
+                , scroll: false
+                }
+                [ DOM.div { className: "p-3 overflow-auto" } $ messageBox msgHub
                 ]
-          , DOM.div { className: "container-xl" }
-              $ DOM.div { className: "row" }
-              $ messagePreview msgHub
-          ]
-      , ReactContext.consumer msgHubProps.ctx \msgs ->
-          pure $ offcanvas
-            { onHide: setCheckingNotifications false
-            , placement: Offcanvas.placement.end
-            , show: checkingNotifications -- && (not $ List.null msgs)
-            , scroll: false
-            }
-            [ DOM.div { className: "p-3 overflow-auto" } $ messageBox msgHub
-            ]
 
-      , DOM.div { className: "container-xl" } do
-          let
-            contracts' = Array.fromFoldable contracts
+          , DOM.div { className: "container-xl" } do
+              let
+                contracts' = Array.fromFoldable contracts
 
-          [ subcomponents.contractListComponent { contractList: contracts', connectedWallet: possibleWalletInfo }
-          , DOM.div { className: "col" } $ subcomponents.eventListComponent { contractList: contracts', connectedWallet: possibleWalletInfo }
+              [ subcomponents.contractListComponent { contractList: contracts', connectedWallet: possibleWalletInfo }
+              , DOM.div { className: "col" } $ subcomponents.eventListComponent { contractList: contracts', connectedWallet: possibleWalletInfo }
+              ]
           ]
-      ]
 
 about :: String
-about = """
+about =
+  """
 ## Actus
 Actus proposes a global standard for the consistent representation of financial instruments by breaking down the diversity of financial instruments into distinct cash flow patterns.
 

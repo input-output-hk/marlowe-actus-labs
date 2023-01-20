@@ -6,7 +6,6 @@ import React.Basic.DOM.Simplified.ToJSX (class ToJSX, toJSX)
 import Record as Record
 import Unsafe.Coerce (unsafeCoerce)
 
-
 -- export type ReactMarkdownProps = {
 --   node: Element
 --   children: ReactNode[]
@@ -24,9 +23,8 @@ import Unsafe.Coerce (unsafeCoerce)
 --   siblingCount?: number
 -- }
 
-
 type Props_markdown =
-  ( children :: Array JSX )
+  (children :: Array JSX)
 
 foreign import _Markdown :: ReactComponent { | Props_markdown }
 
