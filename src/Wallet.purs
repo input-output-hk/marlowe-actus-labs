@@ -21,6 +21,7 @@ module Wallet
   , getRewardAddresses
   , getUnusedAddresses
   , getUsedAddresses
+  , getUsedAddresses_
   , getUtxos
   , icon
   , isEnabled
@@ -297,13 +298,17 @@ apiVersion = _Wallet.apiVersion
 enable_ :: Warn (Text "enable_ is deprecated, use enable instead") => Wallet -> Aff Api
 enable_ = Promise.toAffE <<< _Wallet.enable
 
+rejectionAPIError :: forall r. Promise.Rejection -> Variant (| ApiError + ApiForeignErrors + UnknownError r)
+rejectionAPIError rejection =
+  let
+    x :: Foreign
+    x = rejectionToForeign rejection
+  in
+    either foreignErrors (fromMaybe' (\_ -> unknownError x) <<< toApiError) $ readWalletError x
+
 -- | Manually tested and works with Nami.
 enable :: forall r. Wallet -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) Api)
-enable = toAffEitherE (onCatch <<< rejectionToForeign) <<< _Wallet.enable
-  where
-  onCatch :: Foreign -> Variant (| ApiError + ApiForeignErrors + UnknownError r)
-  onCatch rejection =
-    either foreignErrors (fromMaybe' (\_ -> unknownError rejection) <<< toApiError) $ readWalletError rejection
+enable = toAffEitherE rejectionAPIError <<< _Wallet.enable
 
 -- | Manually tested and works with Nami.
 icon :: Wallet -> Effect String
@@ -315,50 +320,43 @@ isEnabled_ = Promise.toAffE <<< _Wallet.isEnabled
 
 -- | Manually tested and works with Nami.
 isEnabled :: forall r. Wallet -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) Boolean)
-isEnabled = toAffEitherE (onCatch <<< rejectionToForeign) <<< _Wallet.isEnabled
-  where
-  onCatch :: Foreign -> Variant (| ApiError + ApiForeignErrors + UnknownError r)
-  onCatch rejection =
-    either foreignErrors (fromMaybe' (\_ -> unknownError rejection) <<< toApiError) $ readWalletError rejection
+isEnabled = toAffEitherE rejectionAPIError <<< _Wallet.isEnabled
 
 -- | Manually tested and works with Nami.
 name :: Wallet -> Effect String
 name = _Wallet.name
 
--- // TODO APIError
 -- | Manually tested and works with Nami.
-getNetworkId :: Api -> Aff Int
-getNetworkId = Promise.toAffE <<< _Api.getNetworkId
+getNetworkId :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) Int)
+getNetworkId = toAffEitherE rejectionAPIError <<< _Api.getNetworkId
 
--- // TODO APIError
 -- | Manually tested and works with Nami.
-getBalance :: Api -> Aff (Cbor Value)
-getBalance = Promise.toAffE <<< _Api.getBalance
+getBalance :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (Cbor Value))
+getBalance = toAffEitherE rejectionAPIError <<< _Api.getBalance
 
--- // TODO APIError
 -- | Manually tested and works with Nami.
-getChangeAddress :: Api -> Aff (Either Foreign (CborHex AddressObject))
-getChangeAddress = toAffEitherE rejectionToForeign <<< _Api.getChangeAddress
+getChangeAddress :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (CborHex AddressObject))
+getChangeAddress = toAffEitherE rejectionAPIError <<< _Api.getChangeAddress
 
--- // TODO APIError
 -- | Manually tested and works with Nami.
-getCollateral :: Api -> Cbor Coin -> Aff (Array (Cbor TransactionUnspentOutput))
-getCollateral api = map (fold <<< Nullable.toMaybe) <<< Promise.toAffE <<< _Api.getCollateral api
+getCollateral :: forall r. Api -> Cbor Coin -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (Array (Cbor TransactionUnspentOutput)))
+getCollateral api = map (map (fold <<< Nullable.toMaybe)) <<< toAffEitherE rejectionAPIError <<< _Api.getCollateral api
 
--- // TODO APIError
 -- | Manually tested and works with Nami.
-getRewardAddresses :: Api -> Aff (Array (CborHex AddressObject))
-getRewardAddresses = Promise.toAffE <<< _Api.getRewardAddresses
+getRewardAddresses :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (Array (CborHex AddressObject)))
+getRewardAddresses = toAffEitherE rejectionAPIError <<< _Api.getRewardAddresses
 
--- // TODO APIError
 -- | Manually tested and works with Nami.
-getUnusedAddresses :: Api -> Aff (Either Foreign (Array (CborHex AddressObject)))
-getUnusedAddresses = toAffEitherE rejectionToForeign <<< _Api.getUnusedAddresses
+getUnusedAddresses :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (Array (CborHex AddressObject)))
+getUnusedAddresses = toAffEitherE rejectionAPIError <<< _Api.getUnusedAddresses
 
--- // TODO APIError
 -- | Manually tested and works with Nami.
-getUsedAddresses :: Api -> Aff (Either Foreign (Array (CborHex AddressObject)))
-getUsedAddresses = toAffEitherE rejectionToForeign <<< _Api.getUsedAddresses
+getUsedAddresses_ :: Warn (Text "getUsedAddresses_ is deprecated, use getUsedAddresses instead") => Api -> Aff (Either Foreign (Array (CborHex AddressObject)))
+getUsedAddresses_ = toAffEitherE rejectionToForeign <<< _Api.getUsedAddresses
+
+-- | Manually tested and works with Nami.
+getUsedAddresses :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (Array (CborHex AddressObject)))
+getUsedAddresses = toAffEitherE rejectionAPIError <<< _Api.getUsedAddresses
 
 -- // TODO APIError, PaginateError
 -- | Manually tested and works with Nami.
