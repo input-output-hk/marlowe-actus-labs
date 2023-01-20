@@ -7,6 +7,7 @@ import Component.ConnectWallet as ConnectWallet
 import Component.ContractList (mkContractList)
 import Component.EventList (mkEventList)
 import Component.MessageHub (mkMessageBox, mkMessagePreview)
+import Component.Modal (Size(..), mkModal)
 import Component.Types (ContractEvent, MessageContent(Success, Info), MessageHub(MessageHub), MkComponentMBase, WalletInfo(..))
 import Component.Widgets (link, linkWithIcon)
 import Contrib.Data.Map (additions, deletions) as Map
@@ -15,6 +16,7 @@ import Contrib.Halogen.Subscription (foldMapThrottle) as Subscription
 import Contrib.React.Bootstrap.Icons as Icons
 import Contrib.React.Bootstrap.Offcanvas (offcanvas)
 import Contrib.React.Bootstrap.Offcanvas as Offcanvas
+import Contrib.React.Markdown (markdown)
 import Control.Monad.Reader.Class (asks)
 import Data.Array as Array
 import Data.Either (Either(..))
@@ -34,7 +36,6 @@ import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Effect.Exception (throw)
 import Effect.Now (now)
-import Effect.Random (random)
 import Halogen.Subscription (Emitter) as Subscription
 import Marlowe.Runtime.Web.Types (GetContractsResponse, TxOutRef)
 import React.Basic (JSX)
@@ -84,10 +85,13 @@ autoConnectWallet walletBrand onSuccess = liftEffect (window >>= Wallet.cardano)
           -- FIXME: paluh - handle error
           Left _ -> pure unit
 
+data DisplayOption = Default | About
+
 mkApp :: MkComponentMBase () (Unit -> JSX)
 mkApp = do
   messageBox <- liftEffect $ mkMessageBox
   messagePreview <- liftEffect $ mkMessagePreview
+  modal <- liftEffect $ mkModal
   subcomponents <- do
     contractListComponent <- mkContractList
     eventListComponent <- mkEventList
@@ -110,6 +114,7 @@ mkApp = do
     possibleWalletInfo /\ setWalletInfo <- useState' Nothing
     configuringWallet /\ setConfiguringWallet <- useState' false
     checkingNotifications /\ setCheckingNotifications <- useState' false
+    displayOption /\ setDisplayOption <- useState' Default
     (version /\ contracts) /\ setContracts <- useState' (initialVersion /\ Map.empty)
 
     idRef <- useStateRef version contracts
@@ -142,7 +147,15 @@ mkApp = do
       autoConnectWallet walletBrand \walletInfo -> do
         liftEffect $ setWalletInfo $ Just walletInfo
 
-    pure $ provider walletInfoCtx possibleWalletInfo $ Array.singleton $ DOM.div { className: "mt-6" }
+    pure $ provider walletInfoCtx possibleWalletInfo $ Array.singleton $ DOM.div { className: "mt-6" } $
+      (case displayOption of
+          About -> Array.singleton $ modal $
+            { onDismiss: setDisplayOption Default
+            , title: DOOM.text "About"
+            , body: markdown {} [ DOOM.text about ]
+            }
+          Default -> [])
+      <>
       [ DOM.div { className: "fixed-top" }
           [ DOM.nav { className: "navbar mb-lg-3 navbar-expand-sm navbar-light bg-light py-0" } $
               DOM.div { className: "container-xl" }
@@ -154,9 +167,7 @@ mkApp = do
                               { icon: Icons.infoSquare
                               , label: (DOOM.text "About")
                               , extraClassNames: "nav-link"
-                              , onClick: do
-                                  x <- random
-                                  msgHubProps.add $ Success (DOOM.text $ "message messsage  messsage  messsage  messsage  messsage  messsage  messsage  messsage ........" <> show x)
+                              , onClick: setDisplayOption About
                               }
                         , DOM.li { className: "nav-item" } $ ReactContext.consumer msgHubProps.ctx \msgs ->
                             [ linkWithIcon
@@ -235,3 +246,40 @@ mkApp = do
           ]
       ]
 
+about :: String
+about = """
+## Actus
+Actus proposes a global standard for the consistent representation of financial instruments by breaking down the diversity of financial instruments into distinct cash flow patterns.
+
+Financial contracts are mutual agreements between parties about future cash flows. The Actus specification defines the semantics of a financial contract per contract type by providing the algorithms and formulas for computing the cash-flows explicitly.
+
+The [taxonomy](https://www.actusfrf.org/taxonomy) of financial contracts is maintained by the Actus foundation.
+
+The Actus Labs prototype currently implements the following Actus contract types:
+
+## Amortizing loans
+An amortizing loan is a loan where according to an amortization schedule payments are executed to pay back the principal with interest.
+
+#### Principal at maturity (PAM)
+Principal at maturity only defines periodic interest payments, the full principal is due at maturity.
+
+#### Linear Amortizer (LAM)
+Regular principal repayments over time, the interest payments decrease linearly.
+
+#### Negative Amortizer (NAM)
+Negative amortization means that the payments per period are smaller than the interest, i.e. the balance of the loan increases over time.
+
+#### Annuity (ANN)
+The annuity amortization consists of regular payments of equal amounts over the lifetime of the loan.
+
+## Actus contracts
+An Actus contract is basically a state machine: When an event occurs, scheduled or unscheduled, there might be cashflow and the internal state of the contract is updated.
+
+Actus has a list of well defined, possible events, for example:
+* IP: Interest payment
+* MD: Maturity date
+
+The specification of the full list can be found in the [actus-dictionary for events](https://github.com/actusfrf/actus-dictionary/blob/3076d91c4112221458f2137442c644f35ca7a77c/actus-dictionary-event.json#L41).
+
+In order to get a Marlowe representation of an Actus contract, first the projected cash flows are generated. 
+"""
