@@ -88,7 +88,7 @@ mkConnectWallet = do
         Just selected@(WalletInfo s) ->
           if Just s.name == (_.name <<< unwrap <$> currentlyConnected) then onDismiss
           else launchAff_ do
-            possibleApi <- (Just <$> Wallet.enable s.wallet) `catchError` \error -> do
+            possibleApi <- (Just <$> Wallet.enable_ s.wallet) `catchError` \error -> do
               liftEffect $ onWalletConnect (ConnectionError error)
               pure Nothing
             case possibleApi of

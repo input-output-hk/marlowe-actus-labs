@@ -129,7 +129,7 @@ mkContractList = do
               liftEffect (Wallet.nami cardano) >>= traverse walletInfo >>= case _ of
                 Nothing -> pure Nothing
                 Just walletInfo@(WalletInfo { wallet }) -> do
-                  walletApi <- Wallet.enable wallet
+                  walletApi <- Wallet.enable_ wallet
                   pure $ Just $ Newtype.over WalletInfo (Record.set (Proxy :: Proxy "wallet") walletApi) walletInfo
           liftEffect $ setInternalConnectedWallet possibleNami
 

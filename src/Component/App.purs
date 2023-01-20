@@ -56,7 +56,7 @@ autoConnectWallet walletBrand onSuccess = liftEffect (window >>= Wallet.cardano)
       Nothing -> do
         liftEffect $ throw $ "Unable to extract wallet " <> show walletBrand
       Just walletInfo@(WalletInfo { wallet }) -> do
-        walletApi <- Wallet.enable wallet
+        walletApi <- Wallet.enable_ wallet
         let
           walletInfo' = Newtype.over WalletInfo (Record.set (Proxy :: Proxy "wallet") walletApi) walletInfo
         liftEffect $ onSuccess walletInfo'
