@@ -32,8 +32,7 @@ module Wallet
   , signTx
   , submitTx
   , yoroi
-  )
-  where
+  ) where
 
 import Prelude
 
