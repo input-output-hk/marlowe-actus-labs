@@ -58,7 +58,7 @@ testWallet = launchAff_ do
         >>= case _ of
           Nothing -> Console.log "boo"
           Just nami -> do
-            api <- Wallet.enable nami
+            api <- Wallet.enable_ nami
             Console.log <<< ("getBalance: " <> _) <<< unsafeStringify =<< Wallet.getBalance api
             Console.log <<< ("getChangeAddress: " <> _) <<< unsafeStringify =<< Wallet.getChangeAddress api
             Console.log <<< ("getRewardAddresses: " <> _) <<< unsafeStringify =<< Wallet.getRewardAddresses api
