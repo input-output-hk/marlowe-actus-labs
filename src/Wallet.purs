@@ -21,9 +21,7 @@ module Wallet
   , getRewardAddresses
   , getUnusedAddresses
   , getUsedAddresses
-  , getUsedAddresses_
   , getUtxos
-  , getUtxos_
   , icon
   , isEnabled
   , isEnabled_
@@ -32,10 +30,10 @@ module Wallet
   , nami
   , signData
   , signTx
-  , signTx_
   , submitTx
   , yoroi
-  ) where
+  )
+  where
 
 import Prelude
 
@@ -50,7 +48,6 @@ import Data.Maybe (Maybe(..), fromMaybe')
 import Data.Nullable (Nullable)
 import Data.Nullable as Nullable
 import Data.Tuple.Nested (type (/\), (/\))
-import Data.Typelevel.Undefined (undefined)
 import Data.Variant (Variant)
 import Data.Variant as Variant
 import Effect (Effect)
@@ -348,16 +345,8 @@ getUnusedAddresses :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiFor
 getUnusedAddresses = toAffEitherE rejectionAPIError <<< _Api.getUnusedAddresses
 
 -- | Manually tested and works with Nami.
-getUsedAddresses_ :: Warn (Text "getUsedAddresses_ is deprecated, use getUsedAddresses instead") => Api -> Aff (Either Foreign (Array (CborHex AddressObject)))
-getUsedAddresses_ = toAffEitherE rejectionToForeign <<< _Api.getUsedAddresses
-
--- | Manually tested and works with Nami.
 getUsedAddresses :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (Array (CborHex AddressObject)))
 getUsedAddresses = toAffEitherE rejectionAPIError <<< _Api.getUsedAddresses
-
--- | Manually tested and works with Nami.
-getUtxos_ :: Warn (Text "getUtxos_ is deprecated, use getUtxos instead") => Api -> Aff (Either Foreign (Maybe (Array (CborHex TransactionUnspentOutputObject))))
-getUtxos_ = map (map Nullable.toMaybe) <<< toAffEitherE rejectionToForeign <<< _Api.getUtxos
 
 -- | Manually tested and works with Nami.
 getUtxos
@@ -428,14 +417,6 @@ toAffEither customCoerce p = makeAff \cb ->
 
 toAffEitherE :: forall a err. (Promise.Rejection -> err) -> Effect (Promise a) -> Aff (Either err a)
 toAffEitherE coerce f = liftEffect f >>= toAffEither coerce
-
-signTx_
-  :: Warn (Text "signTx_ is deprecated, use signTx instead")
-  => Api
-  -> CborHex TransactionObject
-  -> Boolean
-  -> Aff (Either Foreign (CborHex TransactionWitnessSetObject))
-signTx_ api cbor = toAffEitherE rejectionToForeign <<< _Api.signTx api cbor
 
 signTx
   :: forall r

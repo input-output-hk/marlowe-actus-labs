@@ -5,17 +5,14 @@ import Prelude
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain (CashFlow(..), evalVal')
 import CardanoMultiplatformLib (CborHex)
-import CardanoMultiplatformLib as CardanoMultiplatformLib
-import CardanoMultiplatformLib.Transaction (TransactionWitnessSetObject(..))
-import Component.ConnectWallet (mkConnectWallet)
+import CardanoMultiplatformLib.Transaction (TransactionWitnessSetObject)
 import Component.ContractForm (walletAddresses, walletChangeAddress)
 import Component.Modal (mkModal)
-import Component.SubmitContract (walletSignTx)
 import Component.Types (ContractHeaderResource, MkComponentM, WalletInfo(..))
 import Component.Widgets (link)
 import Control.Monad.Reader.Class (asks)
 import Data.Argonaut (decodeJson)
-import Data.Array (catMaybes, concat, fromFoldable, singleton)
+import Data.Array (catMaybes, concat, drop, fromFoldable, length, singleton)
 import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (adjust)
 import Data.Either (Either(..), hush)
@@ -24,8 +21,8 @@ import Data.Map (lookup)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (unwrap)
 import Data.Time.Duration as Duration
+import Data.Traversable (traverse)
 import Debug (traceM)
-import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Now (nowDateTime)
@@ -36,7 +33,7 @@ import Marlowe.Actus.Metadata (actusMetadataKey)
 import Marlowe.Actus.Metadata as M
 import Marlowe.Runtime.Web (post')
 import Marlowe.Runtime.Web.Client (getResource, put')
-import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), Metadata(..), PostTransactionsRequest(..), PostTransactionsResponse(..), PutTransactionRequest(..), ResourceEndpoint(..), Runtime(..), ServerURL(..), TextEnvelope(..), TransactionEndpoint(..), partyToBech32, toTextEnvelope)
+import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), IndexEndpoint(..), Metadata(..), PostTransactionsRequest(..), PostTransactionsResponse(..), PutTransactionRequest(..), ResourceEndpoint(..), Runtime(..), ServerURL(..), TextEnvelope(..), TransactionEndpoint(..), TransactionsEndpoint(..), toTextEnvelope)
 import React.Basic (fragment) as DOOM
 import React.Basic.DOM (text)
 import React.Basic.DOM (text) as DOOM
@@ -45,7 +42,7 @@ import React.Basic.DOM.Simplified.Generated as DOM
 import React.Basic.Events (handler_)
 import React.Basic.Hooks (JSX, component, useState, (/\))
 import React.Basic.Hooks as React
-import Wallet (Wallet)
+import React.Basic.Hooks.Aff (useAff)
 import Wallet as Wallet
 
 data NewInput
@@ -60,8 +57,9 @@ type EventListState =
         { party :: Party
         , token :: Token
         , value :: BigInt.BigInt
-        , endpoint :: ContractEndpoint
+        , transactions :: TransactionsEndpoint
         }
+  , cashFlows :: Array { cashflow :: CashFlow Value Party, party :: Party, token :: Token, value :: BigInt.BigInt, transactions :: TransactionsEndpoint }
   }
 
 type Props =
@@ -87,23 +85,19 @@ mkEventList = do
   cardanoMultiplatformLib <- asks _.cardanoMultiplatformLib
 
   liftEffect $ component "EventList" \{ contractList, connectedWallet } -> React.do
-    let
-      actusContracts = concat $ map endpointAndMetadata contractList
-
-    ((state :: EventListState) /\ updateState) <- useState { newInput: Nothing }
+    ((state :: EventListState) /\ updateState) <- useState { newInput: Nothing, cashFlows: [] }
 
     let
-      onEdit { party, token, value, endpoint } = handler_ do
-        updateState _ { newInput = Just { party, token, value, endpoint } }
+      onEdit { party, token, value, transactions } = handler_ do
+        updateState _ { newInput = Just { party, token, value, transactions } }
 
-      onApplyInputs { party, token, value, endpoint: ContractEndpoint (ResourceEndpoint link) } cw = handler_ do
+      onApplyInputs { party, token, value, transactions } cw = handler_ do
         now <- nowDateTime
         -- FIXME: move aff flow into `useAff` on the component level
         launchAff_ $ do
-          possibleChangeAddress <- walletChangeAddress cardanoMultiplatformLib cw
-          getResource runtime.serverURL link {}
-            >>= case _, possibleChangeAddress of
-              Right { payload: { links: { transactions } } }, Just changeAddress -> do
+          walletChangeAddress cardanoMultiplatformLib cw
+            >>= case _ of
+              Just changeAddress -> do
 
                 addresses <- walletAddresses cardanoMultiplatformLib cw
 
@@ -135,8 +129,7 @@ mkEventList = do
                       let
                         { txBody: tx } = postTransactionsResponse
                         TextEnvelope { cborHex: txCborHex } = tx
-                      -- walletSignTx cardanoMultiplatformLib cw txCborHex >>= case _ of
-                      Wallet.signTx_ cw txCborHex true >>= case _ of
+                      Wallet.signTx cw txCborHex true >>= case _ of
                         Right witnessSet -> do
                           submit witnessSet runtime.serverURL transactionsEndpoint >>= case _ of
                             Right _ -> do
@@ -156,13 +149,15 @@ mkEventList = do
                       pure unit
 
                 pure unit
-              Left err, _ -> do
+              Nothing -> do
                 -- Note: this happens, when the contract is in status `Unsigned`
-                traceM err
                 pure unit
-              _, _ -> pure unit
 
         updateState _ { newInput = Nothing }
+
+    useAff unit $ do
+      cashFlows' <- traverse (cashFlowAndEndpoint runtime) contractList
+      liftEffect $ updateState _ { cashFlows = concat cashFlows' }
 
     pure $
       DOM.div {}
@@ -229,46 +224,71 @@ mkEventList = do
                     , DOM.th {} [ text "Add" ]
                     ]
                 ]
-            , DOM.tbody {} $ map
-                ( \({ cashflow, party, token, value, endpoint }) ->
-                    let
-                      cf = unwrap cashflow
-                    in
-                      [ DOM.tr {}
-                          [ DOM.td {} [ text cf.contractId ]
-                          , DOM.td {} [ text $ show cf.event ]
-                          , DOM.td {} [ text <$> hush (formatDateTime "YYYY-DD-MM HH:mm:ss:SSS" cf.paymentDay) ]
-                          , DOM.td {} [ text $ fromMaybe "" $ BigInt.toString <$> evalVal cf.amount ]
-                          , DOM.td {} [ text $ cf.currency ]
-                          , DOM.td {} [ DOM.button { onClick: onEdit { party, token, value, endpoint }, className: "btn btn-secondary btn-sm" } "Add" ]
-                          ]
-                      ]
-                )
-                actusContracts
+            , DOM.tbody {} $
+                map
+                  ( \({ cashflow, party, token, value, transactions }) ->
+                      let
+                        cf = unwrap cashflow
+                      in
+                        [ DOM.tr {}
+                            [ DOM.td {} [ text cf.contractId ]
+                            , DOM.td {} [ text $ show cf.event ]
+                            , DOM.td {} [ text <$> hush (formatDateTime "YYYY-DD-MM HH:mm:ss:SSS" cf.paymentDay) ]
+                            , DOM.td {} [ text $ fromMaybe "" $ BigInt.toString <$> evalVal cf.amount ]
+                            , DOM.td {} [ text $ cf.currency ]
+                            , DOM.td {} [ DOM.button { onClick: onEdit { party, token, value, transactions }, className: "btn btn-secondary btn-sm" } "Add" ]
+                            ]
+                        ]
+                  )
+                  state.cashFlows
             ]
         ]
 
-endpointAndMetadata
-  :: { links :: { contract :: ContractEndpoint }, resource :: ContractHeader }
-  -> Array { cashflow :: CashFlow Value Party, party :: Party, token :: Token, value :: BigInt.BigInt, endpoint :: ContractEndpoint }
-endpointAndMetadata { resource: ContractHeader { metadata }, links } = fromMaybe [] $ do
-  M.Metadata { contractTerms, party, counterParty } <- decodeMetadata metadata
-  let
-    projectedCashFlows = fromFoldable $ genProjectedCashflows (party /\ counterParty) (defaultRiskFactors contractTerms) contractTerms
-  pure $ catMaybes $
-    map
-      ( \cf@(CashFlow { currency, amount }) -> do
-          value <- evalVal' amount
-          if value == (BigInt.fromInt 0) then Nothing
-          else pure $
-            { cashflow: toMarloweCashflow cf
-            , party: if value < (BigInt.fromInt 0) then party else counterParty
-            , token: currencyToToken currency
-            , value
-            , endpoint: links.contract
-            }
-      )
-      projectedCashFlows
+cashFlowAndEndpoint
+  :: forall r s t
+   . { serverURL :: ServerURL | r }
+  -> { links :: { contract :: ContractEndpoint | s }, resource :: ContractHeader | t }
+  -> Aff
+       ( Array
+           { cashflow :: CashFlow Value Party
+           , party :: Party
+           , token :: Token
+           , transactions :: TransactionsEndpoint
+           , value :: BigInt.BigInt
+           }
+       )
+cashFlowAndEndpoint { serverURL } { resource: ContractHeader { metadata }, links: { contract: ContractEndpoint (ResourceEndpoint link) } } =
+  case decodeMetadata metadata of
+    Just (M.Metadata { contractTerms, party, counterParty }) -> do
+      getResource serverURL link {}
+        >>= case _ of
+          Right { payload: { links: { transactions: TransactionsEndpoint (IndexEndpoint link') } } } -> do
+            numberOfTransactions <- getResource serverURL link' {}
+              >>= case _ of
+                Right { payload: arr } -> pure $ length arr
+                _ -> pure 0
+
+            let
+              -- TODO: more reliable detection of active cashflows
+              projectedCashFlows = drop numberOfTransactions $ fromFoldable $ genProjectedCashflows (party /\ counterParty) (defaultRiskFactors contractTerms) contractTerms
+
+            pure $ catMaybes $
+              map
+                ( \cf@(CashFlow { currency, amount }) -> do
+                    value <- evalVal' amount
+                    if value == (BigInt.fromInt 0) then Nothing
+                    else pure $
+                      { cashflow: toMarloweCashflow cf
+                      , party: if value < (BigInt.fromInt 0) then party else counterParty
+                      , token: currencyToToken currency
+                      , value
+                      , transactions: TransactionsEndpoint (IndexEndpoint link')
+                      }
+                )
+                projectedCashFlows
+
+          _ -> pure mempty -- FIXME: notification
+    Nothing -> pure mempty
 
 -- FIXME: proper mapping
 currencyToToken :: String -> Token
@@ -277,10 +297,6 @@ currencyToToken = Token ""
 partyToString :: Party -> String
 partyToString (V1.Address addr) = addr
 partyToString (V1.Role role) = role
-
--- partyToAddress :: Party -> Bech32
--- partyToAddress (V1.Address addr) = RT.Address addr
--- partyToAddress (V1.Role _) = RT.Address "" -- FIXME
 
 actusMetadata
   :: { links :: { contract :: ContractEndpoint }

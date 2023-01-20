@@ -88,10 +88,10 @@ walletChangeAddress lib wallet = do
 
 walletAddresses :: CardanoMultiplatformLib.Lib -> Wallet.Api -> Aff (Array Bech32)
 walletAddresses cardanoMultiplatformLib wallet = do
-  possibleUsedAddresses <- Wallet.getUsedAddresses_ wallet
+  possibleUsedAddresses <- Wallet.getUsedAddresses wallet
   -- let
   --   possibleUsedAddresses = Right []
-  possibleUTxOs <- Wallet.getUtxos_ wallet
+  possibleUTxOs <- Wallet.getUtxos wallet
 
   case possibleUsedAddresses, possibleUTxOs of
     Right addresses, Right (Just utxos) -> do
@@ -136,7 +136,7 @@ initialJson = String.joinWith "\n"
   ]
 
 initialAddress :: String
-initialAddress = "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
+initialAddress = "" -- "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
 
 error :: forall errs. String -> Batteries.Errors' (raw :: Array String | errs)
 error = Array.singleton <<< rawError
