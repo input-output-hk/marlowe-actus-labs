@@ -23,6 +23,7 @@ module Wallet
   , getUsedAddresses
   , getUsedAddresses_
   , getUtxos
+  , getUtxos_
   , icon
   , isEnabled
   , isEnabled_
@@ -42,12 +43,14 @@ import CardanoMultiplatformLib (AddressObject, CborHex)
 import CardanoMultiplatformLib.Transaction (TransactionObject, TransactionUnspentOutputObject, TransactionWitnessSetObject, TransactionHashObject)
 import Control.Alt ((<|>))
 import Control.Monad.Except (runExcept, runExceptT)
-import Data.Either (Either(..), either)
+import Data.Either (Either(..), either, hush)
 import Data.Foldable (fold)
 import Data.List.NonEmpty (NonEmptyList)
 import Data.Maybe (Maybe(..), fromMaybe')
 import Data.Nullable (Nullable)
 import Data.Nullable as Nullable
+import Data.Tuple.Nested (type (/\), (/\))
+import Data.Typelevel.Undefined (undefined)
 import Data.Variant (Variant)
 import Data.Variant as Variant
 import Effect (Effect)
@@ -352,10 +355,16 @@ getUsedAddresses_ = toAffEitherE rejectionToForeign <<< _Api.getUsedAddresses
 getUsedAddresses :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (Array (CborHex AddressObject)))
 getUsedAddresses = toAffEitherE rejectionAPIError <<< _Api.getUsedAddresses
 
--- // TODO APIError, PaginateError
 -- | Manually tested and works with Nami.
-getUtxos :: Api -> Aff (Either Foreign (Maybe (Array (CborHex TransactionUnspentOutputObject))))
-getUtxos = map (map Nullable.toMaybe) <<< toAffEitherE rejectionToForeign <<< _Api.getUtxos
+getUtxos_ :: Warn (Text "getUtxos_ is deprecated, use getUtxos instead") => Api -> Aff (Either Foreign (Maybe (Array (CborHex TransactionUnspentOutputObject))))
+getUtxos_ = map (map Nullable.toMaybe) <<< toAffEitherE rejectionToForeign <<< _Api.getUtxos
+
+-- | Manually tested and works with Nami.
+getUtxos
+  :: forall r
+   . Api
+  -> Aff (Either (Maybe Number /\ (Variant (| ApiError + ApiForeignErrors + UnknownError r))) (Maybe (Array (CborHex TransactionUnspentOutputObject))))
+getUtxos = map (map Nullable.toMaybe) <<< toAffEitherE rejectionPaginateError <<< _Api.getUtxos
 
 signData :: forall r. Api -> CborHex AddressObject -> Bytes -> Aff (Either (Variant (| ApiError + DataSignError + ApiForeignErrors + UnknownError r)) Bytes)
 signData api address = toAffEitherE rejectionDataSignError <<< _Api.signData api address
@@ -397,6 +406,17 @@ rejectionTxSendError rejection =
   in
     readWalletError x # either foreignErrors \e ->
       fromMaybe' (\_ -> unknownError x) $ toApiError e <|> toTxSendError e
+
+rejectionPaginateError :: forall r. Promise.Rejection -> Maybe Number /\ (Variant (| ApiError + ApiForeignErrors + UnknownError r))
+rejectionPaginateError rejection =
+  let
+    x :: Foreign
+    x = rejectionToForeign rejection
+
+    maxSize :: Maybe Number
+    maxSize = hush $ runExcept $ Foreign.readNumber x
+  in
+    maxSize /\ (either foreignErrors (fromMaybe' (\_ -> unknownError x) <<< toApiError) $ readWalletError x)
 
 toAffEither :: forall a err. (Promise.Rejection -> err) -> Promise.Promise a -> Aff (Either err a)
 toAffEither customCoerce p = makeAff \cb ->

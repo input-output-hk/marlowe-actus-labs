@@ -91,7 +91,7 @@ walletAddresses cardanoMultiplatformLib wallet = do
   possibleUsedAddresses <- Wallet.getUsedAddresses_ wallet
   -- let
   --   possibleUsedAddresses = Right []
-  possibleUTxOs <- Wallet.getUtxos wallet
+  possibleUTxOs <- Wallet.getUtxos_ wallet
 
   case possibleUsedAddresses, possibleUTxOs of
     Right addresses, Right (Just utxos) -> do
