@@ -56,7 +56,6 @@ useEmitter emitter handler =
       subscription <- HS.subscribe emitter handler
       pure $ HS.unsubscribe subscription
 
-
 -- | Use this when you want to have access to the last value emitted
 newtype UseEmitter' a hooks = UseEmitter' (UseEffect Unit (UseState a hooks))
 

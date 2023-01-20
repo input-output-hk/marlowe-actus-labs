@@ -101,9 +101,9 @@ modal props children = element _internalmodal propsWithChildren
 
 type Props_modalBody =
   HTMLAttributes +
-  ( -- as :: ReactComponent
-    bsPrefix :: String
-  )
+    ( -- as :: ReactComponent
+      bsPrefix :: String
+    )
 
 foreign import _ModalBody :: ReactComponent { | Props_modalBody }
 
@@ -180,12 +180,12 @@ modalFooter props children = element _internalmodalFooter propsWithChildren
 
 type Props_modalHeader =
   HTMLAttributes +
-  ( closeButton :: Boolean
-  , closeLabel :: String
-  , closeVariant :: Variant
-  , onHide :: Effect Unit
-  , bsPrefix :: String
-  )
+    ( closeButton :: Boolean
+    , closeLabel :: String
+    , closeVariant :: Variant
+    , onHide :: Effect Unit
+    , bsPrefix :: String
+    )
 
 foreign import _ModalHeader :: ReactComponent { | Props_modalHeader }
 

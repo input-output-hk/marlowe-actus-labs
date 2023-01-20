@@ -11,6 +11,9 @@ module Wallet
   , apiVersion
   , cardano
   , enable
+  , enable_
+  , eternl
+  , gerowallet
   , getBalance
   , getChangeAddress
   , getCollateral
@@ -21,8 +24,7 @@ module Wallet
   , getUtxos
   , icon
   , isEnabled
-  , eternl
-  , gerowallet
+  , isEnabled_
   , lace
   , name
   , nami
@@ -36,25 +38,32 @@ import Prelude
 
 import CardanoMultiplatformLib (AddressObject, CborHex)
 import CardanoMultiplatformLib.Transaction (TransactionObject, TransactionUnspentOutputObject, TransactionWitnessSetObject, TransactionHashObject)
-import Control.Monad.Except (runExceptT)
-import Data.Either (Either(..))
+import Control.Alt ((<|>))
+import Control.Monad.Except (runExcept, runExceptT)
+import Data.Either (Either(..), either, hush)
 import Data.Foldable (fold)
-import Data.Maybe (Maybe(..))
+import Data.List.NonEmpty (NonEmptyList)
+import Data.Maybe (Maybe(..), fromMaybe')
 import Data.Nullable (Nullable)
 import Data.Nullable as Nullable
+import Data.Tuple.Nested (type (/\), (/\))
+import Data.Variant (Variant)
+import Data.Variant as Variant
 import Effect (Effect)
 import Effect.Aff (Aff, makeAff)
 import Effect.Class (liftEffect)
 import Effect.Exception (throw)
-import Foreign (Foreign)
+import Foreign (Foreign, ForeignError)
 import Foreign as Foreign
 import Foreign.Index as Foreign.Index
 import JS.Object (EffectMth0, EffectMth1, EffectMth2, EffectProp, JSObject)
 import JS.Object.Generic (mkFFI)
+import Prim.TypeError (class Warn, Text)
 import Promise (Rejection, resolve, thenOrCatch) as Promise
 import Promise.Aff (Promise)
 import Promise.Aff (Promise, toAffE) as Promise
 import Type.Prelude (Proxy(..))
+import Type.Row (type (+))
 import Unsafe.Coerce (unsafeCoerce)
 import Web.HTML (Window)
 
@@ -67,6 +76,106 @@ data Transaction
 data Value
 
 data HashObject32
+
+type ApiError r =
+  ( invalidRequest :: String
+  , internalError :: String
+  , refused :: String
+  , accountChange :: String
+  | r
+  )
+
+type DataSignError r =
+  ( proofGeneration :: String
+  , addressNotPK :: String
+  , userDeclined :: String
+  | r
+  )
+
+type TxSendError r =
+  ( refused :: String
+  , failure :: String
+  | r
+  )
+
+type TxSignError r =
+  ( proofGeneration :: String
+  , userDeclined :: String
+  | r
+  )
+
+type ApiForeignErrors r =
+  ( foreignErrors :: NonEmptyList ForeignError
+  | r
+  )
+
+type UnknownError r =
+  ( unknownError :: Foreign
+  | r
+  )
+
+_invalidRequest :: Proxy "invalidRequest"
+_invalidRequest = Proxy
+
+_internalError :: Proxy "internalError"
+_internalError = Proxy
+
+_refused :: Proxy "refused"
+_refused = Proxy
+
+_failure :: Proxy "failure"
+_failure = Proxy
+
+_accountChange :: Proxy "accountChange"
+_accountChange = Proxy
+
+_proofGeneration :: Proxy "proofGeneration"
+_proofGeneration = Proxy
+
+_addressNotPK :: Proxy "addressNotPK"
+_addressNotPK = Proxy
+
+_userDeclined :: Proxy "userDeclined"
+_userDeclined = Proxy
+
+toApiError :: forall e r. { info :: String, code :: Int | e } -> Maybe (Variant (| ApiError + r))
+toApiError = case _ of
+  { info, code: -1 } -> Just $ Variant.inj _invalidRequest info
+  { info, code: -2 } -> Just $ Variant.inj _internalError info
+  { info, code: -3 } -> Just $ Variant.inj _refused info
+  { info, code: -4 } -> Just $ Variant.inj _accountChange info
+  _ -> Nothing
+
+toDataSignError :: forall e r. { info :: String, code :: Int | e } -> Maybe (Variant (| DataSignError + r))
+toDataSignError = case _ of
+  { info, code: 1 } -> Just $ Variant.inj _proofGeneration info
+  { info, code: 2 } -> Just $ Variant.inj _addressNotPK info
+  { info, code: 3 } -> Just $ Variant.inj _userDeclined info
+  _ -> Nothing
+
+toTxSendError :: forall e r. { info :: String, code :: Int | e } -> Maybe (Variant (| TxSendError + r))
+toTxSendError = case _ of
+  { info, code: 1 } -> Just $ Variant.inj _refused info
+  { info, code: 2 } -> Just $ Variant.inj _failure info
+  _ -> Nothing
+
+toTxSignError :: forall e r. { info :: String, code :: Int | e } -> Maybe (Variant (| TxSignError + r))
+toTxSignError = case _ of
+  { info, code: 1 } -> Just $ Variant.inj _proofGeneration info
+  { info, code: 2 } -> Just $ Variant.inj _userDeclined info
+  _ -> Nothing
+
+unknownError :: forall r. Foreign -> Variant (| UnknownError + r)
+unknownError = Variant.inj (Proxy :: Proxy "unknownError")
+
+foreignErrors :: forall r. NonEmptyList ForeignError -> Variant (| ApiForeignErrors + r)
+foreignErrors = Variant.inj (Proxy :: Proxy "foreignErrors")
+
+readWalletError :: Foreign -> Either (NonEmptyList ForeignError) { info :: String, code :: Int }
+readWalletError rejection = runExcept do
+  info <- Foreign.readString rejection
+  code <- Foreign.readInt rejection
+  pure { info, code }
 
 newtype Cbor :: forall k. k -> Type
 newtype Cbor a = Cbor String
@@ -187,58 +296,115 @@ apiVersion :: Wallet -> Effect String
 apiVersion = _Wallet.apiVersion
 
 -- | Manually tested and works with Nami.
-enable :: Wallet -> Aff Api
-enable = Promise.toAffE <<< _Wallet.enable
+enable_ :: Warn (Text "enable_ is deprecated, use enable instead") => Wallet -> Aff Api
+enable_ = Promise.toAffE <<< _Wallet.enable
+
+-- | Manually tested and works with Nami.
+enable :: forall r. Wallet -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) Api)
+enable = toAffEitherE rejectionAPIError <<< _Wallet.enable
 
 -- | Manually tested and works with Nami.
 icon :: Wallet -> Effect String
 icon = _Wallet.icon
 
 -- | Manually tested and works with Nami.
-isEnabled :: Wallet -> Aff Boolean
-isEnabled = Promise.toAffE <<< _Wallet.isEnabled
+isEnabled_ :: Warn (Text "isEnabled_ is deprecated, use isEnabled instead") => Wallet -> Aff Boolean
+isEnabled_ = Promise.toAffE <<< _Wallet.isEnabled
+
+-- | Manually tested and works with Nami.
+isEnabled :: forall r. Wallet -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) Boolean)
+isEnabled = toAffEitherE rejectionAPIError <<< _Wallet.isEnabled
 
 -- | Manually tested and works with Nami.
 name :: Wallet -> Effect String
 name = _Wallet.name
 
 -- | Manually tested and works with Nami.
-getNetworkId :: Api -> Aff Int
-getNetworkId = Promise.toAffE <<< _Api.getNetworkId
+getNetworkId :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) Int)
+getNetworkId = toAffEitherE rejectionAPIError <<< _Api.getNetworkId
 
 -- | Manually tested and works with Nami.
-getBalance :: Api -> Aff (Cbor Value)
-getBalance = Promise.toAffE <<< _Api.getBalance
+getBalance :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (Cbor Value))
+getBalance = toAffEitherE rejectionAPIError <<< _Api.getBalance
 
 -- | Manually tested and works with Nami.
-getChangeAddress :: Api -> Aff (Either Foreign (CborHex AddressObject))
-getChangeAddress = toAffEitherE rejectionToForeign <<< _Api.getChangeAddress
+getChangeAddress :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (CborHex AddressObject))
+getChangeAddress = toAffEitherE rejectionAPIError <<< _Api.getChangeAddress
 
 -- | Manually tested and works with Nami.
-getCollateral :: Api -> Cbor Coin -> Aff (Array (Cbor TransactionUnspentOutput))
-getCollateral api = map (fold <<< Nullable.toMaybe) <<< Promise.toAffE <<< _Api.getCollateral api
+getCollateral :: forall r. Api -> Cbor Coin -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (Array (Cbor TransactionUnspentOutput)))
+getCollateral api = map (map (fold <<< Nullable.toMaybe)) <<< toAffEitherE rejectionAPIError <<< _Api.getCollateral api
 
 -- | Manually tested and works with Nami.
-getRewardAddresses :: Api -> Aff (Array (CborHex AddressObject))
-getRewardAddresses = Promise.toAffE <<< _Api.getRewardAddresses
+getRewardAddresses :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (Array (CborHex AddressObject)))
+getRewardAddresses = toAffEitherE rejectionAPIError <<< _Api.getRewardAddresses
 
 -- | Manually tested and works with Nami.
-getUnusedAddresses :: Api -> Aff (Either Foreign (Array (CborHex AddressObject)))
-getUnusedAddresses = toAffEitherE rejectionToForeign <<< _Api.getUnusedAddresses
+getUnusedAddresses :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (Array (CborHex AddressObject)))
+getUnusedAddresses = toAffEitherE rejectionAPIError <<< _Api.getUnusedAddresses
 
 -- | Manually tested and works with Nami.
-getUsedAddresses :: Api -> Aff (Either Foreign (Array (CborHex AddressObject)))
-getUsedAddresses = toAffEitherE rejectionToForeign <<< _Api.getUsedAddresses
+getUsedAddresses :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (Array (CborHex AddressObject)))
+getUsedAddresses = toAffEitherE rejectionAPIError <<< _Api.getUsedAddresses
 
 -- | Manually tested and works with Nami.
-getUtxos :: Api -> Aff (Either Foreign (Maybe (Array (CborHex TransactionUnspentOutputObject))))
-getUtxos = map (map Nullable.toMaybe) <<< toAffEitherE rejectionToForeign <<< _Api.getUtxos
+getUtxos
+  :: forall r
+   . Api
+  -> Aff (Either (Maybe Number /\ (Variant (| ApiError + ApiForeignErrors + UnknownError r))) (Maybe (Array (CborHex TransactionUnspentOutputObject))))
+getUtxos = map (map Nullable.toMaybe) <<< toAffEitherE rejectionPaginateError <<< _Api.getUtxos
 
-signData :: Api -> CborHex AddressObject -> Bytes -> Aff Bytes
-signData api address = Promise.toAffE <<< _Api.signData api address
+signData :: forall r. Api -> CborHex AddressObject -> Bytes -> Aff (Either (Variant (| ApiError + DataSignError + ApiForeignErrors + UnknownError r)) Bytes)
+signData api address = toAffEitherE rejectionDataSignError <<< _Api.signData api address
 
 rejectionToForeign :: Promise.Rejection -> Foreign
 rejectionToForeign = unsafeCoerce
+
+rejectionAPIError :: forall r. Promise.Rejection -> Variant (| ApiError + ApiForeignErrors + UnknownError r)
+rejectionAPIError rejection =
+  let
+    x :: Foreign
+    x = rejectionToForeign rejection
+  in
+    either foreignErrors (fromMaybe' (\_ -> unknownError x) <<< toApiError) $ readWalletError x
+
+rejectionDataSignError :: forall r. Promise.Rejection -> Variant (| ApiError + DataSignError + ApiForeignErrors + UnknownError r)
+rejectionDataSignError rejection =
+  let
+    x :: Foreign
+    x = rejectionToForeign rejection
+  in
+    readWalletError x # either foreignErrors \e ->
+      fromMaybe' (\_ -> unknownError x) $ toApiError e <|> toDataSignError e
+
+rejectionTxSignError :: forall r. Promise.Rejection -> Variant (| ApiError + TxSignError + ApiForeignErrors + UnknownError r)
+rejectionTxSignError rejection =
+  let
+    x :: Foreign
+    x = rejectionToForeign rejection
+  in
+    readWalletError x # either foreignErrors \e ->
+      fromMaybe' (\_ -> unknownError x) $ toApiError e <|> toTxSignError e
+
+rejectionTxSendError :: forall r. Promise.Rejection -> Variant (| ApiError + TxSendError + ApiForeignErrors + UnknownError r)
+rejectionTxSendError rejection =
+  let
+    x :: Foreign
+    x = rejectionToForeign rejection
+  in
+    readWalletError x # either foreignErrors \e ->
+      fromMaybe' (\_ -> unknownError x) $ toApiError e <|> toTxSendError e
+
+rejectionPaginateError :: forall r. Promise.Rejection -> Maybe Number /\ (Variant (| ApiError + ApiForeignErrors + UnknownError r))
+rejectionPaginateError rejection =
+  let
+    x :: Foreign
+    x = rejectionToForeign rejection
+
+    maxSize :: Maybe Number
+    maxSize = hush $ runExcept $ Foreign.readNumber x
+  in
+    maxSize /\ (either foreignErrors (fromMaybe' (\_ -> unknownError x) <<< toApiError) $ readWalletError x)
 
 toAffEither :: forall a err. (Promise.Rejection -> err) -> Promise.Promise a -> Aff (Either err a)
 toAffEither customCoerce p = makeAff \cb ->
@@ -248,14 +414,20 @@ toAffEither customCoerce p = makeAff \cb ->
       (\e -> Promise.resolve <$> cb (Right (Left (customCoerce e))))
       p
 
--- FIXME: paluh. Fix error handling by introducing Variant based error
--- representation and using it across the whole API.
 toAffEitherE :: forall a err. (Promise.Rejection -> err) -> Effect (Promise a) -> Aff (Either err a)
 toAffEitherE coerce f = liftEffect f >>= toAffEither coerce
 
-signTx :: Api -> CborHex TransactionObject -> Boolean -> Aff (Either Foreign (CborHex TransactionWitnessSetObject))
-signTx api cbor = toAffEitherE rejectionToForeign <<< _Api.signTx api cbor
+signTx
+  :: forall r
+   . Api
+  -> CborHex TransactionObject
+  -> Boolean
+  -> Aff (Either (Variant (| ApiError + TxSignError + ApiForeignErrors + UnknownError r)) (CborHex TransactionWitnessSetObject))
+signTx api cbor = toAffEitherE rejectionTxSignError <<< _Api.signTx api cbor
 
-submitTx :: Api -> CborHex TransactionObject -> Aff (Either Foreign (CborHex TransactionHashObject))
-submitTx api = toAffEitherE rejectionToForeign <<< _Api.submitTx api
-
+submitTx
+  :: forall r
+   . Api
+  -> CborHex TransactionObject
+  -> Aff (Either (Variant (| ApiError + TxSendError + ApiForeignErrors + UnknownError r)) (CborHex TransactionHashObject))
+submitTx api = toAffEitherE rejectionTxSendError <<< _Api.submitTx api

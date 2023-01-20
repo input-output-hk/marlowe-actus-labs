@@ -38,7 +38,7 @@ walletInfo :: Wallet -> Aff (WalletInfo Wallet)
 walletInfo wallet = WalletInfo <$> ado
   name <- liftEffect (Wallet.name wallet)
   icon <- liftEffect (Wallet.icon wallet)
-  isEnabled <- Wallet.isEnabled wallet
+  isEnabled <- Wallet.isEnabled_ wallet
   apiVersion <- liftEffect (Wallet.apiVersion wallet)
   in
     { name, icon, isEnabled, apiVersion, wallet }
@@ -88,7 +88,7 @@ mkConnectWallet = do
         Just selected@(WalletInfo s) ->
           if Just s.name == (_.name <<< unwrap <$> currentlyConnected) then onDismiss
           else launchAff_ do
-            possibleApi <- (Just <$> Wallet.enable s.wallet) `catchError` \error -> do
+            possibleApi <- (Just <$> Wallet.enable_ s.wallet) `catchError` \error -> do
               liftEffect $ onWalletConnect (ConnectionError error)
               pure Nothing
             case possibleApi of

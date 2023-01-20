@@ -84,6 +84,7 @@
   , "safe-coerce"
   , "unsafe-coerce"
   , "validation"
+  , "variant"
   , "web-dom"
   , "web-encoding"
   , "web-html"

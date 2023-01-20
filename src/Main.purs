@@ -8,41 +8,33 @@ import Prelude
 import CardanoMultiplatformLib as CardanoMultiplatformLib
 import Component.App (mkApp)
 import Component.MessageHub (mkMessageHub)
-import Component.Types (ContractEvent(..), ContractHeaderResource)
+import Component.Types (ContractEvent(..))
 import Contrib.Data.Argonaut (JsonParser)
 import Contrib.Data.Map as Contrib.Map
 import Control.Monad.Reader (runReaderT)
 import Control.Monad.Rec.Loops (whileM_)
 import Data.Argonaut (Json, decodeJson, (.:))
 import Data.Either (Either, either)
-import Data.Map (lookup, Map)
+import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), isJust, maybe)
+import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype as Newtype
 import Data.Traversable (for_)
 import Data.Tuple.Nested ((/\))
-import Effect (Effect)
 import Effect (Effect)
 import Effect.Aff (Aff, Fiber, Milliseconds(..), delay, forkAff, launchAff_)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Class.Console as Console
 import Effect.Exception (throw)
-import Effect.Exception (throw)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
 import Halogen.Subscription as Subscription
 import JS.Unsafe.Stringify (unsafeStringify)
-import Marlowe.Actus.Metadata (actusMetadataKey)
-import Marlowe.Runtime.Web as Marlowe.Runtime.Web
 import Marlowe.Runtime.Web as Marlowe.Runtime.Web
 import Marlowe.Runtime.Web.Client (foldMapMContractPages)
-import Marlowe.Runtime.Web.Client (getPage')
-import Marlowe.Runtime.Web.Types (ContractHeader(..), Metadata(..), ServerURL(..), api)
 import Marlowe.Runtime.Web.Types (ContractHeader, ServerURL(..), TxOutRef, api)
 import Prim.TypeError (class Warn, Text)
 import React.Basic (createContext)
-import React.Basic (createContext)
-import React.Basic.DOM.Client (createRoot, renderRoot)
 import React.Basic.DOM.Client (createRoot, renderRoot)
 import Wallet as Wallet
 import Web.DOM (Element)
@@ -66,7 +58,7 @@ testWallet = launchAff_ do
         >>= case _ of
           Nothing -> Console.log "boo"
           Just nami -> do
-            api <- Wallet.enable nami
+            api <- Wallet.enable_ nami
             Console.log <<< ("getBalance: " <> _) <<< unsafeStringify =<< Wallet.getBalance api
             Console.log <<< ("getChangeAddress: " <> _) <<< unsafeStringify =<< Wallet.getChangeAddress api
             Console.log <<< ("getRewardAddresses: " <> _) <<< unsafeStringify =<< Wallet.getRewardAddresses api
