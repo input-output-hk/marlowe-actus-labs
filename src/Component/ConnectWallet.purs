@@ -38,7 +38,7 @@ walletInfo :: Wallet -> Aff (WalletInfo Wallet)
 walletInfo wallet = WalletInfo <$> ado
   name <- liftEffect (Wallet.name wallet)
   icon <- liftEffect (Wallet.icon wallet)
-  isEnabled <- Wallet.isEnabled wallet
+  isEnabled <- Wallet.isEnabled_ wallet
   apiVersion <- liftEffect (Wallet.apiVersion wallet)
   in
     { name, icon, isEnabled, apiVersion, wallet }

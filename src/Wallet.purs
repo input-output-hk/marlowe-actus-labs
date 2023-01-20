@@ -24,6 +24,7 @@ module Wallet
   , getUtxos
   , icon
   , isEnabled
+  , isEnabled_
   , lace
   , name
   , nami
@@ -111,31 +112,55 @@ type UnknownError r =
   | r
   )
 
+_invalidRequest :: Proxy "invalidRequest"
+_invalidRequest = Proxy
+
+_internalError :: Proxy "internalError"
+_internalError = Proxy
+
+_refused :: Proxy "refused"
+_refused = Proxy
+
+_failure :: Proxy "failure"
+_failure = Proxy
+
+_accountChange :: Proxy "accountChange"
+_accountChange = Proxy
+
+_proofGeneration :: Proxy "proofGeneration"
+_proofGeneration = Proxy
+
+_addressNotPK :: Proxy "addressNotPK"
+_addressNotPK = Proxy
+
+_userDeclined :: Proxy "userDeclined"
+_userDeclined = Proxy
+
 toApiError :: forall e r. { info :: String, code :: Int | e } -> Maybe (Variant (| ApiError + r))
 toApiError = case _ of
-  { info, code: -1 } -> Just $ Variant.inj (Proxy :: Proxy "invalidRequest") info
-  { info, code: -2 } -> Just $ Variant.inj (Proxy :: Proxy "internalError") info
-  { info, code: -3 } -> Just $ Variant.inj (Proxy :: Proxy "refused") info
-  { info, code: -4 } -> Just $ Variant.inj (Proxy :: Proxy "accountChange") info
+  { info, code: -1 } -> Just $ Variant.inj _invalidRequest info
+  { info, code: -2 } -> Just $ Variant.inj _internalError info
+  { info, code: -3 } -> Just $ Variant.inj _refused info
+  { info, code: -4 } -> Just $ Variant.inj _accountChange info
   _ -> Nothing
 
 toDataSignError :: forall e r. { info :: String, code :: Int | e } -> Maybe (Variant (| DataSignError + r))
 toDataSignError = case _ of
-  { info, code: 1 } -> Just $ Variant.inj (Proxy :: Proxy "proofGeneration") info
-  { info, code: 2 } -> Just $ Variant.inj (Proxy :: Proxy "addressNotPK") info
-  { info, code: 3 } -> Just $ Variant.inj (Proxy :: Proxy "userDeclined") info
+  { info, code: 1 } -> Just $ Variant.inj _proofGeneration info
+  { info, code: 2 } -> Just $ Variant.inj _addressNotPK info
+  { info, code: 3 } -> Just $ Variant.inj _userDeclined info
   _ -> Nothing
 
 toTxSendError :: forall e r. { info :: String, code :: Int | e } -> Maybe (Variant (| TxSendError + r))
 toTxSendError = case _ of
-  { info, code: 1 } -> Just $ Variant.inj (Proxy :: Proxy "refused") info
-  { info, code: 2 } -> Just $ Variant.inj (Proxy :: Proxy "failure") info
+  { info, code: 1 } -> Just $ Variant.inj _refused info
+  { info, code: 2 } -> Just $ Variant.inj _failure info
   _ -> Nothing
 
 toTxSignError :: forall e r. { info :: String, code :: Int | e } -> Maybe (Variant (| TxSignError + r))
 toTxSignError = case _ of
-  { info, code: 1 } -> Just $ Variant.inj (Proxy :: Proxy "proofGeneration") info
-  { info, code: 2 } -> Just $ Variant.inj (Proxy :: Proxy "userDeclined") info
+  { info, code: 1 } -> Just $ Variant.inj _proofGeneration info
+  { info, code: 2 } -> Just $ Variant.inj _userDeclined info
   _ -> Nothing
 
 unknownError :: forall r. Foreign -> Variant (| UnknownError + r)
@@ -284,10 +309,17 @@ enable = toAffEitherE (onCatch <<< rejectionToForeign) <<< _Wallet.enable
 icon :: Wallet -> Effect String
 icon = _Wallet.icon
 
--- // TODO APIError
 -- | Manually tested and works with Nami.
-isEnabled :: Wallet -> Aff Boolean
-isEnabled = Promise.toAffE <<< _Wallet.isEnabled
+isEnabled_ :: Warn (Text "isEnabled_ is deprecated, use isEnabled instead") => Wallet -> Aff Boolean
+isEnabled_ = Promise.toAffE <<< _Wallet.isEnabled
+
+-- | Manually tested and works with Nami.
+isEnabled :: forall r. Wallet -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) Boolean)
+isEnabled = toAffEitherE (onCatch <<< rejectionToForeign) <<< _Wallet.isEnabled
+  where
+  onCatch :: Foreign -> Variant (| ApiError + ApiForeignErrors + UnknownError r)
+  onCatch rejection =
+    either foreignErrors (fromMaybe' (\_ -> unknownError rejection) <<< toApiError) $ readWalletError rejection
 
 -- | Manually tested and works with Nami.
 name :: Wallet -> Effect String
