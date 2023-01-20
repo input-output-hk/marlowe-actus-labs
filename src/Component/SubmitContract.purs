@@ -132,7 +132,7 @@ walletSignTx lib wallet txCborHex = do
     json <- liftEffect $ Transaction.transactionObject.to_json txObj
     traceM $ json
 
-  Wallet.signTx wallet txCborHex false >>= case _ of
+  Wallet.signTx_ wallet txCborHex false >>= case _ of
     Right witnessSet -> do
       pure $ Just witnessSet
     -- let
@@ -177,7 +177,7 @@ mkSubmitContract = do
               traceM "Successfully created a transaction"
               let
                 WalletInfo { wallet: walletApi } = connectedWallet
-              Wallet.signTx walletApi txCborHex false >>= case _ of
+              Wallet.signTx_ walletApi txCborHex false >>= case _ of
                 Right witnessSet -> do
                   submit witnessSet runtime.serverURL contractEndpoint >>= case _ of
                     Right _ -> do
