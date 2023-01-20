@@ -63,7 +63,6 @@ type MkContextBase r =
   | r
   }
 
-
 -- We use this monad during creation of the components.
 -- This gives us ability to pass down "static" data.
 -- which is not changing during the lifetime of the component.
@@ -71,5 +70,4 @@ type MkContextBase r =
 type MkComponentMBase r = ReaderT (MkContextBase r) Effect
 
 type MkComponentM = MkComponentMBase ()
-
 

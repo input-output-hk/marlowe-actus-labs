@@ -11,7 +11,7 @@ import Unsafe.Coerce (unsafeCoerce)
 
 foreign import data Dimension :: Type
 
-dimension :: { height :: Dimension , width :: Dimension }
+dimension :: { height :: Dimension, width :: Dimension }
 dimension =
   { height: unsafeCoerce "height" :: Dimension
   , width: unsafeCoerce "width" :: Dimension

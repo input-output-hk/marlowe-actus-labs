@@ -92,7 +92,6 @@ offcanvas props children = element _internaloffcanvas propsWithChildren
   propsWithChildren :: { | attrs }
   propsWithChildren = Record.merge { children: toJSX children } props
 
-
 type Props_offcanvasHeader =
   ( closeButton :: Boolean
   , closeLabel :: String
@@ -119,7 +118,6 @@ offcanvasHeader props children = element _internaloffcanvasHeader propsWithChild
   where
   propsWithChildren :: { | attrs }
   propsWithChildren = Record.merge { children: toJSX children } props
-
 
 type Props_offcanvasTitle =
   ( bsPrefix :: String
