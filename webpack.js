@@ -1,7 +1,13 @@
-const path = require('path');
-const webpack = require('webpack');
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-module.exports = (env, argv) => {
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+import webpack from 'webpack';
+import RemarkHTML from 'remark-html';
+
+export default function(env, argv) {
   const develMode = argv.mode == "development";
 
   if (develMode) {
@@ -52,6 +58,22 @@ module.exports = (env, argv) => {
     },
     module: {
       rules: [
+        {
+          test: /\.md$/,
+          use: [
+            {
+              loader: "html-loader",
+            },
+            {
+              loader: "remark-loader",
+              options: {
+                remarkOptions: {
+                  plugins: [RemarkHTML],
+                },
+              },
+            },
+          ],
+        },
         {
           test: /\.(scss)$/,
           use: [

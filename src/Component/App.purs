@@ -8,9 +8,9 @@ import Component.ContractList (mkContractList)
 import Component.EventList (mkEventList)
 import Component.MessageHub (mkMessageBox, mkMessagePreview)
 import Component.Modal (Size(..), mkModal)
-import Component.Types (ContractEvent, MessageContent(Success, Info), MessageHub(MessageHub), MkComponentMBase, WalletInfo(..))
+import Component.Types (MessageContent(Success, Info), MessageHub(MessageHub), MkComponentMBase, WalletInfo(..))
 import Component.Widgets (link, linkWithIcon)
-import Contrib.Data.Map (additions, deletions) as Map
+import Contrib.Data.Map as Map
 import Contrib.Halogen.Subscription (MinInterval(..))
 import Contrib.Halogen.Subscription (foldMapThrottle) as Subscription
 import Contrib.React.Bootstrap.Icons as Icons
@@ -37,6 +37,7 @@ import Effect.Class (liftEffect)
 import Effect.Exception (throw)
 import Effect.Now (now)
 import Halogen.Subscription (Emitter) as Subscription
+import Marlowe.Runtime.Web.Streaming (ContractEvent, ContractStream(..))
 import Marlowe.Runtime.Web.Types (GetContractsResponse, TxOutRef)
 import React.Basic (JSX)
 import React.Basic as ReactContext
@@ -98,12 +99,10 @@ mkApp = do
     connectWallet <- mkConnectWallet
     pure { contractListComponent, eventListComponent, connectWallet, messageBox }
 
-  (contractEmitter :: Subscription.Emitter ContractEvent) <- asks _.contractEmitter
+  (ContractStream contractStream) <- asks _.contractStream
 
   throttledEmitter :: Subscription.Emitter (List ContractEvent) <- liftEffect $
-    Subscription.foldMapThrottle (List.singleton) (MinInterval $ Milliseconds 500.0) contractEmitter
-
-  getContracts <- asks _.getContracts
+    Subscription.foldMapThrottle (List.singleton) (MinInterval $ Milliseconds 500.0) contractStream.emitter
 
   initialVersion <- liftEffect now
 
@@ -120,11 +119,11 @@ mkApp = do
     idRef <- useStateRef version contracts
 
     useEmitter throttledEmitter \contractEvent -> do
-      (currContracts :: Map TxOutRef GetContractsResponse) <- getContracts
+      (currContracts :: Map TxOutRef GetContractsResponse) <- contractStream.getLiveState
       version <- now
       let
-        (additionsNumber :: Int) = length $ Map.additions contracts currContracts
-        (deletionsNumber :: Int) = length $ Map.deletions contracts currContracts
+        (additionsNumber :: Int) = length $ Map.additions (Map.Old contracts) (Map.New currContracts)
+        (deletionsNumber :: Int) = length $ Map.deletions (Map.Old contracts) (Map.New currContracts)
 
       msgHubProps.add $ Info $ DOOM.text $
         "New contracts: " <> show additionsNumber <> ", deleted contracts: " <> show deletionsNumber
@@ -218,7 +217,6 @@ mkApp = do
                                     ConnectWallet.ConnectionError _ -> pure unit
                                     ConnectWallet.NoWallets -> pure unit
                                   setConfiguringWallet false
-
                               , onDismiss: setConfiguringWallet false
                               , inModal: true
                               }
@@ -228,7 +226,7 @@ mkApp = do
                   $ DOM.div { className: "row" }
                   $ messagePreview msgHub
               ]
-          , ReactContext.consumer msgHubProps.ctx \msgs ->
+          , ReactContext.consumer msgHubProps.ctx \_ ->
               pure $ offcanvas
                 { onHide: setCheckingNotifications false
                 , placement: Offcanvas.placement.end
@@ -237,15 +235,13 @@ mkApp = do
                 }
                 [ DOM.div { className: "p-3 overflow-auto" } $ messageBox msgHub
                 ]
-
-          , DOM.div { className: "container-xl" } do
-              let
-                contracts' = Array.fromFoldable contracts
-
-              [ subcomponents.contractListComponent { contractList: contracts', connectedWallet: possibleWalletInfo }
-              , DOM.div { className: "col" } $ subcomponents.eventListComponent { contractList: contracts', connectedWallet: possibleWalletInfo }
-              ]
+      , DOM.div { className: "container-xl" } do
+          let
+            contracts' = Array.fromFoldable contracts
+          [ subcomponents.contractListComponent { contractList: contracts', connectedWallet: possibleWalletInfo }
+          , DOM.div { className: "col" } $ subcomponents.eventListComponent { contractList: contracts', connectedWallet: possibleWalletInfo }
           ]
+      ]
 
 about :: String
 about =

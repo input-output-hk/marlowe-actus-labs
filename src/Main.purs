@@ -1,16 +1,13 @@
-module Main
-  ( main
-  , testWallet
-  ) where
+module Main where
 
 import Prelude
 
 import CardanoMultiplatformLib as CardanoMultiplatformLib
 import Component.App (mkApp)
 import Component.MessageHub (mkMessageHub)
-import Component.Types (ContractEvent(..))
 import Contrib.Data.Argonaut (JsonParser)
 import Contrib.Data.Map as Contrib.Map
+import Contrib.Effect as Effect
 import Control.Monad.Reader (runReaderT)
 import Control.Monad.Rec.Loops (whileM_)
 import Data.Argonaut (Json, decodeJson, (.:))
@@ -21,6 +18,7 @@ import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype as Newtype
 import Data.Traversable (for_)
 import Data.Tuple.Nested ((/\))
+import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, Fiber, Milliseconds(..), delay, forkAff, launchAff_)
 import Effect.Class (class MonadEffect, liftEffect)
@@ -32,7 +30,11 @@ import Halogen.Subscription as Subscription
 import JS.Unsafe.Stringify (unsafeStringify)
 import Marlowe.Runtime.Web as Marlowe.Runtime.Web
 import Marlowe.Runtime.Web.Client (foldMapMContractPages)
+import Marlowe.Runtime.Web.Client (getPage')
+import Marlowe.Runtime.Web.Streaming (PollingInterval(..), RequestInterval(..))
+import Marlowe.Runtime.Web.Streaming as Streaming
 import Marlowe.Runtime.Web.Types (GetContractsResponse, ServerURL(..), TxOutRef, api)
+import Marlowe.Runtime.Web.Types (Metadata(..), ServerURL(..), GetContractsResponse, TxOutRef, api)
 import Prim.TypeError (class Warn, Text)
 import React.Basic (createContext)
 import React.Basic.DOM.Client (createRoot, renderRoot)
@@ -42,9 +44,6 @@ import Web.DOM.NonElementParentNode (getElementById)
 import Web.HTML (HTMLDocument, window)
 import Web.HTML.HTMLDocument (toNonElementParentNode)
 import Web.HTML.Window (document)
-
-liftEither :: forall a m err. MonadEffect m => Show err => Either err a -> m a
-liftEither = either (liftEffect <<< throw <<< show) pure
 
 -- | TODO: move this testing code to a separate "app"
 testWallet :: Effect Unit
@@ -69,6 +68,7 @@ testWallet = launchAff_ do
 type Config =
   { marloweWebServerUrl :: ServerURL
   , develMode :: Boolean
+  , aboutMarkdown :: String
   }
 
 decodeConfig :: JsonParser Config
@@ -76,45 +76,13 @@ decodeConfig json = do
   obj <- decodeJson json
   marloweWebServerUrl <- obj .: "marloweWebServerUrl"
   develMode <- obj .: "develMode"
-  pure { marloweWebServerUrl: ServerURL marloweWebServerUrl, develMode }
-
-contractsById :: Array GetContractsResponse -> Map TxOutRef GetContractsResponse
-contractsById = Contrib.Map.fromFoldableBy $ _.contractId <<< Newtype.unwrap <<< _.resource
-
-pushPullContractsStreams
-  :: Warn (Text "pushPullContractsStreams is deprecated, use web socket based implementation instead!")
-  => Milliseconds
-  -> ServerURL
-  -> Aff { contractEmitter :: Subscription.Emitter ContractEvent, getContracts :: Effect (Map TxOutRef GetContractsResponse) }
-pushPullContractsStreams waitBetween serverUrl = do
-  contracts :: Ref (Map TxOutRef GetContractsResponse) <- liftEffect $ Ref.new Map.empty
-
-  { emitter: contractEmitter, listener: contractListener :: Subscription.Listener ContractEvent } <-
-    liftEffect Subscription.create
-
-  _ :: Fiber Unit <- forkAff $ whileM_ (pure true) do
-    previousContracts <- liftEffect $ Ref.read contracts
-    nextContracts :: Map TxOutRef GetContractsResponse <-
-      map contractsById $ liftEither =<< foldMapMContractPages serverUrl api Nothing \pageContracts -> do
-        liftEffect do
-          let
-            cs :: Map TxOutRef GetContractsResponse
-            cs = contractsById pageContracts
-          Ref.modify_ (Map.union cs) contracts
-          for_ (Contrib.Map.additions previousContracts cs) $ Subscription.notify contractListener <<< Addition
-          for_ (Contrib.Map.updates previousContracts cs) $ Subscription.notify contractListener <<< Update
-        delay (Milliseconds 500.0)
-        pure pageContracts
-    liftEffect do
-      Ref.write nextContracts contracts
-      for_ (Contrib.Map.deletions previousContracts nextContracts) $ Subscription.notify contractListener <<< Deletion
-    delay waitBetween
-
-  pure { contractEmitter, getContracts: Ref.read contracts }
+  aboutMarkdown <- obj .: "aboutMarkdown"
+  pure { marloweWebServerUrl: ServerURL marloweWebServerUrl, develMode, aboutMarkdown }
 
 main :: Json -> Effect Unit
 main configJson = do
-  config <- liftEither $ decodeConfig configJson
+  config <- Effect.liftEither $ decodeConfig configJson
+
   let
     logger :: String -> Effect Unit
     logger =
@@ -127,7 +95,10 @@ main configJson = do
     (getElementById "app-root" $ toNonElementParentNode doc)
   reactRoot <- createRoot container
   launchAff_ do
-    { contractEmitter, getContracts } <- pushPullContractsStreams (Milliseconds 1_000.0) config.marloweWebServerUrl
+    let
+      reqInterval = RequestInterval (Milliseconds 1_000.0)
+      pollInterval = PollingInterval (Milliseconds 20_000.0)
+    contractStream <- Streaming.contracts pollInterval reqInterval config.marloweWebServerUrl
 
     CardanoMultiplatformLib.importLib >>= case _ of
       Nothing -> liftEffect $ logger "Cardano serialization lib loading failed"
@@ -139,8 +110,7 @@ main configJson = do
             { cardanoMultiplatformLib
             , walletInfoCtx
             , logger
-            , contractEmitter
-            , getContracts
+            , contractStream
             , msgHub
             , runtime
             }

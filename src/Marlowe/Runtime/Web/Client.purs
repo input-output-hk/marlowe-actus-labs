@@ -165,6 +165,17 @@ getPages
   -> m (GetResourceResponse (List { page :: a, currRange :: Maybe Range }))
 getPages serverUrl path = foldMapMPages serverUrl path (pure <<< List.singleton)
 
+getPages'
+  :: forall endpoint a m
+   . DecodeJson a
+  => MonadAff m
+  => ToResourceLink endpoint a
+  => ServerURL
+  -> endpoint
+  -> Maybe Range
+  -> m (GetResourceResponse (List { page :: a, currRange :: Maybe Range }))
+getPages' serverUrl endpoint = getPages serverUrl (toResourceLink endpoint)
+
 getResource'
   :: forall a extraHeaders endpoint
    . DecodeJson a

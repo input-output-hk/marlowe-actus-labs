@@ -29,7 +29,6 @@ import Foreign.Object (Object)
 import Foreign.Object as Object
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Record as Record
-import Type.Prelude (Proxy(..))
 import Type.Row.Homogeneous as Row
 
 newtype TxId = TxId String
@@ -66,6 +65,8 @@ txOutRefFromString = String.split (String.Pattern "#") >>> case _ of
 
 txOutRefToString :: TxOutRef -> String
 txOutRefToString (TxOutRef { txId: TxId txId, txIx }) = txId <> "#" <> show txIx
+
+type ContractId = TxOutRef
 
 newtype PolicyId = PolicyId String
 
