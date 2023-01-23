@@ -12,28 +12,32 @@ import Component.Types (ContractHeaderResource, MkComponentM, WalletInfo(..))
 import Component.Widgets (link)
 import Control.Monad.Reader.Class (asks)
 import Data.Argonaut (decodeJson)
-import Data.Array (catMaybes, concat, drop, fromFoldable, length, singleton)
+import Data.Array (catMaybes, concat, drop, filter, fromFoldable, length, singleton)
 import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (adjust)
-import Data.Either (Either(..), hush)
+import Data.Decimal as D
+import Data.Either (Either(..), either, hush)
 import Data.Formatter.DateTime (formatDateTime)
 import Data.Map (lookup)
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.Newtype (unwrap)
 import Data.Time.Duration as Duration
 import Data.Traversable (traverse)
 import Debug (traceM)
 import Effect.Aff (Aff, launchAff_)
-import Effect.Class (liftEffect)
+import Effect.Class (class MonadEffect, liftEffect)
+import Effect.Exception (throw)
 import Effect.Now (nowDateTime)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input(..), Party, Token(..), Value)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input(..), Party, Token(..), Value(..))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
+import Language.Marlowe.Extended.V1.Metadata (lovelaceFormat)
+import Language.Marlowe.Extended.V1.Metadata.Types (NumberFormat(..))
 import Marlowe.Actus (defaultRiskFactors, evalVal, toMarloweCashflow)
 import Marlowe.Actus.Metadata (actusMetadataKey)
 import Marlowe.Actus.Metadata as M
-import Marlowe.Runtime.Web (post')
+import Marlowe.Runtime.Web (getPage', post')
 import Marlowe.Runtime.Web.Client (getResource, put')
-import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), IndexEndpoint(..), Metadata(..), PostTransactionsRequest(..), PostTransactionsResponse(..), PutTransactionRequest(..), ResourceEndpoint(..), Runtime(..), ServerURL(..), TextEnvelope(..), TransactionEndpoint(..), TransactionsEndpoint(..), toTextEnvelope)
+import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), IndexEndpoint(..), Metadata(..), PostTransactionsRequest(..), PostTransactionsResponse(..), PutTransactionRequest(..), ResourceEndpoint(..), Runtime(..), ServerURL(..), TextEnvelope(..), TransactionEndpoint(..), TransactionsEndpoint(..), api, toTextEnvelope)
 import React.Basic (fragment) as DOOM
 import React.Basic.DOM (text)
 import React.Basic.DOM (text) as DOOM
@@ -77,6 +81,9 @@ submit witnesses serverUrl transactionEndpoint = do
 
     req = PutTransactionRequest textEnvelope
   put' serverUrl transactionEndpoint req
+
+-- liftEither :: forall a m err. MonadEffect m => Show err => Either err a -> m a
+-- liftEither = either (liftEffect <<< throw <<< show) pure
 
 mkEventList :: MkComponentM (Props -> JSX)
 mkEventList = do
@@ -156,6 +163,11 @@ mkEventList = do
         updateState _ { newInput = Nothing }
 
     useAff unit $ do
+      -- let
+      --   isActus :: ContractHeaderResource -> Boolean
+      --   isActus { resource: ContractHeader { metadata: Metadata md } } = isJust $ lookup actusMetadataKey md
+      -- contracts <- filter isActus <$> (getPage' runtime.serverURL api Nothing >>= liftEither >>> liftEffect <#> _.page)
+      -- cashFlows' <- traverse (cashFlowAndEndpoint runtime) contracts
       cashFlows' <- traverse (cashFlowAndEndpoint runtime) contractList
       liftEffect $ updateState _ { cashFlows = concat cashFlows' }
 
@@ -172,7 +184,7 @@ mkEventList = do
                         , R.input
                             { className: "form-control"
                             , type: "text"
-                            , value: show (BigInt.abs value)
+                            , value: BigInt.toString (BigInt.abs value)
                             }
                         ]
                     , DOM.div { className: "form-group" }
@@ -234,8 +246,12 @@ mkEventList = do
                             [ DOM.td {} [ text cf.contractId ]
                             , DOM.td {} [ text $ show cf.event ]
                             , DOM.td {} [ text <$> hush (formatDateTime "YYYY-DD-MM HH:mm:ss:SSS" cf.paymentDay) ]
-                            , DOM.td {} [ text $ fromMaybe "" $ BigInt.toString <$> evalVal cf.amount ]
-                            , DOM.td {} [ text $ cf.currency ]
+                            , DOM.td {}
+                                [ text $ fromMaybe "" $
+                                    if cf.currency == "" then show <$> (((_ / 1000000.0) <<< BigInt.toNumber) <$> evalVal cf.amount)
+                                    else BigInt.toString <$> (evalVal $ DivValue cf.amount (Constant $ BigInt.fromInt 1000000))
+                                ]
+                            , DOM.td {} [ text $ if cf.currency == "" then "₳" else cf.currency ]
                             , DOM.td {} [ DOM.button { onClick: onEdit { party, token, value, transactions }, className: "btn btn-secondary btn-sm" } "Add" ]
                             ]
                         ]
@@ -281,7 +297,7 @@ cashFlowAndEndpoint { serverURL } { resource: ContractHeader { metadata }, links
                       { cashflow: toMarloweCashflow cf
                       , party: if value < (BigInt.fromInt 0) then party else counterParty
                       , token: currencyToToken currency
-                      , value
+                      , value: if currency == "" then value else value / (BigInt.fromInt 1000000)
                       , transactions: TransactionsEndpoint (IndexEndpoint link')
                       }
                 )
@@ -293,6 +309,10 @@ cashFlowAndEndpoint { serverURL } { resource: ContractHeader { metadata }, links
 -- FIXME: proper mapping
 currencyToToken :: String -> Token
 currencyToToken = Token ""
+
+tokenToCurrency :: Token -> String
+tokenToCurrency (Token "" "") = "L"
+tokenToCurrency _ = "undefined"
 
 partyToString :: Party -> String
 partyToString (V1.Address addr) = addr

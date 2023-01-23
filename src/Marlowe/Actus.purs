@@ -10,11 +10,12 @@ module Marlowe.Actus
 
 import Prelude
 
-import Actus.Domain (CashFlow(..), ContractState, ContractTerms(..), EventType, Observation'(..), RiskFactors(..), Value'(..), marloweFixedPoint)
+import Actus.Domain (CashFlow(..), ContractState, ContractTerms(..), EventType, Observation'(..), RiskFactors(..), Value'(..), _fromDecimal)
 import Control.Apply (lift2)
 import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.DateTime (DateTime)
 import Data.DateTime.Instant (Instant, fromDateTime)
+import Data.Decimal (fromInt) as Decimal
 import Data.Foldable (foldl)
 import Data.List (List, reverse)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
@@ -164,7 +165,7 @@ genContract cashFlows = foldl generator Close $ reverse (map toMarloweCashflow c
             counterparty
             party
             (Token "" currency)
-            amount
+            (adjustAda currency amount)
             (fromDateTime paymentDay)
             continuation
         )
@@ -174,7 +175,7 @@ genContract cashFlows = foldl generator Close $ reverse (map toMarloweCashflow c
                 party
                 counterparty
                 (Token "" currency)
-                (NegValue amount)
+                (NegValue $ adjustAda currency amount)
                 (fromDateTime paymentDay)
                 continuation
             )
@@ -196,6 +197,10 @@ genContract cashFlows = foldl generator Close $ reverse (map toMarloweCashflow c
       ]
       timeout
       Close
+
+adjustAda :: String -> Value -> Value
+adjustAda "" v = v
+adjustAda _ v = DivValue v (Constant $ fromInt 1000000)
 
 cashFlowToChoiceId :: forall a b. CashFlow a b -> ChoiceId
 cashFlowToChoiceId (CashFlow { event, paymentDay }) =
@@ -228,7 +233,7 @@ oracle = Address "" -- FIXME: oracle address
 defaultRiskFactors :: ContractTerms -> EventType -> DateTime -> RiskFactorsMarlowe
 defaultRiskFactors (ContractTerms { currency, settlementCurrency }) _ _ = -- FIXME: just a stub
   let
-    o_rf_CURS = fromMaybe (fromInt' 1) $ do
+    o_rf_CURS = fromMaybe (_fromDecimal $ Decimal.fromInt 1) $ do
       cur <- currency
       settlementCur <- settlementCurrency
       if cur == settlementCur then Nothing
@@ -240,5 +245,3 @@ defaultRiskFactors (ContractTerms { currency, settlementCurrency }) _ _ = -- FIX
       , o_rf_SCMO: ChoiceValue' (ChoiceId "scmo" oracle) -- TODO: add to oracle
       , pp_payoff: ChoiceValue' (ChoiceId "pp" oracle) -- TODO: add to oracle
       }
-  where
-  fromInt' = Constant' <<< fromInt <<< (marloweFixedPoint * _)

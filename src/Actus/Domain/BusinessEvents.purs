@@ -46,6 +46,33 @@ derive instance Ord EventType
 instance Show EventType where
   show = genericShow
 
+description :: EventType -> String
+description IED = "Initial Exchange"
+description FP = "Fee Payment"
+description PR = "Principal Redemption"
+description PD = "Principal Drawing"
+description PY = "Penalty Payment"
+description PP = "Principal Prepayment (unscheduled event)"
+description IP = "Interest Payment"
+description IPFX = "Interest Payment Fixed Leg"
+description IPFL = "Interest Payment Floating Leg"
+description IPCI = "Interest Capitalization"
+description CE = "Credit Event"
+description RRF = "Rate Reset Fixing with Known Rate"
+description RR = "Rate Reset Fixing with Unknown Rate"
+description PRF = "Principal Payment Amount Fixing"
+description DV = "Dividend Payment"
+description PRD = "Purchase"
+description MR = "Margin Call"
+description TD = "Termination"
+description SC = "Scaling Index Fixing"
+description IPCB = "Interest Calculation Base Fixing"
+description MD = "Maturity"
+description XD = "Exercise"
+description STD = "Settlement"
+description PI = "Principal Increase"
+description AD = "Monitoring"
+
 instance Enum EventType where
   succ = genericSucc
   pred = genericPred

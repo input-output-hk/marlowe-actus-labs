@@ -7,7 +7,7 @@ import Component.ConnectWallet as ConnectWallet
 import Component.ContractList (mkContractList)
 import Component.EventList (mkEventList)
 import Component.MessageHub (mkMessageBox, mkMessagePreview)
-import Component.Modal (mkModal)
+import Component.Modal (Size(..), mkModal)
 import Component.Types (MessageContent(Success, Info), MessageHub(MessageHub), MkComponentMBase, WalletInfo(..))
 import Component.Widgets (link, linkWithIcon)
 import Contrib.Data.Map as Map
@@ -153,6 +153,7 @@ mkApp = do
             { onDismiss: setDisplayOption Default
             , title: DOOM.text "About"
             , body: DOOM.div { dangerouslySetInnerHTML: { __html: about } }
+            , size: Large
             }
           Default -> []
       )
