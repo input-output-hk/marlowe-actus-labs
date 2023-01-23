@@ -56,6 +56,7 @@ type MkContextBase r =
   -- , transactionStream :: ContractTransactionsStream
   , runtime :: Runtime
   , msgHub :: MessageHub
+  , aboutMarkdown :: String
   | r
   }
 

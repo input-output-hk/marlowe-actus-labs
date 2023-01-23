@@ -113,6 +113,7 @@ main configJson = do
             , contractStream
             , msgHub
             , runtime
+            , aboutMarkdown: config.aboutMarkdown
             }
 
         app <- liftEffect $ runReaderT mkApp mkAppCtx
