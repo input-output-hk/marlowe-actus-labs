@@ -6,12 +6,15 @@ module Marlowe.Actus
   , defaultRiskFactors
   , toMarloweCashflow
   , evalVal
+  , currencyToToken
+  , currenciesWith6Decimals
   ) where
 
 import Prelude
 
 import Actus.Domain (CashFlow(..), ContractState, ContractTerms(..), EventType, Observation'(..), RiskFactors(..), Value'(..), _fromDecimal)
 import Control.Apply (lift2)
+import Data.Array (elem)
 import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.DateTime (DateTime)
 import Data.DateTime.Instant (Instant, fromDateTime)
@@ -164,8 +167,8 @@ genContract cashFlows = foldl generator Close $ reverse (map toMarloweCashflow c
         ( invoice
             counterparty
             party
-            (Token "" currency)
-            (adjustAda currency amount)
+            (currencyToToken currency)
+            (adjustDecimals currency amount)
             (fromDateTime paymentDay)
             continuation
         )
@@ -174,8 +177,8 @@ genContract cashFlows = foldl generator Close $ reverse (map toMarloweCashflow c
             ( invoice
                 party
                 counterparty
-                (Token "" currency)
-                (NegValue $ adjustAda currency amount)
+                (currencyToToken currency)
+                (NegValue $ adjustDecimals currency amount)
                 (fromDateTime paymentDay)
                 continuation
             )
@@ -198,9 +201,17 @@ genContract cashFlows = foldl generator Close $ reverse (map toMarloweCashflow c
       timeout
       Close
 
-adjustAda :: String -> Value -> Value
-adjustAda "" v = v
-adjustAda _ v = DivValue v (Constant $ fromInt 1000000)
+-- TODO: use token registry for handling of decimals
+adjustDecimals :: String -> Value -> Value
+adjustDecimals name v | elem name currenciesWith6Decimals = v
+adjustDecimals _ v = DivValue v (Constant $ fromInt 1000000)
+
+currenciesWith6Decimals :: Array String
+currenciesWith6Decimals = [ "", "DjedTestUSD" ]
+
+currencyToToken :: String -> Token
+currencyToToken "DjedTestUSD" = Token "9772ff715b691c0444f333ba1db93b055c0864bec48fff92d1f2a7fe" "Djed_testMicroUSD"
+currencyToToken i = Token "" i
 
 cashFlowToChoiceId :: forall a b. CashFlow a b -> ChoiceId
 cashFlowToChoiceId (CashFlow { event, paymentDay }) =

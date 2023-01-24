@@ -12,10 +12,9 @@ import Component.Types (ContractHeaderResource, MkComponentM, WalletInfo(..))
 import Component.Widgets (link)
 import Control.Monad.Reader.Class (asks)
 import Data.Argonaut (decodeJson)
-import Data.Array (catMaybes, concat, drop, filter, fromFoldable, length, singleton)
+import Data.Array (catMaybes, concat, drop, elem, filter, fromFoldable, length, singleton)
 import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (adjust)
-import Data.Decimal as D
 import Data.Either (Either(..), either, hush)
 import Data.Formatter.DateTime (formatDateTime)
 import Data.Map (lookup)
@@ -32,7 +31,7 @@ import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input(..), Party, Tok
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Language.Marlowe.Extended.V1.Metadata (lovelaceFormat)
 import Language.Marlowe.Extended.V1.Metadata.Types (NumberFormat(..))
-import Marlowe.Actus (defaultRiskFactors, evalVal, toMarloweCashflow)
+import Marlowe.Actus (currenciesWith6Decimals, currencyToToken, defaultRiskFactors, evalVal, toMarloweCashflow)
 import Marlowe.Actus.Metadata (actusMetadataKey)
 import Marlowe.Actus.Metadata as M
 import Marlowe.Runtime.Web (getPage', post')
@@ -152,6 +151,8 @@ mkEventList = do
 
                       pure unit
                     Left _ -> do
+                      traceM token
+                      traceM $ BigInt.toString value
                       traceM "error"
                       pure unit
 
@@ -248,7 +249,7 @@ mkEventList = do
                             , DOM.td {} [ text <$> hush (formatDateTime "YYYY-DD-MM HH:mm:ss:SSS" cf.paymentDay) ]
                             , DOM.td {}
                                 [ text $ fromMaybe "" $
-                                    if cf.currency == "" then show <$> (((_ / 1000000.0) <<< BigInt.toNumber) <$> evalVal cf.amount)
+                                    if elem cf.currency currenciesWith6Decimals then show <$> (((_ / 1000000.0) <<< BigInt.toNumber) <$> evalVal cf.amount)
                                     else BigInt.toString <$> (evalVal $ DivValue cf.amount (Constant $ BigInt.fromInt 1000000))
                                 ]
                             , DOM.td {} [ text $ if cf.currency == "" then "₳" else cf.currency ]
@@ -297,7 +298,7 @@ cashFlowAndEndpoint { serverURL } { resource: ContractHeader { metadata }, links
                       { cashflow: toMarloweCashflow cf
                       , party: if value < (BigInt.fromInt 0) then party else counterParty
                       , token: currencyToToken currency
-                      , value: if currency == "" then value else value / (BigInt.fromInt 1000000)
+                      , value: if elem currency currenciesWith6Decimals then value else value / (BigInt.fromInt 1000000)
                       , transactions: TransactionsEndpoint (IndexEndpoint link')
                       }
                 )
@@ -305,14 +306,6 @@ cashFlowAndEndpoint { serverURL } { resource: ContractHeader { metadata }, links
 
           _ -> pure mempty -- FIXME: notification
     Nothing -> pure mempty
-
--- FIXME: proper mapping
-currencyToToken :: String -> Token
-currencyToToken = Token ""
-
-tokenToCurrency :: Token -> String
-tokenToCurrency (Token "" "") = "L"
-tokenToCurrency _ = "undefined"
 
 partyToString :: Party -> String
 partyToString (V1.Address addr) = addr
