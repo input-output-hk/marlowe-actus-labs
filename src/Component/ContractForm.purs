@@ -17,12 +17,16 @@ import Contrib.React.Bootstrap.FormBuilder (FormBuilder, BootstrapForm)
 import Contrib.React.Bootstrap.FormBuilder as FormBuilder
 import Control.Monad.Reader.Class (asks)
 import Data.Argonaut (decodeJson, parseJson)
+import Data.Array (elem, fromFoldable)
 import Data.Array as Array
 import Data.Bifunctor (lmap)
-import Data.Either (Either(..))
+import Data.BigInt.Argonaut (fromInt, toNumber, toString)
+import Data.Either (Either(..), hush)
 import Data.FormURLEncoded.Query (FieldId(..), Query)
+import Data.Formatter.DateTime (formatDateTime)
 import Data.Map as Map
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Newtype (unwrap)
 import Data.String as String
 import Data.Time.Duration (Seconds(..))
 import Data.Undefined.NoProblem as NoProblem
@@ -31,9 +35,9 @@ import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
-import Language.Marlowe.Core.V1.Semantics.Types (Party)
+import Language.Marlowe.Core.V1.Semantics.Types (Party, Value(..))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
-import Marlowe.Actus (defaultRiskFactors, genContract)
+import Marlowe.Actus (CashFlows, currenciesWith6Decimals, defaultRiskFactors, evalVal, genContract, toMarloweCashflow)
 import Marlowe.Runtime.Web.Types (TxOutRef, bech32ToParty)
 import Polyform.Batteries (rawError)
 import Polyform.Batteries as Batteries
@@ -52,6 +56,7 @@ type FormSpec m = UseForm.Form m Unit -- JSX
 
 type Result =
   { contractTerms :: ContractTerms
+  , cashFlows :: CashFlows
   , contract :: V1.Contract
   , counterParty :: V1.Party
   , party :: V1.Party
@@ -69,14 +74,12 @@ type Props =
   , connectedWallet :: WalletInfo Wallet.Api
   }
 
-createContract :: Party -> Party -> ContractTerms -> V1.Contract
-createContract party counterParty terms = do
-  let
-    cashflowsMarlowe = genProjectedCashflows
-      (party /\ counterParty)
-      (defaultRiskFactors terms)
-      terms
-  genContract cashflowsMarlowe
+createCashFlows :: Party -> Party -> ContractTerms -> CashFlows
+createCashFlows party counterParty terms =
+  genProjectedCashflows
+    (party /\ counterParty)
+    (defaultRiskFactors terms)
+    terms
 
 walletChangeAddress :: CardanoMultiplatformLib.Lib -> Wallet.Api -> Aff (Maybe Bech32)
 walletChangeAddress lib wallet = do
@@ -90,16 +93,16 @@ initialJson = String.joinWith "\n"
   [ "{"
   , """ "contractType": "PAM", """
   , """ "contractID": "pam01", """
-  , """ "statusDate": "2023-01-31T00:00:00", """
-  , """ "contractDealDate": "2023-01-28T00:00:00", """
-  , """ "currency": "", """
+  , """ "statusDate": "2023-12-31T00:00:00", """
+  , """ "contractDealDate": "2023-12-28T00:00:00", """
+  , """ "currency": "DjedTestUSD", """
   , """ "notionalPrincipal": "1000", """
-  , """ "initialExchangeDate": "2023-02-01T00:00:00", """
-  , """ "maturityDate": "2023-02-28T00:00:00", """
+  , """ "initialExchangeDate": "2024-01-01T00:00:00", """
+  , """ "maturityDate": "2025-01-01T00:00:00", """
   , """ "nominalInterestRate": "0.1", """
-  , """ "cycleAnchorDateOfInterestPayment": "2023-02-01T00:00:00", """
-  , """ "cycleOfInterestPayment": "P1ML0", """
-  , """ "dayCountConvention": "A365", """
+  , """ "cycleAnchorDateOfInterestPayment": "2025-01-01T00:00:00", """
+  , """ "cycleOfInterestPayment": "P1YL0", """
+  , """ "dayCountConvention": "30E360", """
   , """ "endOfMonthConvention": "SD", """
   , """ "premiumDiscountAtIED": "   0", """
   , """ "rateMultiplier": "1.0", """
@@ -141,9 +144,11 @@ mkForm cardanoMultiplatformLib = FormBuilder.evalBuilder ado
   let
     counterParty = bech32ToParty counterPartyAddress
     party = bech32ToParty partyAddress
-    contract = createContract party counterParty contractTerms
+    cashFlows = createCashFlows party counterParty contractTerms
+    contract = genContract cashFlows
   in
     { contractTerms
+    , cashFlows
     , contract
     , counterParty
     , party
@@ -197,7 +202,42 @@ mkContractForm = do
           let
             mb3 = DOM.div { className: "mb-3" }
             fields = UseForm.renderForm form formState
-          fields <#> \field -> mb3 field
+          DOOM.fragment
+            (fields <#> \field -> mb3 field)
+            <> case result of
+              Just (V (Right { cashFlows })) ->
+                DOM.table { className: "table table-hover" } $
+                  [ DOM.thead {} $
+                      [ DOM.tr {}
+                          [ DOM.th {} [ DOOM.text "Contract Id" ]
+                          , DOM.th {} [ DOOM.text "Type" ]
+                          , DOM.th {} [ DOOM.text "Date" ]
+                          , DOM.th {} [ DOOM.text "Amount" ]
+                          , DOM.th {} [ DOOM.text "Currency" ]
+                          ]
+                      ]
+                  , DOM.tbody {} $ fromFoldable $
+                      map
+                        ( \cashflow ->
+                            let
+                              cf = unwrap cashflow
+                            in
+                              [ DOM.tr {}
+                                  [ DOM.td {} [ DOOM.text cf.contractId ]
+                                  , DOM.td {} [ DOOM.text $ show cf.event ]
+                                  , DOM.td {} [ DOOM.text <$> hush (formatDateTime "YYYY-DD-MM HH:mm:ss:SSS" cf.paymentDay) ]
+                                  , DOM.td {}
+                                      [ DOOM.text $ fromMaybe "" $
+                                          if elem cf.currency currenciesWith6Decimals then show <$> (((_ / 1000000.0) <<< toNumber) <$> evalVal cf.amount)
+                                          else toString <$> (evalVal $ DivValue cf.amount (Constant $ fromInt 1000000))
+                                      ]
+                                  , DOM.td {} [ DOOM.text $ if cf.currency == "" then "₳" else cf.currency ]
+                                  ]
+                              ]
+                        )
+                        (map toMarloweCashflow cashFlows)
+                  ]
+              _ -> mempty
         formActions = DOOM.fragment
           [ link
               { label: DOOM.text "Cancel"
