@@ -8,6 +8,7 @@ module Marlowe.Actus
   , evalVal
   , currencyToToken
   , currenciesWith6Decimals
+  , module Exports
   ) where
 
 import Prelude
@@ -22,6 +23,7 @@ import Data.Decimal (fromInt) as Decimal
 import Data.Foldable (foldl)
 import Data.List (List, reverse)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Marlowe.Actus.Metadata (Metadata(..)) as Exports
 import Language.Marlowe.Core.V1.Semantics.Types (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), Token(..), Value(..))
 
 type ContractStateMarlowe = ContractState Value'

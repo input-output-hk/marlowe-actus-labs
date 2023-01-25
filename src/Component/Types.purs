@@ -2,17 +2,21 @@ module Component.Types where
 
 import Prelude
 
+import Actus.Domain as Actus
 import CardanoMultiplatformLib as CardanoMultiplatformLib
+import Contrib.Data.BigInt.PositiveBigInt (PositiveBigInt)
 import Control.Monad.Reader (ReaderT)
+import Data.BigInt.Argonaut (BigInt(..))
+import Data.Lazy (Lazy)
 import Data.List (List)
-import Data.Map (Map)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
+import Data.Tuple.Nested (type (/\), (/\))
 import Effect (Effect)
-import Halogen.Subscription as Subscription
+import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Runtime.Web (Runtime)
-import Marlowe.Runtime.Web.Streaming (ContractEvent, ContractStream(..), ContractTransactionsStream(..))
-import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractHeader, GetContractResponse, ResourceWithLinks, TxOutRef, GetContractsResponse)
+import Marlowe.Runtime.Web.Streaming (ContractWithTransactionsStream)
+import Marlowe.Runtime.Web.Types as Runtime
 import React.Basic (JSX, ReactContext)
 import Wallet as Wallet
 
@@ -25,8 +29,6 @@ newtype WalletInfo wallet = WalletInfo
   }
 
 derive instance Newtype (WalletInfo wallet) _
-
-type ContractHeaderResource = ResourceWithLinks ContractHeader (contract :: ContractEndpoint)
 
 data MessageContent
   = Info JSX
@@ -52,7 +54,7 @@ type MkContextBase r =
   , walletInfoCtx :: ReactContext (Maybe (WalletInfo Wallet.Api))
   -- FIXME: use more advanced logger so we use levels and setup app verbosity.
   , logger :: String -> Effect Unit
-  , contractStream :: ContractStream
+  , contractStream :: ContractWithTransactionsStream
   -- , transactionStream :: ContractTransactionsStream
   , runtime :: Runtime
   , msgHub :: MessageHub
@@ -67,4 +69,46 @@ type MkContextBase r =
 type MkComponentMBase r = ReaderT (MkContextBase r) Effect
 
 type MkComponentM = MkComponentMBase ()
+
+data UserContractRole
+  = ContractParty | ContractCounterParty | BothParties
+
+data ActusContractRole = ActusParty | ActusCounterParty
+
+-- Cash flow direction in the context of the wallet.
+data UserCashFlowDirection
+  = IncomingFlow
+  | OutgoingFlow
+  | InternalFlow
+
+newtype CashFlowInfo = CashFlowInfo
+  { -- Author of the transaction - either party or counter party.
+    cashFlow :: Actus.CashFlow V1.Value V1.Party
+  , sender :: ActusContractRole
+  -- From the current wallet perspective (if relatd to the user).
+  , userCashFlowDirection :: Maybe (UserCashFlowDirection  /\ PositiveBigInt)
+  , token :: V1.Token
+  -- Value from ACTUS perspective.
+  , value :: BigInt
+  }
+
+newtype ContractInfo = ContractInfo
+  { cashFlowInfo :: Lazy (Array CashFlowInfo)
+  , counterParty :: V1.Party
+  , contractId :: Runtime.ContractId
+  , contractTerms :: Actus.ContractTerms
+  , userContractRole :: Maybe UserContractRole
+  , party :: V1.Party
+  , endpoints ::
+    { contract :: Runtime.ContractEndpoint
+    , transactions :: Maybe Runtime.TransactionsEndpoint
+    }
+  -- Use this only for debugging - all domain specific data
+  -- should be precomputed and exposed as separated fields.
+  , _runtime ::
+    { contractHeader :: Runtime.ContractHeader
+    , transactions :: Array Runtime.Tx
+    }
+  }
+
 

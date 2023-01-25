@@ -4,9 +4,8 @@ import Prelude
 
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain (ContractTerms)
-import CardanoMultiplatformLib (Bech32, addressObject, allocate, asksLib, bech32FromBytes, bech32FromString, bech32ToString, runGarbageCollector)
+import CardanoMultiplatformLib (Bech32, bech32FromBytes, bech32FromString, bech32ToString, runGarbageCollector)
 import CardanoMultiplatformLib as CardanoMultiplatformLib
-import CardanoMultiplatformLib.Transaction (transactionOutputObject, transactionUnspentOutput, transactionUnspentOutputObject)
 import CardanoMultiplatformLib.Types (cborHexToCbor)
 import Component.Modal (mkModal)
 import Component.Modal as Modal
@@ -26,7 +25,6 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.String as String
 import Data.Time.Duration (Seconds(..))
-import Data.Traversable (for)
 import Data.Undefined.NoProblem as NoProblem
 import Data.Validation.Semigroup (V(..))
 import Debug (traceM)
@@ -48,6 +46,7 @@ import React.Basic.DOM.Simplified.Generated as DOM
 import React.Basic.Hooks (component, useEffectOnce, useState', (/\))
 import React.Basic.Hooks as React
 import Wallet as Wallet
+import WalletContext (walletAddresses)
 
 type FormSpec m = UseForm.Form m Unit -- JSX
 
@@ -84,34 +83,7 @@ walletChangeAddress lib wallet = do
   Wallet.getChangeAddress wallet >>= case _ of
     Right address ->
       map Just $ liftEffect $ runGarbageCollector lib $ bech32FromBytes (cborHexToCbor address) NoProblem.undefined
-    Left err -> pure Nothing
-
-walletAddresses :: CardanoMultiplatformLib.Lib -> Wallet.Api -> Aff (Array Bech32)
-walletAddresses cardanoMultiplatformLib wallet = do
-  possibleUsedAddresses <- Wallet.getUsedAddresses wallet
-  -- let
-  --   possibleUsedAddresses = Right []
-  possibleUTxOs <- Wallet.getUtxos wallet
-
-  case possibleUsedAddresses, possibleUTxOs of
-    Right addresses, Right (Just utxos) -> do
-      liftEffect $ runGarbageCollector cardanoMultiplatformLib do
-        _TransactionUnspentOutput <- asksLib _."TransactionUnspentOutput"
-        utxoAddresses' <- for utxos \utxo -> do
-          let
-            utxo' = cborHexToCbor utxo
-          unspentTxOutObj <- allocate $ transactionUnspentOutput.from_bytes _TransactionUnspentOutput utxo'
-          txOutObj <- allocate $ transactionUnspentOutputObject.output unspentTxOutObj
-          addressObj <- allocate $ transactionOutputObject.address txOutObj
-          liftEffect $ addressObject.to_bech32 addressObj NoProblem.undefined
-
-        addresses' <- for addresses \addrCborHex -> do
-          _Address <- asksLib _."Address"
-          bech32FromBytes (cborHexToCbor addrCborHex) NoProblem.undefined
-
-        pure $ Array.nub $ utxoAddresses' <> addresses'
-    _, _ -> do
-      pure []
+    Left _ -> pure Nothing
 
 initialJson :: String
 initialJson = String.joinWith "\n"

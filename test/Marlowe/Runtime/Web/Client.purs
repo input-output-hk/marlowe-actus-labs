@@ -5,27 +5,33 @@ import Prelude
 import Actus.Core (genProjectedCashflows)
 import Actus.Domain (ContractTerms(..))
 import CardanoMultiplatformLib.Types (unsafeBech32)
+import Contrib.Effect as Effect
 import Contrib.Fetch (FetchError(InvalidStatusCode))
 import Control.Monad.Error.Class (catchError, throwError)
 import Data.Argonaut (Json, JsonDecodeError, decodeJson, encodeJson, jsonParser)
 import Data.Array (head)
+import Data.Array as Array
 import Data.BigInt.Argonaut as BigInt
-import Data.Either (Either(..), either)
+import Data.Either (Either(..), either, hush)
+import Data.List as List
 import Data.Map as Map
 import Data.Maybe (Maybe(..))
 import Data.Newtype (un)
 import Data.Time.Duration (Milliseconds(..))
+import Data.Traversable (for)
 import Data.Tuple.Nested ((/\))
 import Debug (traceM)
 import Effect.Aff (delay)
 import Effect.Class (liftEffect)
+import Effect.Class.Console (log)
 import Effect.Exception (error, throw)
 import Foreign.Object (Object)
+import JS.Unsafe.Stringify (unsafeStringify)
 import Language.Marlowe.Core.V1.Semantics.Types (Ada(..))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus (defaultRiskFactors, genContract)
 import Marlowe.Actus.Metadata (Metadata(..), actusMetadataKey)
-import Marlowe.Runtime.Web.Client (ClientError(..), foldMapMPages, foldMapMPages', getResource, post, post')
+import Marlowe.Runtime.Web.Client (ClientError(..), foldMapMPages, foldMapMPages', getItems', getPages', getResource, post, post')
 import Marlowe.Runtime.Web.Types (ContractsEndpoint(..), GetContractsResponse, Metadata, PostContractsRequest(..), PostContractsResponseContent(..), ServerURL(..), Tx(..), api)
 import Marlowe.Runtime.Web.Types as RT
 import Node.Encoding (Encoding(..))
@@ -118,23 +124,74 @@ spec serverUrl@(ServerURL serverUrlStr) = do
                traceM "OTHER error"
                pure unit
 
-     -- it "GET contracts" do
-     --    traceM "TESTING CONTRACTS FETCH"
-     --    contracts <- foldMapMPages' serverUrl api (pure <<< _.page) `catchError` \err -> do
-     --      traceM $ "ERROR: " <> show err
-     --      throwError err
-     --    traceM "FETCHED?"
-     --    case head <$> contracts of
-     --        Right contractHeader -> do
-     --          pure unit
-     --          -- contract <- fetchContract serverUrl contractHeader.links.contract
-     --          -- transactionHeaders <- fetchTransactionHeaders serverUrl contract.links.transactions
-     --          -- case head transactionHeaders of
-     --          --  Just transactionHeader -> do
-     --          --     transaction <- fetchTransaction serverUrl transactionHeader.links.transaction
-     --          --     let (Tx tx) = transaction.resource
-     --          --     case tx.block of
-     --          --            Just _ -> pure unit
-     --          --            _ -> fail "Expected block"
-     --          --  _ -> fail "Expected transaction"
-     --        _ -> fail "Expected contract"
+     it "GET contracts" do
+      -- let
+      --   getContracts :: Int
+      --   getContracts = foldMapMPages' serverUrl api (pure <<< _.page) Nothing
+      -- => ServerURL
+      -- -> t
+      -- -> ({ currRange :: Maybe Range, page :: a } -> m b)
+      -- -> Maybe Range
+
+      contracts <- getItems' serverUrl api Nothing `catchError` \err -> do
+        log "Get contracts error: "
+        log $ unsafeStringify err
+        throwError err
+
+      (hush contracts >>= Array.head) # case _ of
+            Just getContractsResponse -> do
+              traceM getContractsResponse
+              pure unit
+              -- contract <- fetchContract serverUrl contractHeader.links.contract
+              -- transactionHeaders <- fetchTransactionHeaders serverUrl contract.links.transactions
+              -- case head transactionHeaders of
+              --  Just transactionHeader -> do
+              --     transaction <- fetchTransaction serverUrl transactionHeader.links.transaction
+              --     let (Tx tx) = transaction.resource
+              --     case tx.block of
+              --            Just _ -> pure unit
+              --            _ -> fail "Expected block"
+              --  _ -> fail "Expected transaction"
+            _ -> fail "Expected contract"
+
+
+     it "GET transactions" do
+      (contracts :: Array GetContractsResponse) <- getItems' serverUrl api Nothing >>= Effect.liftEither
+
+      let
+        contracts' = Array.catMaybes $ contracts <#> \c@{ resource, links } -> do
+          transactions <- links.transactions
+          pure $ c { links { transactions = transactions } }
+
+      void $ for contracts' \{ links } -> do
+        txs <- getItems' serverUrl links.transactions Nothing
+        case txs of
+          Right txs' -> do
+            traceM $ "Transactions: " <> show (Array.length txs')
+            pure unit
+          Left (FetchError (InvalidStatusCode res)) -> do
+            traceM $ "Invalid status code: " <> show res.status
+            body <- res.text
+            traceM $ "error body" <> body
+            pure unit
+          _ -> pure unit
+        traceM txs
+        traceM "transactions fetched correctly"
+
+
+
+      -- (hush contracts >>= List.head) # case _ of
+      --       Just getContractsResponse -> do
+      --         traceM getContractsResponse
+      --         pure unit
+      --         -- contract <- fetchContract serverUrl contractHeader.links.contract
+      --         -- transactionHeaders <- fetchTransactionHeaders serverUrl contract.links.transactions
+      --         -- case head transactionHeaders of
+      --         --  Just transactionHeader -> do
+      --         --     transaction <- fetchTransaction serverUrl transactionHeader.links.transaction
+      --         --     let (Tx tx) = transaction.resource
+      --         --     case tx.block of
+      --         --            Just _ -> pure unit
+      --         --            _ -> fail "Expected block"
+      --         --  _ -> fail "Expected transaction"
+      --       _ -> fail "Expected contract"

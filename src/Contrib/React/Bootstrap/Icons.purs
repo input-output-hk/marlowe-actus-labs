@@ -14,6 +14,7 @@ module Contrib.React.Bootstrap.Icons
   , infoCircle
   , infoCircleFill
   , fileEarmarkPlus
+  , files
   , wallet2
   ) where
 
@@ -62,6 +63,9 @@ exclamationTriangleFill = unsafeIcon "exclamation-triangle-fill"
 
 fileEarmarkPlus :: Icon
 fileEarmarkPlus = unsafeIcon "file-earmark-plus"
+
+files :: Icon
+files = unsafeIcon "files"
 
 infoSquare :: Icon
 infoSquare = unsafeIcon "info-square"

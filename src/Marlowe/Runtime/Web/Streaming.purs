@@ -1,12 +1,18 @@
 module Marlowe.Runtime.Web.Streaming
   ( contracts
   , contractsTransactions
+  , contractsWithTransactions
+  , mkContractsWithTransactions
   , ContractEvent
+  , ContractMap
+  , ContractStream(..)
   , ContractTransactionsEvent
   , ContractTransactionsMap
-  , ContractStream(..)
-  , ContractMap
   , ContractTransactionsStream(..)
+  , ContractWithTransactionsEvent(..)
+  , ContractWithTransactionsMap
+  , ContractWithTransactions
+  , ContractWithTransactionsStream(..)
   , PollingInterval(..)
   , RequestInterval(..)
   ) where
@@ -15,11 +21,12 @@ import Prelude
 
 import Contrib.Data.Map (New(..), Old(..), additions, deletions, fromFoldableBy, updates) as Map
 import Contrib.Effect as Effect
+import Control.Alt ((<|>))
 import Control.Monad.Rec.Loops (whileM_)
 import Data.Filterable (filter)
 import Data.Foldable (any, foldMap)
 import Data.Map (Map)
-import Data.Map (empty, fromFoldable, lookup, union) as Map
+import Data.Map (catMaybes, empty, fromFoldable, lookup, union) as Map
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype as Newtype
 import Data.Traversable (for, for_)
@@ -34,7 +41,7 @@ import Effect.Ref as Ref
 import Halogen.Subscription (Listener)
 import Halogen.Subscription as Subscription
 import Marlowe.Runtime.Web.Client (foldMapMContractPages, getPages', getResource')
-import Marlowe.Runtime.Web.Types (ContractId, GetContractsResponse, ServerURL, TransactionEndpoint, TransactionsEndpoint, Tx(..), TxHeader(..), api)
+import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractId, GetContractsResponse, ServerURL, TransactionEndpoint, TransactionsEndpoint, Tx(..), TxHeader(..), api)
 
 -- | API CAUTION: We update the state in chunks but send the events one by one. This means that
 -- | the event handler can see some state changes (in `getLiveState`) before it receives some notifications.
@@ -201,3 +208,58 @@ fetchContractsTransactions endpoints prevContractTransactionMap listener (Reques
     { contractsTransactions: Map.fromFoldable (items <#> snd)
     , notify: doNotify
     }
+
+type ContractWithTransactions =
+  { contract :: GetContractsResponse
+  , transactions :: Array Tx
+  }
+
+type ContractWithTransactionsMap = Map ContractId ContractWithTransactions
+
+data ContractWithTransactionsEvent
+  = ContractEvent ContractEvent
+  | ContractTransactionsEvent ContractTransactionsEvent
+
+newtype ContractWithTransactionsStream = ContractWithTransactionsStream
+  { emitter :: Subscription.Emitter ContractWithTransactionsEvent
+  , getLiveState :: Effect ContractWithTransactionsMap
+  , getState :: Aff ContractWithTransactionsMap
+  }
+
+contractsWithTransactions :: ContractStream -> ContractTransactionsStream -> ContractWithTransactionsStream
+contractsWithTransactions (ContractStream contractStream) (ContractTransactionsStream contractTransactionsStream) = do
+  let
+    getLiveState = do
+      contractMap <- contractStream.getLiveState
+      contractTransactionsMap <- contractTransactionsStream.getLiveState
+
+      forWithIndex contractMap \contractId contract -> do
+        let
+          transactions = fromMaybe [] $ Map.lookup contractId contractTransactionsMap
+        pure { contract, transactions }
+
+    getState = do
+      contractMap <- contractStream.getState
+      contractTransactionsMap <- contractTransactionsStream.getState
+
+      forWithIndex contractMap \contractId contract -> do
+        let
+          transactions = fromMaybe [] $ Map.lookup contractId contractTransactionsMap
+        pure { contract, transactions }
+
+    emitter = (ContractEvent <$> contractStream.emitter) <|> (ContractTransactionsEvent <$> contractTransactionsStream.emitter)
+
+  ContractWithTransactionsStream { emitter, getLiveState, getState }
+
+
+mkContractsWithTransactions :: PollingInterval -> RequestInterval -> ServerURL -> Aff ContractWithTransactionsStream
+mkContractsWithTransactions pollingInterval requestInterval serverUrl = do
+  contractStream@(ContractStream { getState }) <- contracts pollingInterval requestInterval serverUrl
+  let
+    transactionEndpointsSource = (Map.catMaybes <<< map (_.links.transactions)) <$> getState
+  contractTransactionsStream <- contractsTransactions
+    pollingInterval
+    requestInterval
+    transactionEndpointsSource
+    serverUrl
+  pure $ contractsWithTransactions contractStream contractTransactionsStream

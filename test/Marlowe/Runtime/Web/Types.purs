@@ -9,7 +9,7 @@ import Data.Either (Either(..), either)
 import Data.Foldable (for_)
 import Effect.Exception (error)
 import Foreign.Object as Object
-import Marlowe.Runtime.Web.Types (ContractHeader, ContractState, Tx, TxHeader, ResourceLink, ResourceWithLinks, decodeResourceWithLink)
+import Marlowe.Runtime.Web.Types (ContractHeader, ContractState, ResourceLink, ResourceWithLinks, Tx, TxHeader, GetContractsResponse, decodeResourceWithLink)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff (readTextFile)
 import Test.Spec (Spec, describe, it)
@@ -29,7 +29,7 @@ spec = do
 
         for_ contractsWithLinksJson \contractWithLinksJson -> do
           let
-            contracts :: Either JsonDecodeError (ResourceWithLinks ContractHeader (contract :: ResourceLink ContractState))
+            contracts :: Either JsonDecodeError GetContractsResponse
             contracts = decodeResourceWithLink (map decodeJson) contractWithLinksJson
           case contracts of
             Left err -> do

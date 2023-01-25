@@ -2,16 +2,21 @@ module Utils.React.Basic.Hooks where
 
 import Prelude
 
+import Control.Monad.Rec.Class (forever)
 import Data.Int as Int
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (class Newtype)
 import Data.Time.Duration (Milliseconds(..), Seconds, fromDuration)
 import Data.Tuple.Nested ((/\), type (/\))
 import Effect (Effect)
-import Effect.Timer (clearTimeout, setTimeout)
+import Effect.Aff (Aff, delay)
+import Effect.Ref as Ref
+import Effect.Timer (clearInterval, clearTimeout, setInterval, setTimeout)
 import Halogen.Subscription (Emitter, subscribe, unsubscribe) as HS
 import React.Basic.Hooks (Hook, Ref, UseEffect, UseRef, UseState, useEffect, useRef, useState, writeRef)
 import React.Basic.Hooks (Render) as RB.Hooks
 import React.Basic.Hooks as React
+import React.Basic.Hooks.Aff (UseAff, useAff)
 
 type HookApply hooks (newHook :: Type -> Type) = newHook hooks
 
@@ -102,3 +107,35 @@ useStateRef version state =
 
 useStateRef' :: forall st. Eq st => st -> Hook (UseStateRef st st) (Ref st)
 useStateRef' st = useStateRef st st
+
+-- Run an action on regular basis. Use the cleanup action when unmounting or on deps change.
+useSetInterval
+  :: forall deps
+   . Eq deps
+  => deps
+  -> Milliseconds
+  -> Effect (Effect Unit)
+  -> Hook (UseEffect deps) Unit
+useSetInterval deps (Milliseconds milliseconds) action = React.do
+  useEffect deps do
+    cleanupRef <- Ref.new Nothing
+    intervalId <- setInterval (Int.floor milliseconds) do
+      cleanup <- action
+      Ref.write (Just cleanup) cleanupRef
+
+    pure $ do
+      Ref.read cleanupRef >>= fromMaybe (pure unit)
+      clearInterval intervalId
+
+useLoopAff
+  :: forall deps
+   . Eq deps
+  => deps
+  -> Milliseconds
+  -> Aff Unit
+  -> Hook (UseAff deps Unit) Unit
+useLoopAff deps interval action = React.do
+  void $ useAff deps $ forever do
+    action
+    delay interval
+

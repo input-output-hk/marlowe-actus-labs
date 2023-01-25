@@ -7,21 +7,22 @@ import Actus.Domain.ContractTerms (ContractTerms)
 import Component.ConnectWallet (walletInfo)
 import Component.ContractForm (initialJson, mkContractForm, mkForm)
 import Component.ContractForm as ContractForm
-import Component.EventList (decodeMetadata)
 import Component.Modal (mkModal)
 import Component.SubmitContract (mkSubmitContract)
-import Component.Types (ContractHeaderResource, MkComponentM, WalletInfo(..))
+import Component.Types (ContractInfo(..), MessageContent(..), MessageHub(..), MkComponentM, WalletInfo(..))
 import Component.Widgets (linkWithIcon)
 import Contrib.React.Basic.Hooks.UseForm as UseForm
 import Contrib.React.Bootstrap (overlayTrigger, tooltip)
 import Contrib.React.Bootstrap.Icons as Icons
+import Contrib.React.Bootstrap.Table (table)
+import Contrib.React.Bootstrap.Table as Table
 import Contrib.React.Bootstrap.Types as OverlayTrigger
 import Control.Alt ((<|>))
 import Control.Monad.Reader.Class (asks)
 import Data.Array as Array
 import Data.Decimal (Decimal)
 import Data.Either (Either(..))
-import Data.Foldable (foldMap)
+import Data.Foldable (fold, foldMap)
 import Data.FormURLEncoded.Query as Query
 import Data.List (List)
 import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
@@ -35,7 +36,9 @@ import Effect.Class (liftEffect)
 import JS.Unsafe.Stringify (unsafeStringify)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Party)
 import Language.Marlowe.Core.V1.Semantics.Types as V1
-import Marlowe.Runtime.Web.Types (ContractHeader(..), Metadata, TxOutRef, txOutRefToString)
+import Marlowe.Actus.Metadata as M
+import Marlowe.Runtime.Web.Streaming (ContractWithTransactions)
+import Marlowe.Runtime.Web.Types (ContractHeader(..), Metadata, TxOutRef, GetContractsResponse, txOutRefToString)
 import Polyform.Validator (runValidator)
 import React.Basic.DOM (text)
 import React.Basic.DOM as DOOM
@@ -81,7 +84,7 @@ type ContractListState =
   }
 
 type Props =
-  { contractList :: Array ContractHeaderResource
+  { contractList :: Array ContractInfo
   , connectedWallet :: Maybe (WalletInfo Wallet.Api)
   }
 
@@ -95,12 +98,10 @@ mkContractList = do
   modal <- liftEffect $ mkModal
   cardanoMultiplatformLib <- asks _.cardanoMultiplatformLib
   logger <- asks _.logger
+  msgHub@(MessageHub msgHubProps) <- asks _.msgHub
 
   liftEffect $ component "ContractList" \{ connectedWallet, contractList } -> React.do
     ((state :: ContractListState) /\ updateState) <- useState { newContract: Nothing, metadata: Nothing }
-
-    -- FIXME: paluh. Submission testing.
-    internalConnectedWallet /\ setInternalConnectedWallet <- useState' Nothing
 
     useEffectOnce $ do
       when testingSubmit do
@@ -118,17 +119,6 @@ mkContractList = do
             , "counter-party": [ counterPartyAddress ]
             , "contract-terms": [ initialJson ]
             }
-
-        launchAff_ do
-          possibleNami <- liftEffect (window >>= Wallet.cardano) >>= case _ of
-            Nothing -> pure Nothing
-            Just cardano -> do
-              liftEffect (Wallet.nami cardano) >>= traverse walletInfo >>= case _ of
-                Nothing -> pure Nothing
-                Just walletInfo@(WalletInfo { wallet }) -> do
-                  walletApi <- Wallet.enable_ wallet
-                  pure $ Just $ Newtype.over WalletInfo (Record.set (Proxy :: Proxy "wallet") walletApi) walletInfo
-          liftEffect $ setInternalConnectedWallet possibleNami
 
         runValidator validator query >>= case _ of
           V (Right result) -> do
@@ -149,7 +139,7 @@ mkContractList = do
 
     pure $
       DOOM.div_
-        [ case state.newContract, connectedWallet <|> internalConnectedWallet of
+        [ case state.newContract, connectedWallet of
             Just Creating, Just cw -> contractForm
               { onDismiss: updateState _ { newContract = Nothing }
               , onSuccess: onNewContract
@@ -157,8 +147,17 @@ mkContractList = do
               , connectedWallet: cw
               }
             Just (Submitting contractData), Just wallet -> submitContract
-              { onDismiss: updateState _ { newContract = Nothing }
-              , onSuccess: const $ updateState _ { newContract = Nothing }
+              { onDismiss: do
+                  updateState _ { newContract = Nothing }
+                  msgHubProps.add $ Error $ DOOM.text $ fold
+                    [ "Contract submission failed. Please try again later."
+                    ]
+              , onSuccess: const $ do
+                  updateState _ { newContract = Nothing }
+                  msgHubProps.add $ Success $ DOOM.text $ fold
+                    [ "Successfully submitted the contract. Contract transaction awaits to be included in the blockchain."
+                    , "Contract status should change to 'Confirmed' at that point."
+                    ]
               , connectedWallet: wallet
               , inModal: true
               , contractData
@@ -195,45 +194,48 @@ mkContractList = do
                 addContractLink
         , DOM.div { className: "row" } $ Array.singleton $ case state.metadata of
             Just (metadata) -> modal $
-              { body: text $ maybe "Empty Metadata" (show <<< _.contractTerms <<< unwrap) $ decodeMetadata metadata -- TODO: encode contractTerms as JSON
+              { body: text $ maybe "Empty Metadata" (show <<< _.contractTerms <<< unwrap) $ M.decodeMetadata metadata -- TODO: encode contractTerms as JSON
               , onDismiss: updateState _ { metadata = Nothing }
               , title: text "Contract Terms"
               }
             Nothing -> mempty
-        , DOM.div { className: "row" } $ Array.singleton $
-            DOM.table { className: "table table-striped table-hover" }
-              [ DOM.thead {} $
-                  [ DOM.tr {}
-                      [ DOM.th {} [ text "Id" ]
-                      , DOM.th {} [ text "Type" ]
-                      , DOM.th {} [ text "Party" ]
-                      , DOM.th {} [ text "Counter Party" ]
-                      , DOM.th {} [ text "Terms" ]
-                      , DOM.th {} [ text "Status" ]
-                      ]
+        , table { striped: Table.striped.boolean true, hover: true }
+            [ DOM.thead {} do
+              let
+                th label = DOM.th { className: "text-center" } [ text label ]
+              [ DOM.tr {}
+                  [ th "Id"
+                  , th "Type"
+                  , th "Party"
+                  , th "Counter Party"
+                  , th "Terms"
+                  , th "Status"
                   ]
-              , DOM.tbody {} $ map
-                  ( \{ resource: ContractHeader { contractId, status, metadata } } ->
-                      let
-                        md = decodeMetadata metadata
-                      in
-                        DOM.tr {}
-                          [ DOM.td {} [ text $ maybe "" (_.contractId <<< unwrap <<< _.contractTerms <<< unwrap) md ]
-                          , DOM.td {} [ text $ maybe "" (show <<< _.contractType <<< unwrap <<< _.contractTerms <<< unwrap) md ]
-                          , DOM.td {} [ foldMap (displayParty <<< _.party <<< unwrap) md ]
-                          , DOM.td {} [ foldMap (displayParty <<< _.counterParty <<< unwrap) md ]
-                          , DOM.td {} [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
-                          , DOM.td {} $ do
-                              let
-                                tooltipJSX = tooltip {} (DOOM.text $ txOutRefToString contractId)
-                              overlayTrigger
-                                { overlay: tooltipJSX
-                                , placement: OverlayTrigger.placement.bottom
-                                } $ DOM.span {} [ show status ]
-                          ]
-                  )
-                  contractList
               ]
+            , DOM.tbody {} $ map
+                ( \(ContractInfo { _runtime }) -> -- { resource: ContractHeader { contractId, status, metadata } } ->
+                    let
+                      ContractHeader { contractId, status, metadata } = _runtime.contractHeader
+                      md = M.decodeMetadata metadata
+                      tdCentered = DOM.td { className: "text-center" }
+                    in
+                      DOM.tr {}
+                        [ DOM.td {} [ text $ maybe "" (_.contractId <<< unwrap <<< _.contractTerms <<< unwrap) md ]
+                        , tdCentered [ text $ maybe "" (show <<< _.contractType <<< unwrap <<< _.contractTerms <<< unwrap) md ]
+                        , DOM.td {} [ foldMap (displayParty <<< _.party <<< unwrap) md ]
+                        , DOM.td {} [ foldMap (displayParty <<< _.counterParty <<< unwrap) md ]
+                        , tdCentered [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
+                        , DOM.td { className: "text-center" } $ do
+                            let
+                              tooltipJSX = tooltip {} (DOOM.text $ txOutRefToString contractId)
+                            overlayTrigger
+                              { overlay: tooltipJSX
+                              , placement: OverlayTrigger.placement.bottom
+                              } $ DOM.span {} [ show status ]
+                        ]
+                )
+                contractList
+            ]
         ]
   where
   displayParty :: Party -> JSX

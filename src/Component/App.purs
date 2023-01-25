@@ -2,30 +2,38 @@ module Component.App where
 
 import Prelude
 
+import Actus.Core (genProjectedCashflows)
+import Actus.Domain (CashFlow(..), ContractTerms, evalVal') as Actus
 import Component.ConnectWallet (mkConnectWallet, walletInfo)
 import Component.ConnectWallet as ConnectWallet
 import Component.ContractList (mkContractList)
 import Component.EventList (mkEventList)
 import Component.MessageHub (mkMessageBox, mkMessagePreview)
 import Component.Modal (Size(..), mkModal)
-import Component.Types (MessageContent(Success, Info), MessageHub(MessageHub), MkComponentMBase, WalletInfo(..))
+import Component.Types (ActusContractRole(..), CashFlowInfo(..), ContractInfo(..), MessageContent(Success, Info), MessageHub(MessageHub), MkComponentMBase, UserCashFlowDirection(..), UserContractRole(..), WalletInfo(..))
 import Component.Widgets (link, linkWithIcon)
-import Contrib.Data.Map as Map
+import Contrib.Data.BigInt.PositiveBigInt as PositiveBigInt
+import Contrib.Data.Map (New(..), Old(..), additions, deletions) as Map
 import Contrib.Halogen.Subscription (MinInterval(..))
-import Contrib.Halogen.Subscription (foldMapThrottle) as Subscription
+import Contrib.Halogen.Subscription (bindEffect, foldMapThrottle) as Subscription
 import Contrib.React.Bootstrap.Icons as Icons
 import Contrib.React.Bootstrap.Offcanvas (offcanvas)
 import Contrib.React.Bootstrap.Offcanvas as Offcanvas
+import Contrib.React.Bootstrap.Tab (tab)
+import Contrib.React.Bootstrap.Tabs (tabs)
 import Control.Monad.Reader.Class (asks)
 import Data.Array as Array
+import Data.BigInt.Argonaut as BigInt
 import Data.Either (Either(..))
 import Data.Foldable (length)
+import Data.Lazy as Lazy
 import Data.List (List)
 import Data.List as List
 import Data.Map (Map)
-import Data.Map (empty) as Map
-import Data.Maybe (Maybe(..))
+import Data.Map (catMaybes, empty, lookup) as Map
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid as Monoid
+import Data.Newtype (un)
 import Data.Newtype as Newtype
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for, traverse)
@@ -36,19 +44,27 @@ import Effect.Class (liftEffect)
 import Effect.Exception (throw)
 import Effect.Now (now)
 import Halogen.Subscription (Emitter) as Subscription
-import Marlowe.Runtime.Web.Streaming (ContractEvent, ContractStream(..))
-import Marlowe.Runtime.Web.Types (GetContractsResponse, TxOutRef)
+import Language.Marlowe.Core.V1.Semantics.Types as V1
+import Marlowe.Actus (defaultRiskFactors)
+import Marlowe.Actus (toMarloweCashflow) as Actus
+import Marlowe.Actus.Metadata (Metadata(..)) as Actus
+import Marlowe.Actus.Metadata as Actus.Metadata
+import Marlowe.Runtime.Web.Streaming (ContractWithTransactionsEvent, ContractWithTransactionsMap, ContractWithTransactionsStream(..))
+import Marlowe.Runtime.Web.Types (partyToBech32)
+import Marlowe.Runtime.Web.Types as Runtime
 import React.Basic (JSX)
 import React.Basic as ReactContext
-import React.Basic.DOM as DOOM
+import React.Basic.DOM (div, img, span_, text) as DOOM
 import React.Basic.DOM.Simplified.Generated as DOM
-import React.Basic.Hooks (component, provider, useState')
+import React.Basic.Hooks (component, provider, readRef, useEffect, useState')
 import React.Basic.Hooks as React
 import React.Basic.Hooks.Aff (useAff)
 import Record as Record
 import Type.Prelude (Proxy(..))
-import Utils.React.Basic.Hooks (useEmitter, useStateRef)
+import Utils.React.Basic.Hooks (useEmitter', useLoopAff, useStateRef, useStateRef')
 import Wallet as Wallet
+import WalletContext (WalletContext(..))
+import WalletContext as WalletContext
 import Web.HTML (window)
 
 -- | Debugging helpers which allow us to automatically connect wallet
@@ -85,22 +101,37 @@ autoConnectWallet walletBrand onSuccess = liftEffect (window >>= Wallet.cardano)
           -- FIXME: paluh - handle error
           Left _ -> pure unit
 
+-- | Use this switch to autoconnect the wallet for testing.
+debugWallet :: Maybe WalletBrand
+debugWallet = Nothing -- Just Nami -- Nothing
+
 data DisplayOption = Default | About
+
+type ContractInfoMap = Map Runtime.ContractId ContractInfo
+
+-- On the app level we keep the previous wallet context
+-- so we can reuse pieces of contract info from the previous
+-- state in a safe manner.
+newtype AppContractInfoMap = AppContractInfoMap
+  { walletContext :: Maybe WalletContext
+  , map :: ContractInfoMap
+  }
 
 mkApp :: MkComponentMBase () (Unit -> JSX)
 mkApp = do
   messageBox <- liftEffect $ mkMessageBox
   messagePreview <- liftEffect $ mkMessagePreview
   modal <- liftEffect $ mkModal
+  cardanoMultiplatformLib <- asks _.cardanoMultiplatformLib
   subcomponents <- do
     contractListComponent <- mkContractList
     eventListComponent <- mkEventList
     connectWallet <- mkConnectWallet
     pure { contractListComponent, eventListComponent, connectWallet, messageBox }
 
-  (ContractStream contractStream) <- asks _.contractStream
+  (ContractWithTransactionsStream contractStream) <- asks _.contractStream
 
-  throttledEmitter :: Subscription.Emitter (List ContractEvent) <- liftEffect $
+  throttledEmitter :: Subscription.Emitter (List ContractWithTransactionsEvent) <- liftEffect $
     Subscription.foldMapThrottle (List.singleton) (MinInterval $ Milliseconds 500.0) contractStream.emitter
 
   initialVersion <- liftEffect now
@@ -112,24 +143,55 @@ mkApp = do
 
   liftEffect $ component "App" \_ -> React.do
     possibleWalletInfo /\ setWalletInfo <- useState' Nothing
+    let
+      walletInfoName = _.name <<< un WalletInfo <$> possibleWalletInfo
+    possibleWalletInfoRef <- useStateRef walletInfoName possibleWalletInfo
+
+    possibleWalletContext /\ setWalletContext <- useState' Nothing
+    possibleWalletContextRef <- useStateRef' possibleWalletContext
+
+    useLoopAff walletInfoName (Milliseconds 5000.0) do
+      pwi <- liftEffect $ readRef possibleWalletInfoRef
+      pwc <- liftEffect $ readRef possibleWalletContextRef
+      case pwi, pwc of
+        Nothing, Nothing -> pure unit
+        Nothing , Just _ -> liftEffect $ setWalletContext Nothing
+        Just (WalletInfo walletInfo), _ -> do
+          walletContext <- WalletContext.walletContext cardanoMultiplatformLib walletInfo.wallet
+          liftEffect $ setWalletContext $ Just walletContext
+
     configuringWallet /\ setConfiguringWallet <- useState' false
     checkingNotifications /\ setCheckingNotifications <- useState' false
     displayOption /\ setDisplayOption <- useState' Default
-    (version /\ contracts) /\ setContracts <- useState' (initialVersion /\ Map.empty)
 
-    idRef <- useStateRef version contracts
+    -- We are ignoring contract events for now and we update the whole contractInfo set.
+    upstreamVersion <- useEmitter' initialVersion (Subscription.bindEffect (const $ now) throttledEmitter)
+    upstreamVersionRef <- useStateRef' upstreamVersion
 
-    useEmitter throttledEmitter \contractEvent -> do
-      (currContracts :: Map TxOutRef GetContractsResponse) <- contractStream.getLiveState
-      version <- now
+    -- Let's use versioning so we avoid large comparison.
+    (version /\ contractMap) /\ setContractMap <- useState' (upstreamVersion /\ AppContractInfoMap { walletContext: possibleWalletContext, map: Map.empty })
+    idRef <- useStateRef version contractMap
+
+    useEffect (upstreamVersion /\ possibleWalletContext) do
+      updates <- contractStream.getLiveState
+      old <- readRef idRef
+      newVersion <- readRef upstreamVersionRef
       let
-        (additionsNumber :: Int) = length $ Map.additions (Map.Old contracts) (Map.New currContracts)
-        (deletionsNumber :: Int) = length $ Map.deletions (Map.Old contracts) (Map.New currContracts)
+        new = updateAppContractInfoMap old possibleWalletContext updates
+        _map (AppContractInfoMap { map }) = map
 
-      msgHubProps.add $ Info $ DOOM.text $
-        "New contracts: " <> show additionsNumber <> ", deleted contracts: " <> show deletionsNumber
+        old' = _map old
+        new' = _map new
 
-      setContracts (version /\ currContracts)
+        (additionsNumber :: Int) = length $ Map.additions (Map.Old old') (Map.New new')
+        (deletionsNumber :: Int) = length $ Map.deletions (Map.Old old') (Map.New new')
+
+      when (deletionsNumber > 0 || additionsNumber > 0) do
+        msgHubProps.add $ Info $ DOOM.text $
+          "New contracts: " <> show additionsNumber <> ", deleted contracts: " <> show deletionsNumber
+
+      setContractMap (newVersion /\ new)
+      pure $ pure unit
 
     -- -- This causes a lot of re renders - we avoid it for now by
     -- -- enforcing manual offcanvas toggling.
@@ -141,11 +203,12 @@ mkApp = do
     --     setCheckingNotifications false
     --   pure $ pure unit
 
-    let
-      debugWallet = Nothing
     useAff unit $ for debugWallet \walletBrand ->
       autoConnectWallet walletBrand \walletInfo -> do
         liftEffect $ setWalletInfo $ Just walletInfo
+
+    let
+      AppContractInfoMap { map: contracts } = contractMap
 
     pure $ provider walletInfoCtx possibleWalletInfo $ Array.singleton $ DOM.div { className: "mt-6" } $
       ( case displayOption of
@@ -239,8 +302,144 @@ mkApp = do
                 ]
           , DOM.div { className: "container-xl" } do
               let
-                contracts' = Array.fromFoldable contracts
-              [ subcomponents.contractListComponent { contractList: contracts', connectedWallet: possibleWalletInfo }
-              , DOM.div { className: "col" } $ subcomponents.eventListComponent { contractList: contracts', connectedWallet: possibleWalletInfo }
+                renderTab props children = tab props $ DOM.div { className: "row pt-4" } children
+                contractArray = Array.fromFoldable contracts
+              [ tabs {fill: true, justify: true, defaultActiveKey: "cash-flows" }
+                [ renderTab
+                  { eventKey: "contracts"
+                  , title: DOM.div
+                    { className: "text-body" }
+                    [ DOM.span { className: "me-2" } $ Icons.toJSX Icons.files
+                    , DOOM.text "Contracts"
+                    ]
+                  }
+                  $ subcomponents.contractListComponent { contractList: contractArray, connectedWallet: possibleWalletInfo }
+                , renderTab
+                  { eventKey: "cash-flows"
+                  , title: DOM.div
+                    { className: "text-body" }
+                    [ DOM.span { className: "me-2" } $ Icons.toJSX Icons.cashStack
+                    , DOOM.text "Cash flows"
+                    ]
+
+                  }
+                  $ subcomponents.eventListComponent { contractList: contractArray, connectedWallet: possibleWalletInfo }
+                ]
               ]
           ]
+
+-- TODO: Currently we ignore role tokens.
+updateAppContractInfoMap :: AppContractInfoMap -> Maybe WalletContext -> ContractWithTransactionsMap -> AppContractInfoMap
+updateAppContractInfoMap (AppContractInfoMap { walletContext: prevWalletContext, map: prev }) walletContext updates = do
+  let
+    walletChanged = prevWalletContext /= walletContext
+    usedAddresses = fromMaybe [] $ _.usedAddresses <<< un WalletContext <$> walletContext
+
+    mkUserContractRole prevRole party counterParty = do
+      if walletChanged
+      then case partyToBech32 party, partyToBech32 counterParty of
+          Just addr1, Just addr2 -> case Array.elem addr1 usedAddresses, Array.elem addr2 usedAddresses of
+            true, true -> Just BothParties
+            true, false -> Just ContractParty
+            false, true -> Just ContractCounterParty
+            false, false -> Nothing
+          _, _ -> Nothing
+      else prevRole
+
+    map = Map.catMaybes $ updates <#> \{ contract: { resource: contractHeader@(Runtime.ContractHeader { contractId }), links: endpoints }, transactions } -> do
+      case contractId `Map.lookup` prev of
+        Just (ContractInfo contractInfo) -> do
+          let
+            userContractRole = mkUserContractRole
+              contractInfo.userContractRole
+              contractInfo.party
+              contractInfo.counterParty
+
+            cashFlowInfo = do
+              let
+                recomputeCashFlows = walletChanged || transactions /= contractInfo._runtime.transactions
+              if recomputeCashFlows
+                then Lazy.defer \_ -> contractCashFlowInfo
+                  contractInfo.contractTerms
+                  contractInfo.party
+                  contractInfo.counterParty
+                  userContractRole
+                  transactions
+                else contractInfo.cashFlowInfo
+
+          pure $ ContractInfo $ contractInfo
+            { cashFlowInfo = cashFlowInfo
+            , userContractRole = userContractRole
+            , _runtime
+              { contractHeader = contractHeader
+              , transactions = transactions
+              }
+            }
+        Nothing -> do
+          Actus.Metadata { party, counterParty, contractTerms } <- Actus.Metadata.fromRuntimeResource contractHeader
+          let
+            Runtime.ContractHeader { contractId } = contractHeader
+            userContractRole = mkUserContractRole Nothing party counterParty
+          pure $ ContractInfo $
+            { cashFlowInfo: Lazy.defer \_ -> contractCashFlowInfo
+                contractTerms
+                party
+                counterParty
+                userContractRole
+                transactions
+            , contractId
+            , contractTerms
+            , counterParty
+            , endpoints
+            , party
+            , userContractRole
+            , _runtime: { contractHeader, transactions }
+            }
+  AppContractInfoMap { walletContext, map }
+
+
+contractCashFlowInfo
+  :: Actus.ContractTerms
+  -> V1.Party
+  -> V1.Party
+  -> Maybe UserContractRole
+  -> Array Runtime.Tx
+  -> Array CashFlowInfo
+contractCashFlowInfo contractTerms party counterParty possibleUserContractRole transactions = do
+  let
+    -- FIXME: proper mapping
+    currencyToToken :: String -> V1.Token
+    currencyToToken = V1.Token ""
+
+    numberOfTransactions = length transactions
+    -- TODO: more reliable detection of active cashflows
+    projectedCashFlows =
+      Array.drop numberOfTransactions
+      $ Array.fromFoldable
+      $ genProjectedCashflows
+        (party /\ counterParty)
+        (defaultRiskFactors contractTerms)
+        contractTerms
+
+  Array.catMaybes $
+    map
+      ( \cf@(Actus.CashFlow { currency, amount }) -> do
+          actusValue <- Actus.evalVal' amount
+          value <- PositiveBigInt.fromBigInt actusValue
+          let
+            sender = if actusValue < (BigInt.fromInt 0)
+              then ActusParty
+              else ActusCounterParty
+          pure $ CashFlowInfo
+            { cashFlow: Actus.toMarloweCashflow cf
+            , sender
+            , token: currencyToToken currency
+            , userCashFlowDirection: possibleUserContractRole <#> case _, sender of
+                BothParties, _ -> InternalFlow /\ value
+                ContractParty, ActusParty -> OutgoingFlow /\ value
+                ContractCounterParty, ActusCounterParty -> OutgoingFlow /\ value
+                _, _ -> IncomingFlow /\ value
+            , value: actusValue
+            }
+      )
+      projectedCashFlows

@@ -9,11 +9,11 @@ import Control.Alt ((<|>))
 import Control.Monad.Except (ExceptT(..), runExceptT, throwError)
 import Control.Monad.Loops (unfoldrM)
 import Control.Monad.Trans.Class (lift)
-import Data.Argonaut (class DecodeJson, JsonDecodeError, decodeJson, stringify)
+import Data.Argonaut (class DecodeJson, Json, JsonDecodeError, decodeJson, stringify)
 import Data.Argonaut.Decode ((.:))
 import Data.Bifunctor (lmap, rmap)
 import Data.Either (Either(..))
-import Data.Foldable (fold)
+import Data.Foldable (fold, foldMap)
 import Data.Generic.Rep (class Generic)
 import Data.HTTP.Method (Method(..))
 import Data.List (List)
@@ -24,6 +24,7 @@ import Data.Newtype (class Newtype, unwrap)
 import Data.Show.Generic (genericShow)
 import Data.String.CaseInsensitive (CaseInsensitiveString(..))
 import Data.Tuple.Nested ((/\))
+import Debug (traceM)
 import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Fetch (RequestMode(..))
@@ -46,7 +47,7 @@ instance Show ClientError where
 type GetResourceResponse res = Either ClientError res
 
 allowedStatusCodes :: Array Int
-allowedStatusCodes = [ 200, 201, 206 ]
+allowedStatusCodes = [ 200, 201, 202, 206 ]
 
 decodeResponse :: forall a. DecodeJson a => JsonParser a
 decodeResponse json = do
@@ -76,8 +77,12 @@ getResource (ServerURL serverUrl) (ResourceLink path) extraHeaders = do
         $ extraHeaders
 
   runExceptT do
+    let
+      decode :: Json -> Either JsonDecodeError a
+      decode json = do
+        decodeResponse json <|> decodeJson json
     res@{ status, headers: resHeaders } <- ExceptT $ fetchEither url { headers: reqHeaders, mode: Cors } allowedStatusCodes FetchError
-    lift (jsonBody res) >>= (\json -> decodeResponse json <|> decodeJson json) >>> case _ of
+    lift (jsonBody res) >>= decode >>> case _ of
       Left err -> throwError (ResponseDecodingError err)
       Right payload -> pure { payload, headers: resHeaders, status }
 
@@ -90,8 +95,9 @@ getPage
   -> Aff (GetResourceResponse ({ page :: a, nextRange :: Maybe Range }))
 getPage serverUrl path possibleRange = runExceptT do
   { headers, payload, status } <- ExceptT
-    $ getResource serverUrl path
-    $ maybe { "Range": "contractId" } ({ "Range": _ } <<< coerce) possibleRange
+    $ case possibleRange of
+      Just range -> getResource serverUrl path { "Range": coerce range }
+      Nothing -> getResource serverUrl path {}
   pure
     { page: payload
     , nextRange:
@@ -101,24 +107,6 @@ getPage serverUrl path possibleRange = runExceptT do
           $ toArray headers
         else Nothing
     }
-
--- TODO generalize
-getContracts
-  :: ServerURL
-  -> ResourceLink (Array GetContractsResponse)
-  -> Maybe Range
-  -> Aff (Either ClientError (Array GetContractsResponse))
-getContracts serverUrl resourceLink = map (rmap (fold <<< map _.page)) <<< getPages serverUrl resourceLink
-
--- TODO generalize
-getContracts'
-  :: forall endpoint
-   . ToResourceLink endpoint (Array GetContractsResponse)
-  => ServerURL
-  -> endpoint
-  -> Maybe Range
-  -> Aff (Either ClientError (Array GetContractsResponse))
-getContracts' serverUrl endpoint = getContracts serverUrl (toResourceLink endpoint)
 
 -- TODO generalize
 foldMapMContractPages
@@ -176,6 +164,36 @@ getPages'
   -> m (GetResourceResponse (List { page :: a, currRange :: Maybe Range }))
 getPages' serverUrl endpoint = getPages serverUrl (toResourceLink endpoint)
 
+getItems
+  :: forall f t b
+   . DecodeJson b
+  => MonadAff f
+  => ToResourceLink t b
+  => Monoid b
+  => ServerURL
+  -> t
+  -> Maybe Range
+  -> f (Either ClientError b)
+getItems serverUrl endpoint range = do
+  getPages serverUrl (toResourceLink endpoint) range <#> case _ of
+    Left err -> Left err
+    Right pages -> Right $ foldMap _.page pages
+
+getItems'
+  :: forall f endpoint b
+   . MonadAff f
+  => DecodeJson b
+  => ToResourceLink endpoint b
+  => Monoid b
+  => ServerURL
+  -> endpoint
+  -> Maybe Range
+  -> f (Either ClientError b)
+getItems' serverUrl endpoint range = do
+  getPages' serverUrl endpoint range <#> case _ of
+    Left err -> Left err
+    Right pages -> Right $ foldMap _.page pages
+
 getResource'
   :: forall a extraHeaders endpoint
    . DecodeJson a
@@ -213,19 +231,19 @@ foldMapMPages'
 foldMapMPages' serverUrl path = foldMapMPages serverUrl (toResourceLink path)
 
 post
-  :: forall links postRequest postResponse getResponse extraHeaders
+  :: forall postRequest postResponse postResponseLinks getResponse getResponseLinks extraHeaders
    . DecodeJson postResponse
   => EncodeHeaders postRequest extraHeaders
   => EncodeJsonBody postRequest
-  => DecodeRecord (resource :: DecodeJsonFieldFn postResponse) (ResourceWithLinksRow postResponse links)
+  => DecodeRecord (resource :: DecodeJsonFieldFn postResponse) (ResourceWithLinksRow postResponse postResponseLinks)
   => Row.Homogeneous extraHeaders String
   => Row.Homogeneous ("Accept" :: String, "Content-Type" :: String | extraHeaders) String
   => Row.Lacks "Accept" extraHeaders
   => Row.Lacks "Content-Type" extraHeaders
   => ServerURL
-  -> IndexEndpoint postRequest postResponse getResponse links
+  -> IndexEndpoint postRequest postResponse postResponseLinks getResponse getResponseLinks
   -> postRequest
-  -> Aff (GetResourceResponse (ResourceWithLinks postResponse links))
+  -> Aff (GetResourceResponse (ResourceWithLinks postResponse postResponseLinks))
 post (ServerURL serverUrl) (IndexEndpoint (ResourceLink path)) req = runExceptT do
   let
     url = serverUrl <> "/" <> path
@@ -243,10 +261,10 @@ post (ServerURL serverUrl) (IndexEndpoint (ResourceLink path)) req = runExceptT 
     Right payload -> pure payload
 
 post'
-  :: forall t links postRequest postResponse getResponse extraHeaders
-   . Newtype t (IndexEndpoint postRequest postResponse getResponse links)
+  :: forall t postRequest postResponse postResponseLinks getResponse getResponseLinks extraHeaders
+   . Newtype t (IndexEndpoint postRequest postResponse postResponseLinks getResponse getResponseLinks)
   => DecodeJson postResponse
-  => DecodeRecord (resource :: DecodeJsonFieldFn postResponse) (ResourceWithLinksRow postResponse links)
+  => DecodeRecord (resource :: DecodeJsonFieldFn postResponse) (ResourceWithLinksRow postResponse postResponseLinks)
   => EncodeHeaders postRequest extraHeaders
   => EncodeJsonBody postRequest
   => Row.Homogeneous extraHeaders String
@@ -256,7 +274,7 @@ post'
   => ServerURL
   -> t
   -> postRequest
-  -> Aff (Either ClientError (ResourceWithLinks postResponse links))
+  -> Aff (Either ClientError (ResourceWithLinks postResponse postResponseLinks))
 post' serverUrl endpoint req = do
   let
     endpoint' = unwrap endpoint

@@ -26,6 +26,7 @@ import Test.Marlowe.Actus.Metadata as Metadata
 import Test.Marlowe.Runtime.Web (_MARLOWE_WEB_SERVER_URL)
 import Test.Marlowe.Runtime.Web as Web
 import Test.Spec as Spec
+import Test.Spec.Reporter (specReporter)
 import Test.Spec.Reporter.Console (consoleReporter)
 import Test.Spec.Runner (runSpec)
 
@@ -39,7 +40,7 @@ main = do
     testsNAM <- readFile "./test/Actus/Domain/actus-tests-nam.json"
     testsANN <- readFile "./test/Actus/Domain/actus-tests-ann.json"
 
-    runSpec [ consoleReporter ] $ do
+    runSpec [ consoleReporter, specReporter ] $ do
       Spec.parallel do
         ContractTerms.spec
         Metadata.spec

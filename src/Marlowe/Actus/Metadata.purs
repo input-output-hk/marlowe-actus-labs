@@ -10,15 +10,18 @@ import Data.Argonaut.Encode.Class (class EncodeJson)
 import Data.Bifunctor (rmap)
 import Data.DateTime (DateTime)
 import Data.DateTime.Instant (fromDateTime, toDateTime)
-import Data.Either (Either(..))
+import Data.Either (Either(..), hush)
 import Data.Generic.Rep (class Generic)
+import Data.Map as Map
 import Data.Maybe (Maybe)
-import Data.Newtype (class Newtype)
+import Data.Newtype (class Newtype, unwrap)
 import Data.String as String
+import Data.Tuple.Nested (type (/\), (/\))
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Language.Marlowe.Core.V1.Semantics.Types (Party)
 import Language.Marlowe.Core.V1.Semantics.Types as V1
+import Marlowe.Runtime.Web.Types as Runtime
 import Marlowe.Time (instantFromJson, instantToJson)
 
 actusMetadataKey :: Int
@@ -30,8 +33,9 @@ newtype Metadata = Metadata
   , counterParty :: Party -- TODO: really need in metadata?
   }
 
--- Because there is a limit for metadata string
--- we have to split addresses in two parts
+-- Because there is a limit for a single bytestring length
+-- on the blockchain, we need to split the metadata into
+-- two parts so they fit ;-)
 newtype PartyParts = PartyParts Party
 
 instance encodeJson :: EncodeJson PartyParts where
@@ -325,3 +329,14 @@ instance DecodeJson Metadata where
       , party
       , counterParty
       }
+
+decodeMetadata :: Runtime.Metadata -> Maybe Metadata
+decodeMetadata (Runtime.Metadata md) = Map.lookup actusMetadataKey md >>= decodeJson >>> hush
+
+-- | Grab metadata from `Runtime.Contract` or from `Runtime.ContractHeader`.
+fromRuntimeResource :: forall resource r. Newtype resource { metadata :: Runtime.Metadata | r} => resource -> Maybe Metadata
+fromRuntimeResource resource = do
+  let
+    { metadata } = unwrap resource
+  decodeMetadata metadata
+

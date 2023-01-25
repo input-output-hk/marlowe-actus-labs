@@ -29,6 +29,7 @@ import Foreign.Object (Object)
 import Foreign.Object as Object
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Record as Record
+import Type.Row (type (+))
 import Type.Row.Homogeneous as Row
 
 newtype TxId = TxId String
@@ -332,13 +333,16 @@ type ResourceWithLinks :: Type -> Row Type -> Type
 type ResourceWithLinks resource linksRow = { | ResourceWithLinksRow resource linksRow }
 
 -- | We perform GET and POST against this endpoint. Links structure is shared between response and resource.
-newtype IndexEndpoint :: Type -> Type -> Type -> Row Type -> Type
-newtype IndexEndpoint postRequest postResponse getResponse links =
-  IndexEndpoint (ResourceLink (Array (ResourceWithLinks getResponse links)))
+newtype IndexEndpoint :: Type -> Type -> Row Type -> Type -> Row Type -> Type
+newtype IndexEndpoint postRequest postResponse postResponseLinks getResponse getResponseLinks =
+  IndexEndpoint (ResourceLink (Array (ResourceWithLinks getResponse getResponseLinks)))
 
-derive instance Eq (IndexEndpoint postRequest postResponse getResponse links)
-derive instance Newtype (IndexEndpoint postRequest postResponse getResponse links) _
-derive newtype instance DecodeJson (IndexEndpoint postRequest postResponse getResponse links)
+type IndexEndpoint' postRequest postResponse getResponse links =
+  IndexEndpoint postRequest postResponse links getResponse links
+
+derive instance Eq (IndexEndpoint postRequest postResponse postResponseLinks getResponse getResponseLinks)
+derive instance Newtype (IndexEndpoint postRequest postResponse postResponseLinks getResponse getResponseLinks) _
+derive newtype instance DecodeJson (IndexEndpoint postRequest postResponse postResponseLinks getResponse getResponseLinks)
 
 -- | We perform GET and PUT against this endpoint.
 newtype ResourceEndpoint :: Type -> Type -> Row Type -> Type
@@ -356,7 +360,7 @@ instance ToResourceLink (ResourceLink a) a where
   toResourceLink = identity
 else instance ToResourceLink (ResourceEndpoint putRequest getResponse links) (ResourceWithLinks getResponse links) where
   toResourceLink (ResourceEndpoint link) = toResourceLink link
-else instance ToResourceLink (IndexEndpoint postRequest postResponse getResponse links) (Array (ResourceWithLinks getResponse links)) where
+else instance ToResourceLink (IndexEndpoint postRequest postResponse postResponsLinks getResponse getResponseLinks) (Array (ResourceWithLinks getResponse getResponseLinks)) where
   toResourceLink (IndexEndpoint link) = toResourceLink link
 -- | I'm closing the type class here for convenience. If we want to have other instances we can drop this approach.
 else instance (Newtype n t, ToResourceLink t a) => ToResourceLink n a where
@@ -427,14 +431,20 @@ instance DecodeJson PostContractsResponseContent where
   decodeJson = decodeNewtypedRecord
     { txBody: map decodeTransactionObjectTextEnvelope :: Maybe _ -> Maybe _ }
 
-type PostContractsResponse = ResourceWithLinks PostContractsResponseContent (contract :: ContractEndpoint)
+type ContractEndpointRow r = ( "contract" :: ContractEndpoint | r)
+
+type TransactionsEndpointRow r = ( "transactions" :: Maybe TransactionsEndpoint | r)
+
+type PostContractsResponse = ResourceWithLinks PostContractsResponseContent (ContractEndpointRow + ())
 
 type GetContractsResponseContent = ContractHeader
 
-type GetContractsResponse = ResourceWithLinks GetContractsResponseContent (contract :: ContractEndpoint)
+type GetContractsResponse = ResourceWithLinks GetContractsResponseContent (ContractEndpointRow + TransactionsEndpointRow + ())
 
 newtype ContractsEndpoint = ContractsEndpoint
-  (IndexEndpoint PostContractsRequest PostContractsResponseContent GetContractsResponseContent (contract :: ContractEndpoint))
+  (IndexEndpoint PostContractsRequest PostContractsResponseContent (ContractEndpointRow + ()) GetContractsResponseContent
+    ( ContractEndpointRow + TransactionsEndpointRow + ())
+  )
 
 derive instance Eq ContractsEndpoint
 derive instance Newtype ContractsEndpoint _
@@ -499,7 +509,7 @@ instance DecodeJson PostTransactionsResponse where
 type GetTransactionsResponse = TxHeader
 
 newtype TransactionsEndpoint = TransactionsEndpoint
-  (IndexEndpoint PostTransactionsRequest PostTransactionsResponse GetTransactionsResponse (transaction :: TransactionEndpoint))
+  (IndexEndpoint' PostTransactionsRequest PostTransactionsResponse GetTransactionsResponse (transaction :: TransactionEndpoint))
 
 derive instance Eq TransactionsEndpoint
 derive instance Newtype TransactionsEndpoint _

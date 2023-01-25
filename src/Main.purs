@@ -3,6 +3,7 @@ module Main where
 import Prelude
 
 import CardanoMultiplatformLib as CardanoMultiplatformLib
+import CardanoMultiplatformLib.Transaction (transaction)
 import Component.App (mkApp)
 import Component.MessageHub (mkMessageHub)
 import Contrib.Data.Argonaut (JsonParser)
@@ -31,7 +32,7 @@ import JS.Unsafe.Stringify (unsafeStringify)
 import Marlowe.Runtime.Web as Marlowe.Runtime.Web
 import Marlowe.Runtime.Web.Client (foldMapMContractPages)
 import Marlowe.Runtime.Web.Client (getPage')
-import Marlowe.Runtime.Web.Streaming (PollingInterval(..), RequestInterval(..))
+import Marlowe.Runtime.Web.Streaming (ContractStream(..), PollingInterval(..), RequestInterval(..))
 import Marlowe.Runtime.Web.Streaming as Streaming
 import Marlowe.Runtime.Web.Types (GetContractsResponse, ServerURL(..), TxOutRef, api)
 import Marlowe.Runtime.Web.Types (Metadata(..), ServerURL(..), GetContractsResponse, TxOutRef, api)
@@ -98,7 +99,8 @@ main configJson = do
     let
       reqInterval = RequestInterval (Milliseconds 1_000.0)
       pollInterval = PollingInterval (Milliseconds 20_000.0)
-    contractStream <- Streaming.contracts pollInterval reqInterval config.marloweWebServerUrl
+
+    contractStream <- Streaming.mkContractsWithTransactions pollInterval reqInterval config.marloweWebServerUrl
 
     CardanoMultiplatformLib.importLib >>= case _ of
       Nothing -> liftEffect $ logger "Cardano serialization lib loading failed"
