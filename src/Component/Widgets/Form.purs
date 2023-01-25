@@ -32,6 +32,7 @@ import Polyform.Batteries.UrlEncoded.Validators as Validators
 import Polyform.Validator (runValidator)
 import Polyform.Validator as Validator
 import React.Basic (JSX)
+import React.Basic.DOM as DOOM
 import React.Basic.DOM as R
 import React.Basic.DOM.Events (targetValue)
 import React.Basic.DOM.Simplified.Generated as DOM

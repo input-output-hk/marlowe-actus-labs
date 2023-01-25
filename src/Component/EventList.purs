@@ -2,71 +2,48 @@ module Component.EventList where
 
 import Prelude
 
-import Actus.Core (genProjectedCashflows)
-import Actus.Domain (CashFlow(..), evalVal')
 import CardanoMultiplatformLib (CborHex)
 import CardanoMultiplatformLib.Transaction (TransactionWitnessSetObject)
 import Component.ContractForm (walletChangeAddress)
 import Component.Modal (mkModal)
 import Component.Types (ActusContractRole(..), CashFlowInfo(..), ContractInfo(..), MkComponentM, UserContractRole(..), WalletInfo(..))
-import Component.Widgets (link, linkWithIcon)
+import Component.Widgets (link)
 import Component.Widgets.Form (mkBooleanField)
-import Contrib.Fetch (FetchError(..))
+import Contrib.Fetch (FetchError)
 import Contrib.React.Bootstrap (overlayTrigger, tooltip)
-import Contrib.React.Bootstrap.Icons as Icons
-import Contrib.React.Bootstrap.Types as Bootstrap
+import Contrib.React.Bootstrap.Table (table)
+import Contrib.React.Bootstrap.Table as Table
 import Contrib.React.Bootstrap.Types as Bootstrap
 import Control.Monad.Reader.Class (asks)
-import Data.Argonaut (decodeJson)
-import Data.Array (catMaybes, concat, drop, elem, filter, fromFoldable, length, singleton)
-import Data.Array (catMaybes, concat, drop, fromFoldable, length, singleton)
+import Data.Array (elem, singleton)
 import Data.Array as Array
 import Data.BigInt.Argonaut as BigInt
-import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (adjust)
-import Data.DateTime (adjust)
-import Data.Either (Either(..), either, hush)
 import Data.Either (Either(..), hush)
 import Data.Foldable (foldMap)
 import Data.Formatter.DateTime (formatDateTime)
-import Data.Formatter.DateTime (formatDateTime)
 import Data.Lazy as Lazy
-import Data.Map (lookup)
 import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.Newtype (unwrap)
 import Data.Time.Duration as Duration
-import Data.Traversable (traverse)
 import Debug (traceM)
 import Effect.Aff (Aff, launchAff_)
-import Effect.Class (class MonadEffect, liftEffect)
-import Effect.Exception (throw)
+import Effect.Class (liftEffect)
 import Effect.Now (nowDateTime)
-import JS.Unsafe.Stringify (unsafeStringify)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input(..), Party, Token(..), Value(..))
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input(..), Party, Token(..), Value)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input(..), Party, Token, Value(Constant, DivValue))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
-import Language.Marlowe.Core.V1.Semantics.Types as V1
-import Language.Marlowe.Extended.V1.Metadata (lovelaceFormat)
-import Language.Marlowe.Extended.V1.Metadata.Types (NumberFormat(..))
-import Marlowe.Actus (currenciesWith6Decimals, currencyToToken, defaultRiskFactors, evalVal, toMarloweCashflow)
-import Marlowe.Actus (defaultRiskFactors, evalVal, toMarloweCashflow)
-import Marlowe.Actus.Metadata (actusMetadataKey)
-import Marlowe.Actus.Metadata as M
-import Marlowe.Runtime.Web (getPage', post')
-import Marlowe.Runtime.Web.Client (getResource, put')
-import Marlowe.Runtime.Web.Streaming (ContractWithTransactions)
-import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader(..), IndexEndpoint(..), Metadata(..), PostTransactionsRequest(..), PostTransactionsResponse(..), PutTransactionRequest(..), ResourceEndpoint(..), Runtime(..), ServerURL(..), TextEnvelope(..), TransactionEndpoint(..), TransactionsEndpoint(..), api, toTextEnvelope)
-import Marlowe.Runtime.Web.Types (ContractEndpoint(..), ContractHeader, IndexEndpoint(..), PostTransactionsRequest(..), PostTransactionsResponse(..), PutTransactionRequest(..), ResourceEndpoint(..), Runtime(..), ServerURL, TextEnvelope(..), TransactionEndpoint, TransactionsEndpoint(..), toTextEnvelope, txOutRefToString)
+import Marlowe.Actus (currenciesWith6Decimals, evalVal)
+import Marlowe.Runtime.Web (post')
+import Marlowe.Runtime.Web.Client (put')
+import Marlowe.Runtime.Web.Types (PostTransactionsRequest(..), PostTransactionsResponse(..), PutTransactionRequest(..), Runtime(..), ServerURL, TextEnvelope(..), TransactionEndpoint, TransactionsEndpoint, toTextEnvelope)
 import React.Basic (fragment) as DOOM
 import React.Basic.DOM (span_, text) as DOOM
 import React.Basic.DOM (text)
 import React.Basic.DOM as R
 import React.Basic.DOM.Simplified.Generated as DOM
 import React.Basic.Events (handler_)
-import React.Basic.Hooks (JSX, component, useMemo, useState, (/\))
+import React.Basic.Hooks (JSX, component, useState, (/\))
 import React.Basic.Hooks as React
-import React.Basic.Hooks.Aff (useAff)
 import Wallet as Wallet
 import WalletContext (walletAddresses)
 
@@ -102,9 +79,6 @@ submit witnesses serverUrl transactionEndpoint = do
 
     req = PutTransactionRequest textEnvelope
   put' serverUrl transactionEndpoint req
-
--- liftEither :: forall a m err. MonadEffect m => Show err => Either err a -> m a
--- liftEither = either (liftEffect <<< throw <<< show) pure
 
 mkEventList :: MkComponentM (Props -> JSX)
 mkEventList = do
@@ -152,14 +126,14 @@ mkEventList = do
 
                 post' runtime.serverURL transactionsEndpoint req
                   >>= case _ of
-                    Right ({ resource: PostTransactionsResponse postTransactionsResponse, links: { transaction: transactionsEndpoint } }) -> do
+                    Right ({ resource: PostTransactionsResponse postTransactionsResponse, links: { transaction: transactionEndpoint } }) -> do
                       traceM postTransactionsResponse
                       let
                         { txBody: tx } = postTransactionsResponse
                         TextEnvelope { cborHex: txCborHex } = tx
                       Wallet.signTx cw txCborHex true >>= case _ of
                         Right witnessSet -> do
-                          submit witnessSet runtime.serverURL transactionsEndpoint >>= case _ of
+                          submit witnessSet runtime.serverURL transactionEndpoint >>= case _ of
                             Right _ -> do
                               traceM "Successfully submitted the transaction"
                             -- liftEffect $ onSuccess contractEndpoint
@@ -263,7 +237,7 @@ mkEventList = do
               else
                 showMyContracts
 
-        , DOM.table { className: "table table-hover" } $
+        , table { striped: Table.striped.boolean true, hover: true } $
             [ DOM.thead {} do
               let
                 th label = DOM.th { className: "text-center" } [ text label ]
@@ -293,7 +267,7 @@ mkEventList = do
                               [ DOM.td {} [ text $ cf.contractId ]
                               , tdCentered [ text $ show cf.event ]
                               , tdCentered [ foldMap text $ hush (formatDateTime "YYYY-DD-MM HH:mm:ss" cf.paymentDay) ]
-                              , DOM.td {}
+                              , DOM.td {className: "text-end"}
                                 [ text $ fromMaybe "" $
                                   if elem cf.currency currenciesWith6Decimals
                                   then show <$> (((_ / 1000000.0) <<< BigInt.toNumber) <$> evalVal cf.amount)
@@ -318,55 +292,6 @@ mkEventList = do
                   contractList
             ]
         ]
-
--- <<<<<<< HEAD
--- cashFlowAndEndpoint
---   :: forall r s t
---    . { serverURL :: ServerURL | r }
---   -> { links :: { contract :: ContractEndpoint | s }, resource :: ContractHeader | t }
---   -> Aff
---        ( Array
---            { cashflow :: CashFlow Value Party
---            , party :: Party
---            , token :: Token
---            , transactions :: TransactionsEndpoint
---            , value :: BigInt.BigInt
---            }
---        )
--- cashFlowAndEndpoint { serverURL } { resource: ContractHeader { metadata }, links: { contract: ContractEndpoint (ResourceEndpoint link) } } =
---   case decodeMetadata metadata of
---     Just (M.Metadata { contractTerms, party, counterParty }) -> do
---       getResource serverURL link {}
---         >>= case _ of
---           Right { payload: { links: { transactions: TransactionsEndpoint (IndexEndpoint link') } } } -> do
---             numberOfTransactions <- getResource serverURL link' {}
---               >>= case _ of
---                 Right { payload: arr } -> pure $ length arr
---                 _ -> pure 0
--- 
---             let
---               -- TODO: more reliable detection of active cashflows
---               projectedCashFlows = drop numberOfTransactions $ fromFoldable $ genProjectedCashflows (party /\ counterParty) (defaultRiskFactors contractTerms) contractTerms
--- 
---             pure $ catMaybes $
---               map
---                 ( \cf@(CashFlow { currency, amount }) -> do
---                     value <- evalVal' amount
---                     if value == (BigInt.fromInt 0) then Nothing
---                     else pure $
---                       { cashflow: toMarloweCashflow cf
---                       , party: if value < (BigInt.fromInt 0) then party else counterParty
---                       , token: currencyToToken currency
---                       , value: if elem currency currenciesWith6Decimals then value else value / (BigInt.fromInt 1000000)
---                       , transactions: TransactionsEndpoint (IndexEndpoint link')
---                       }
---                 )
---                 projectedCashFlows
--- 
---           _ -> pure mempty -- FIXME: notification
---     Nothing -> pure mempty
--- =======
--- >>>>>>> cd02efc (Introduce ContractInfo with cash flow caching)
 
 partyToString :: Party -> String
 partyToString (V1.Address addr) = addr

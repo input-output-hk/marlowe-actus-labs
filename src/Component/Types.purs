@@ -1,22 +1,27 @@
-module Component.Types where
+module Component.Types
+  ( MkContextBase(..)
+  , MkComponentMBase(..)
+  , MkComponentM
+  , MessageHub(..)
+  , Message(..)
+  , MessageId(..)
+  , MessageContent(..)
+  , WalletInfo(..)
+  , module Exports
+  )
+  where
 
 import Prelude
 
-import Actus.Domain as Actus
 import CardanoMultiplatformLib as CardanoMultiplatformLib
-import Contrib.Data.BigInt.PositiveBigInt (PositiveBigInt)
+import Component.Types.ContractInfo (ContractInfo(..), UserCashFlowDirection(..), UserContractRole(..), ActusContractRole(..), CashFlowInfo(..), ActusContractId(..)) as Exports
 import Control.Monad.Reader (ReaderT)
-import Data.BigInt.Argonaut (BigInt(..))
-import Data.Lazy (Lazy)
 import Data.List (List)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
-import Data.Tuple.Nested (type (/\), (/\))
 import Effect (Effect)
-import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Runtime.Web (Runtime)
 import Marlowe.Runtime.Web.Streaming (ContractWithTransactionsStream)
-import Marlowe.Runtime.Web.Types as Runtime
 import React.Basic (JSX, ReactContext)
 import Wallet as Wallet
 
@@ -69,46 +74,4 @@ type MkContextBase r =
 type MkComponentMBase r = ReaderT (MkContextBase r) Effect
 
 type MkComponentM = MkComponentMBase ()
-
-data UserContractRole
-  = ContractParty | ContractCounterParty | BothParties
-
-data ActusContractRole = ActusParty | ActusCounterParty
-
--- Cash flow direction in the context of the wallet.
-data UserCashFlowDirection
-  = IncomingFlow
-  | OutgoingFlow
-  | InternalFlow
-
-newtype CashFlowInfo = CashFlowInfo
-  { -- Author of the transaction - either party or counter party.
-    cashFlow :: Actus.CashFlow V1.Value V1.Party
-  , sender :: ActusContractRole
-  -- From the current wallet perspective (if relatd to the user).
-  , userCashFlowDirection :: Maybe (UserCashFlowDirection  /\ PositiveBigInt)
-  , token :: V1.Token
-  -- Value from ACTUS perspective.
-  , value :: BigInt
-  }
-
-newtype ContractInfo = ContractInfo
-  { cashFlowInfo :: Lazy (Array CashFlowInfo)
-  , counterParty :: V1.Party
-  , contractId :: Runtime.ContractId
-  , contractTerms :: Actus.ContractTerms
-  , userContractRole :: Maybe UserContractRole
-  , party :: V1.Party
-  , endpoints ::
-    { contract :: Runtime.ContractEndpoint
-    , transactions :: Maybe Runtime.TransactionsEndpoint
-    }
-  -- Use this only for debugging - all domain specific data
-  -- should be precomputed and exposed as separated fields.
-  , _runtime ::
-    { contractHeader :: Runtime.ContractHeader
-    , transactions :: Array Runtime.Tx
-    }
-  }
-
 

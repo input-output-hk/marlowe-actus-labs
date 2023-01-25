@@ -114,9 +114,25 @@ instance DecodeJson TxStatus where
     "confirmed" -> Just Confirmed
     _ -> Nothing
 
+newtype BlockNumber = BlockNumber Int
+derive instance Generic BlockNumber _
+derive instance Newtype BlockNumber _
+derive instance Eq BlockNumber
+derive instance Ord BlockNumber
+instance DecodeJson BlockNumber where
+  decodeJson json = BlockNumber <$> decodeJson json
+
+newtype SlotNumber = SlotNumber Int
+derive instance Generic SlotNumber _
+derive instance Newtype SlotNumber _
+derive instance Eq SlotNumber
+derive instance Ord SlotNumber
+instance DecodeJson SlotNumber where
+  decodeJson json = SlotNumber <$> decodeJson json
+
 newtype BlockHeader = BlockHeader
-  { slotNo :: Int
-  , blockNo :: Int
+  { slotNo :: SlotNumber
+  , blockNo :: BlockNumber
   , blockHeaderHash :: String
   }
 

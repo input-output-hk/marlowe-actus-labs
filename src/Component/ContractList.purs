@@ -9,7 +9,8 @@ import Component.ContractForm (initialJson, mkContractForm, mkForm)
 import Component.ContractForm as ContractForm
 import Component.Modal (mkModal)
 import Component.SubmitContract (mkSubmitContract)
-import Component.Types (ContractInfo(..), MessageContent(..), MessageHub(..), MkComponentM, WalletInfo(..))
+import Component.Types (ActusContractId(..), ContractInfo(..), MessageContent(..), MessageHub(..), MkComponentM, WalletInfo(..))
+import Component.Types.ContractInfo as ContractInfo
 import Component.Widgets (linkWithIcon)
 import Contrib.React.Basic.Hooks.UseForm as UseForm
 import Contrib.React.Bootstrap (overlayTrigger, tooltip)
@@ -24,9 +25,10 @@ import Data.Decimal (Decimal)
 import Data.Either (Either(..))
 import Data.Foldable (fold, foldMap)
 import Data.FormURLEncoded.Query as Query
+import Data.Function (on)
 import Data.List (List)
 import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
-import Data.Newtype (unwrap)
+import Data.Newtype (un, unwrap)
 import Data.Newtype as Newtype
 import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\))
@@ -39,7 +41,9 @@ import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus.Metadata as M
 import Marlowe.Runtime.Web.Streaming (ContractWithTransactions)
 import Marlowe.Runtime.Web.Types (ContractHeader(..), Metadata, TxOutRef, GetContractsResponse, txOutRefToString)
+import Marlowe.Runtime.Web.Types as Runtime
 import Polyform.Validator (runValidator)
+import React.Basic as DOOM
 import React.Basic.DOM (text)
 import React.Basic.DOM as DOOM
 import React.Basic.DOM.Events (targetValue)
@@ -88,6 +92,12 @@ type Props =
   , connectedWallet :: Maybe (WalletInfo Wallet.Api)
   }
 
+data OrderBy
+  = OrderByCreationDate
+  | OrderByActusContractId
+  | OrderByLastUpdateDate
+derive instance Eq OrderBy
+
 testingSubmit :: Boolean
 testingSubmit = false
 
@@ -102,6 +112,18 @@ mkContractList = do
 
   liftEffect $ component "ContractList" \{ connectedWallet, contractList } -> React.do
     ((state :: ContractListState) /\ updateState) <- useState { newContract: Nothing, metadata: Nothing }
+    ordering /\ updateOrdering <- useState { orderBy: OrderByCreationDate, orderAsc: false }
+
+    let
+      contractList' = do
+        let
+          sortedContracts = case ordering.orderBy of
+            OrderByCreationDate -> Array.sortBy (compare `on` (map (_.blockNo <<< un Runtime.BlockHeader) <<< ContractInfo.createdAt)) contractList
+            OrderByActusContractId -> Array.sortBy (compare `on` (ContractInfo.actusContractId)) contractList
+            OrderByLastUpdateDate -> Array.sortBy (compare `on` (map (_.blockNo <<< un Runtime.BlockHeader) <<< ContractInfo.updatedAt)) contractList
+        if ordering.orderAsc
+        then sortedContracts
+        else Array.reverse sortedContracts
 
     useEffectOnce $ do
       when testingSubmit do
@@ -202,29 +224,53 @@ mkContractList = do
         , table { striped: Table.striped.boolean true, hover: true }
             [ DOM.thead {} do
               let
-                th label = DOM.th { className: "text-center" } [ text label ]
+                orderingIcon = if ordering.orderAsc
+                  then Icons.arrowDownShort
+                  else Icons.arrowUpShort
+                orderingTh label headerOrdering = if ordering.orderBy == headerOrdering
+                    then DOM.th { className: "text-center" }
+                      [ Icons.toJSX orderingIcon
+                      , DOM.a
+                        { href: "#"
+                        , onClick: handler_ $ updateOrdering _ { orderAsc = not ordering.orderAsc }
+                        }
+                        [ label ]
+                      ]
+                    else DOM.th { className: "text-center" }
+                      [ DOM.a
+                        { href: "#"
+                        , onClick: handler_ $ updateOrdering _ { orderBy = headerOrdering }
+                        }
+                        [ label ]
+                      ]
+
+                th label = DOM.th { className: "text-center" } [ label ]
               [ DOM.tr {}
-                  [ th "Id"
-                  , th "Type"
-                  , th "Party"
-                  , th "Counter Party"
-                  , th "Terms"
-                  , th "Status"
+                  [ orderingTh (DOOM.text "Actus Contract Id") OrderByActusContractId
+                  , do
+                    let
+                      label = DOOM.fragment [ DOOM.text "Created" ] --, DOOM.br {},  DOOM.text "(Block number)"]
+                    orderingTh label OrderByCreationDate
+                  , th $ DOOM.text "Type"
+                  , th $ DOOM.text "Party"
+                  , th $ DOOM.text "Counter Party"
+                  , th $ DOOM.text "Status"
+                  , th $ DOOM.text "Contract"
                   ]
               ]
             , DOM.tbody {} $ map
-                ( \(ContractInfo { _runtime }) -> -- { resource: ContractHeader { contractId, status, metadata } } ->
+                ( \ci@(ContractInfo { _runtime, counterParty, party }) -> -- { resource: ContractHeader { contractId, status, metadata } } ->
                     let
                       ContractHeader { contractId, status, metadata } = _runtime.contractHeader
-                      md = M.decodeMetadata metadata
+                      -- md = M.decodeMetadata metadata
                       tdCentered = DOM.td { className: "text-center" }
                     in
                       DOM.tr {}
-                        [ DOM.td {} [ text $ maybe "" (_.contractId <<< unwrap <<< _.contractTerms <<< unwrap) md ]
-                        , tdCentered [ text $ maybe "" (show <<< _.contractType <<< unwrap <<< _.contractTerms <<< unwrap) md ]
-                        , DOM.td {} [ foldMap (displayParty <<< _.party <<< unwrap) md ]
-                        , DOM.td {} [ foldMap (displayParty <<< _.counterParty <<< unwrap) md ]
-                        , tdCentered [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
+                        [ DOM.td {} [ text $ un ActusContractId $ ContractInfo.actusContractId ci ]
+                        , tdCentered [ text $ foldMap show $ map (un Runtime.BlockNumber <<< _.blockNo <<< un Runtime.BlockHeader) $ ContractInfo.createdAt ci ]
+                        , tdCentered [ text $ show <<< ContractInfo.actusContractType $ ci ]
+                        , DOM.td {} [ displayParty party ]
+                        , DOM.td {} [ displayParty counterParty ]
                         , DOM.td { className: "text-center" } $ do
                             let
                               tooltipJSX = tooltip {} (DOOM.text $ txOutRefToString contractId)
@@ -232,9 +278,10 @@ mkContractList = do
                               { overlay: tooltipJSX
                               , placement: OverlayTrigger.placement.bottom
                               } $ DOM.span {} [ show status ]
+                        , tdCentered [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
                         ]
                 )
-                contractList
+                contractList'
             ]
         ]
   where

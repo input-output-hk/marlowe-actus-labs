@@ -106,6 +106,7 @@ debugWallet :: Maybe WalletBrand
 debugWallet = Nothing -- Just Nami -- Nothing
 
 data DisplayOption = Default | About
+derive instance Eq DisplayOption
 
 type ContractInfoMap = Map Runtime.ContractId ContractInfo
 
@@ -211,16 +212,6 @@ mkApp = do
       AppContractInfoMap { map: contracts } = contractMap
 
     pure $ provider walletInfoCtx possibleWalletInfo $ Array.singleton $ DOM.div { className: "mt-6" } $
-      ( case displayOption of
-          About -> Array.singleton $ modal $
-            { onDismiss: setDisplayOption Default
-            , title: DOOM.text "About"
-            , body: DOOM.div { dangerouslySetInnerHTML: { __html: about } }
-            , size: Large
-            }
-          Default -> []
-      )
-        <>
           [ DOM.div { className: "fixed-top" }
               [ DOM.nav { className: "navbar mb-lg-3 navbar-expand-sm navbar-light bg-light py-0" } $
                   DOM.div { className: "container-xl" }
@@ -268,24 +259,7 @@ mkApp = do
                                     , onClick: setConfiguringWallet true
                                     }
                             ]
-                        ] <> Monoid.guard configuringWallet do
-                          let
-                            jsx = subcomponents.connectWallet
-                              { currentlyConnected: possibleWalletInfo
-                              , onWalletConnect: \result -> do
-                                  case result of
-                                    ConnectWallet.Connected walletInfo -> do
-                                      let
-                                        WalletInfo { name } = walletInfo
-                                      msgHubProps.add $ Success $ DOOM.text $ "Connected to " <> name
-                                      setWalletInfo (Just walletInfo)
-                                    ConnectWallet.ConnectionError _ -> pure unit
-                                    ConnectWallet.NoWallets -> pure unit
-                                  setConfiguringWallet false
-                              , onDismiss: setConfiguringWallet false
-                              , inModal: true
-                              }
-                          [ jsx ]
+                        ]
                     ]
               , DOM.div { className: "container-xl" }
                   $ DOM.div { className: "row" }
@@ -300,11 +274,36 @@ mkApp = do
                 }
                 [ DOM.div { className: "p-3 overflow-auto" } $ messageBox msgHub
                 ]
+          , Monoid.guard (displayOption == About) $
+              modal $
+                { onDismiss: setDisplayOption Default
+                , title: DOOM.text "About"
+                , body: DOOM.div { dangerouslySetInnerHTML: { __html: about } }
+                , size: Large
+                }
+          , Monoid.guard configuringWallet do
+              let
+                jsx = subcomponents.connectWallet
+                  { currentlyConnected: possibleWalletInfo
+                  , onWalletConnect: \result -> do
+                      case result of
+                        ConnectWallet.Connected walletInfo -> do
+                          let
+                            WalletInfo { name } = walletInfo
+                          msgHubProps.add $ Success $ DOOM.text $ "Connected to " <> name
+                          setWalletInfo (Just walletInfo)
+                        ConnectWallet.ConnectionError _ -> pure unit
+                        ConnectWallet.NoWallets -> pure unit
+                      setConfiguringWallet false
+                  , onDismiss: setConfiguringWallet false
+                  , inModal: true
+                  }
+              jsx
           , DOM.div { className: "container-xl" } do
               let
                 renderTab props children = tab props $ DOM.div { className: "row pt-4" } children
                 contractArray = Array.fromFoldable contracts
-              [ tabs {fill: true, justify: true, defaultActiveKey: "cash-flows" }
+              [ tabs {fill: true, justify: true, defaultActiveKey: "contracts" }
                 [ renderTab
                   { eventKey: "contracts"
                   , title: DOM.div
@@ -378,7 +377,7 @@ updateAppContractInfoMap (AppContractInfoMap { walletContext: prevWalletContext,
         Nothing -> do
           Actus.Metadata { party, counterParty, contractTerms } <- Actus.Metadata.fromRuntimeResource contractHeader
           let
-            Runtime.ContractHeader { contractId } = contractHeader
+            Runtime.ContractHeader { contractId, block } = contractHeader
             userContractRole = mkUserContractRole Nothing party counterParty
           pure $ ContractInfo $
             { cashFlowInfo: Lazy.defer \_ -> contractCashFlowInfo
@@ -435,6 +434,8 @@ contractCashFlowInfo contractTerms party counterParty possibleUserContractRole t
                 ContractParty, ActusParty -> OutgoingFlow /\ value
                 ContractCounterParty, ActusCounterParty -> OutgoingFlow /\ value
                 _, _ -> IncomingFlow /\ value
+            -- FIXME: Shoule I bring in this logic from last merge of EventList
+            --  , value: if elem currency currenciesWith6Decimals then value else value / (BigInt.fromInt 1000000)
             , value: actusValue
             }
       )

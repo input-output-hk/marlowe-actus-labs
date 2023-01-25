@@ -1,6 +1,8 @@
 module Contrib.React.Bootstrap.Icons
   ( Icon
   , toJSX
+  , arrowDownShort
+  , arrowUpShort
   , bell
   , bellFill
   , bellSlash
@@ -33,6 +35,12 @@ newtype Icon = Icon JSX
 
 toJSX :: Icon -> JSX
 toJSX (Icon jsx) = jsx
+
+arrowDownShort :: Icon
+arrowDownShort = unsafeIcon "arrow-down-short"
+
+arrowUpShort :: Icon
+arrowUpShort = unsafeIcon "arrow-up-short"
 
 bell :: Icon
 bell = unsafeIcon "bell"
