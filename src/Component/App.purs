@@ -45,7 +45,7 @@ import Effect.Exception (throw)
 import Effect.Now (now)
 import Halogen.Subscription (Emitter) as Subscription
 import Language.Marlowe.Core.V1.Semantics.Types as V1
-import Marlowe.Actus (defaultRiskFactors)
+import Marlowe.Actus (currencyToToken, defaultRiskFactors)
 import Marlowe.Actus (toMarloweCashflow) as Actus
 import Marlowe.Actus.Metadata (Metadata(..)) as Actus
 import Marlowe.Actus.Metadata as Actus.Metadata
@@ -407,10 +407,6 @@ contractCashFlowInfo
   -> Array CashFlowInfo
 contractCashFlowInfo contractTerms party counterParty possibleUserContractRole transactions = do
   let
-    -- FIXME: proper mapping
-    currencyToToken :: String -> V1.Token
-    currencyToToken = V1.Token ""
-
     numberOfTransactions = length transactions
     -- TODO: more reliable detection of active cashflows
     projectedCashFlows =
