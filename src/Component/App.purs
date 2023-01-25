@@ -421,7 +421,7 @@ contractCashFlowInfo contractTerms party counterParty possibleUserContractRole t
     map
       ( \cf@(Actus.CashFlow { currency, amount }) -> do
           actusValue <- Actus.evalVal' amount
-          value <- PositiveBigInt.fromBigInt actusValue
+          value <- PositiveBigInt.fromBigInt $ BigInt.abs actusValue
           let
             sender = if actusValue < (BigInt.fromInt 0)
               then ActusParty
