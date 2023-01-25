@@ -117,10 +117,12 @@ mkContractList = do
     let
       contractList' = do
         let
+          -- Quick and dirty hack to display just submited contracts as first
+          someFutureBlockNumber = Runtime.BlockNumber 2058430
           sortedContracts = case ordering.orderBy of
-            OrderByCreationDate -> Array.sortBy (compare `on` (map (_.blockNo <<< un Runtime.BlockHeader) <<< ContractInfo.createdAt)) contractList
+            OrderByCreationDate -> Array.sortBy (compare `on` (fromMaybe someFutureBlockNumber <<< map ( _.blockNo <<< un Runtime.BlockHeader) <<< ContractInfo.createdAt)) contractList
             OrderByActusContractId -> Array.sortBy (compare `on` (ContractInfo.actusContractId)) contractList
-            OrderByLastUpdateDate -> Array.sortBy (compare `on` (map (_.blockNo <<< un Runtime.BlockHeader) <<< ContractInfo.updatedAt)) contractList
+            OrderByLastUpdateDate -> Array.sortBy (compare `on` (fromMaybe someFutureBlockNumber <<< map (_.blockNo <<< un Runtime.BlockHeader) <<< ContractInfo.updatedAt)) contractList
         if ordering.orderAsc
         then sortedContracts
         else Array.reverse sortedContracts
@@ -232,13 +234,16 @@ mkContractList = do
                       [ Icons.toJSX orderingIcon
                       , DOM.a
                         { href: "#"
+                        , className: "text-decoration-none"
                         , onClick: handler_ $ updateOrdering _ { orderAsc = not ordering.orderAsc }
                         }
                         [ label ]
                       ]
                     else DOM.th { className: "text-center" }
-                      [ DOM.a
+                      [ DOM.span { className: "invisible" } $ Icons.toJSX orderingIcon
+                      , DOM.a
                         { href: "#"
+                        , className: "text-decoration-none"
                         , onClick: handler_ $ updateOrdering _ { orderBy = headerOrdering }
                         }
                         [ label ]

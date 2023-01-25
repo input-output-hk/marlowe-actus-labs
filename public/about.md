@@ -10,7 +10,7 @@ The [taxonomy](https://www.actusfrf.org/taxonomy) of financial contracts is main
 
 #### Amortizing loans
 
->>> NOTE: This version of ACTUS Labs prototype implements only contracts from this kind.
+> NOTE: This version of ACTUS Labs prototype implements only this kind of contracts.
 
 An amortizing loan is a loan where according to an amortization schedule payments are executed to pay back the principal with interest.
 
