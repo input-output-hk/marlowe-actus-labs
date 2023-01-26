@@ -23,7 +23,7 @@ import Data.Either (Either(..), hush)
 import Data.Foldable (foldMap)
 import Data.Formatter.DateTime (formatDateTime)
 import Data.Lazy as Lazy
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe, isJust)
 import Data.Newtype (unwrap)
 import Data.Time.Duration as Duration
 import Debug (traceM)
@@ -247,6 +247,7 @@ mkEventList = do
                   , th "Date"
                   , th "Amount"
                   , th "Currency"
+                  , th "Execute debug"
                   , th "Action"
                   ]
               ]
@@ -274,6 +275,8 @@ mkEventList = do
                                   else BigInt.toString <$> (evalVal $ DivValue cf.amount (Constant $ BigInt.fromInt 1000000))
                                   ]
                               , tdCentered [ text $ if cf.currency == "" then "₳" else cf.currency ]
+                              , tdCentered $ Array.singleton $ text $
+                                  "user role: " <> show userContractRole <> ", sender: " <> show sender <> ", transaction endpoint: " <> show (isJust endpoints.transactions)
                               , tdCentered $ Array.singleton $ case endpoints.transactions of
                                   Just transactionsEndpoint -> do
                                     let

@@ -7,17 +7,25 @@ import Contrib.Data.BigInt.PositiveBigInt (PositiveBigInt)
 import Control.Alt ((<|>))
 import Data.Array as Array
 import Data.BigInt.Argonaut (BigInt)
+import Data.Generic.Rep (class Generic)
 import Data.Lazy (Lazy)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
+import Data.Show.Generic (genericShow)
 import Data.Tuple.Nested (type (/\))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Runtime.Web.Types as Runtime
 
 data UserContractRole
   = ContractParty | ContractCounterParty | BothParties
+derive instance Generic UserContractRole _
+instance Show UserContractRole where
+  show = genericShow
 
 data ActusContractRole = ActusParty | ActusCounterParty
+derive instance Generic ActusContractRole _
+instance Show ActusContractRole where
+  show = genericShow
 
 -- Cash flow direction in the context of the wallet.
 data UserCashFlowDirection
