@@ -116,12 +116,12 @@ initialAddress = "" -- "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57u
 error :: forall errs. String -> Batteries.Errors' (raw :: Array String | errs)
 error = Array.singleton <<< rawError
 
-addressInput :: CardanoMultiplatformLib.Lib -> String -> Maybe String -> FormBuilder Effect Bech32
-addressInput cardanoMultiplatformLib initial name = do
+addressInput :: CardanoMultiplatformLib.Lib -> String -> String -> Maybe String -> FormBuilder Effect Bech32
+addressInput cardanoMultiplatformLib label initial name = do
   let
     props =
       { initial
-      , label: Just $ DOOM.text "Address"
+      , label: Just $ DOOM.text label
       , name
       , validator: Validator.liftFnMMaybe (const $ pure [ "Invalid address" ]) \str -> do
           bech32FromString cardanoMultiplatformLib str
@@ -139,8 +139,8 @@ mkForm cardanoMultiplatformLib = FormBuilder.evalBuilder ado
     , rows: 15
     , name: (Just $ "contract-terms")
     }
-  partyAddress <- addressInput cardanoMultiplatformLib "" $ Just "party"
-  counterPartyAddress <- addressInput cardanoMultiplatformLib initialAddress $ Just "counter-party"
+  partyAddress <- addressInput cardanoMultiplatformLib "Your address" "" $ Just "party"
+  counterPartyAddress <- addressInput cardanoMultiplatformLib "Counter-party address" initialAddress $ Just "counter-party"
   let
     counterParty = bech32ToParty counterPartyAddress
     party = bech32ToParty partyAddress

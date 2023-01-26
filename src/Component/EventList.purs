@@ -2,6 +2,7 @@ module Component.EventList where
 
 import Prelude
 
+import Actus.Domain.BusinessEvents as Actus.BussinessEvents
 import CardanoMultiplatformLib (CborHex)
 import CardanoMultiplatformLib.Transaction (TransactionWitnessSetObject)
 import Component.ContractForm (walletChangeAddress)
@@ -327,7 +328,7 @@ mkEventList = do
                             item = DOM.tr {}
                               [ DOM.td {} [ text $ cf.contractId ]
                               , tdCentered [ text $ foldMap show $ map (un Runtime.BlockNumber <<< _.blockNo <<< un Runtime.BlockHeader) $ ContractInfo.createdAt ci ]
-                              , tdCentered [ text $ show cf.event ]
+                              , tdCentered [ text $ Actus.BussinessEvents.description cf.event ]
                               , tdCentered [ foldMap text $ hush (formatDateTime "YYYY-DD-MM HH:mm:ss" cf.paymentDay) ]
                               , do
                                   let
@@ -336,7 +337,7 @@ mkEventList = do
                                         case userCashFlowDirection of
                                           Just (IncomingFlow /\ PositiveBigInt absValue) -> ("+" <> formatAmount cf.currency absValue) /\ "table-success"
                                           Just (OutgoingFlow /\ PositiveBigInt absValue) -> ("-" <> formatAmount cf.currency absValue) /\ "table-danger"
-                                          Just (InternalFlow /\ PositiveBigInt absValue) -> ("=" <> formatAmount cf.currency absValue) /\ ""
+                                          Just (InternalFlow /\ PositiveBigInt absValue) -> ("=" <> formatAmount cf.currency absValue) /\ "table-light"
                                           _ -> "" /\ ""
                                       else
                                         formatAmount cf.currency value /\ ""
