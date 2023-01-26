@@ -7,7 +7,7 @@ import CardanoMultiplatformLib (CborHex)
 import CardanoMultiplatformLib.Transaction (TransactionWitnessSetObject)
 import Component.ContractForm (walletChangeAddress)
 import Component.Modal (mkModal)
-import Component.Types (ActusContractRole(..), CashFlowInfo(..), ContractInfo(..), MkComponentM, UserCashFlowDirection(..), UserContractRole(..), WalletInfo(..))
+import Component.Types (ActusContractRole(..), CashFlowInfo(..), ContractInfo(..), MessageContent(..), MessageHub(..), MkComponentM, UserCashFlowDirection(..), UserContractRole(..), WalletInfo(..))
 import Component.Types.ContractInfo as ContractInfo
 import Component.Widget.Table as Table
 import Component.Widgets (link, linkWithIcon)
@@ -100,6 +100,7 @@ mkEventList = do
   modal <- liftEffect mkModal
   booleanField <- liftEffect mkBooleanField
   cardanoMultiplatformLib <- asks _.cardanoMultiplatformLib
+  msgHub@(MessageHub msgHubProps) <- asks _.msgHub
 
   liftEffect $ component "EventList" \{ contractList, connectedWallet } -> React.do
     ((state :: EventListState) /\ updateState) <- useState { newInput: Nothing }
@@ -138,16 +139,13 @@ mkEventList = do
 
                   invalidBefore = fromMaybe now $ adjust (Duration.Minutes (-2.0)) now
                   invalidHereafter = fromMaybe now $ adjust (Duration.Minutes 2.0) now
-
                   collateralUTxOs = []
-
-                  metadata = mempty
 
                   req = PostTransactionsRequest
                     { inputs
                     , invalidBefore
                     , invalidHereafter
-                    , metadata
+                    , metadata: mempty
                     , changeAddress
                     , addresses
                     , collateralUTxOs
@@ -165,9 +163,11 @@ mkEventList = do
                           submit witnessSet runtime.serverURL transactionEndpoint >>= case _ of
                             Right _ -> do
                               traceM "Successfully submitted the transaction"
+                              liftEffect $ msgHubProps.add $ Info $ DOOM.text $ "Successfully submitted a transaction"
                             -- liftEffect $ onSuccess contractEndpoint
                             Left err -> do
                               traceM "Error while submitting the transaction"
+                              liftEffect $ msgHubProps.add $ Error $ DOOM.text $ "Error while submitting the transaction"
                               traceM err
 
                         Left err -> do
