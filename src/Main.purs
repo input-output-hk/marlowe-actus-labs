@@ -15,7 +15,7 @@ import Data.Argonaut (Json, decodeJson, (.:))
 import Data.Either (Either, either)
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..), isJust, maybe)
 import Data.Newtype as Newtype
 import Data.Traversable (for_)
 import Data.Tuple.Nested ((/\))
@@ -29,6 +29,7 @@ import Effect.Ref (Ref)
 import Effect.Ref as Ref
 import Halogen.Subscription as Subscription
 import JS.Unsafe.Stringify (unsafeStringify)
+import Marlowe.Actus.Metadata (actusMetadataKey)
 import Marlowe.Runtime.Web as Marlowe.Runtime.Web
 import Marlowe.Runtime.Web.Client (foldMapMContractPages)
 import Marlowe.Runtime.Web.Client (getPage')
@@ -36,6 +37,7 @@ import Marlowe.Runtime.Web.Streaming (ContractStream(..), PollingInterval(..), R
 import Marlowe.Runtime.Web.Streaming as Streaming
 import Marlowe.Runtime.Web.Types (GetContractsResponse, ServerURL(..), TxOutRef, api)
 import Marlowe.Runtime.Web.Types (Metadata(..), ServerURL(..), GetContractsResponse, TxOutRef, api)
+import Marlowe.Runtime.Web.Types as Runtime
 import Prim.TypeError (class Warn, Text)
 import React.Basic (createContext)
 import React.Basic.DOM.Client (createRoot, renderRoot)
@@ -99,8 +101,9 @@ main configJson = do
     let
       reqInterval = RequestInterval (Milliseconds 50.0)
       pollInterval = PollingInterval (Milliseconds 20_000.0)
+      isActus { resource: Runtime.ContractHeader { metadata: Runtime.Metadata md } } = isJust $ Map.lookup actusMetadataKey md
 
-    contractStream <- Streaming.mkContractsWithTransactions pollInterval reqInterval config.marloweWebServerUrl
+    contractStream <- Streaming.mkContractsWithTransactions pollInterval reqInterval isActus config.marloweWebServerUrl
 
     CardanoMultiplatformLib.importLib >>= case _ of
       Nothing -> liftEffect $ logger "Cardano serialization lib loading failed"

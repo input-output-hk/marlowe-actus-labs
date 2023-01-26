@@ -28,7 +28,7 @@ import Control.Monad.Rec.Loops (whileM_)
 import Data.Filterable (filter)
 import Data.Foldable (any, foldMap)
 import Data.Map (Map)
-import Data.Map (catMaybes, empty, fromFoldable, lookup, union) as Map
+import Data.Map (catMaybes, empty, filter, fromFoldable, lookup, union) as Map
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype as Newtype
 import Data.Traversable (for, for_)
@@ -141,9 +141,7 @@ contractsTransactions (PollingInterval pollingInterval) requestInterval getEndpo
   { emitter, listener } <- liftEffect Subscription.create
 
   _ <- forkAff $ forever do
-    traceM "Staring thread for contractsTransactions"
     void $ AVar.tryTake stateAVar
-    traceM "TAKEN"
     previousState <- liftEffect $ Ref.read stateRef
     endpoints <- getEndpoints
     { contractsTransactions: newState, notify } <- fetchContractsTransactions endpoints previousState listener requestInterval serverUrl
@@ -265,11 +263,11 @@ contractsWithTransactions (ContractStream contractStream) (ContractTransactionsS
   ContractWithTransactionsStream { emitter, getLiveState, getState }
 
 
-mkContractsWithTransactions :: PollingInterval -> RequestInterval -> ServerURL -> Aff ContractWithTransactionsStream
-mkContractsWithTransactions pollingInterval requestInterval serverUrl = do
+mkContractsWithTransactions :: PollingInterval -> RequestInterval -> (GetContractsResponse -> Boolean) -> ServerURL -> Aff ContractWithTransactionsStream
+mkContractsWithTransactions pollingInterval requestInterval filterContracts serverUrl = do
   contractStream@(ContractStream { getState }) <- contracts pollingInterval requestInterval serverUrl
   let
-    transactionEndpointsSource = (Map.catMaybes <<< map (_.links.transactions)) <$> getState
+    transactionEndpointsSource = Map.catMaybes <<< map (_.links.transactions) <<< Map.filter filterContracts <$> getState
   contractTransactionsStream <- contractsTransactions
     pollingInterval
     requestInterval
