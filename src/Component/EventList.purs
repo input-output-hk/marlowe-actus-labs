@@ -163,7 +163,7 @@ mkEventList = do
                           submit witnessSet runtime.serverURL transactionEndpoint >>= case _ of
                             Right _ -> do
                               traceM "Successfully submitted the transaction"
-                              liftEffect $ msgHubProps.add $ Info $ DOOM.text $ "Successfully submitted a transaction"
+                              liftEffect $ msgHubProps.add $ Success $ DOOM.text $ "Successfully submitted a transaction"
                             -- liftEffect $ onSuccess contractEndpoint
                             Left err -> do
                               traceM "Error while submitting the transaction"
