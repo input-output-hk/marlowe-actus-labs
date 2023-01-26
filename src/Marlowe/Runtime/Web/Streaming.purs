@@ -22,6 +22,8 @@ import Prelude
 import Contrib.Data.Map (New(..), Old(..), additions, deletions, fromFoldableBy, updates) as Map
 import Contrib.Effect as Effect
 import Control.Alt ((<|>))
+import Control.Monad.Error.Class (catchError)
+import Control.Monad.Rec.Class (forever)
 import Control.Monad.Rec.Loops (whileM_)
 import Data.Filterable (filter)
 import Data.Foldable (any, foldMap)
@@ -33,6 +35,7 @@ import Data.Traversable (for, for_)
 import Data.TraversableWithIndex (forWithIndex)
 import Data.Tuple (snd)
 import Data.Tuple.Nested (type (/\), (/\))
+import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, Fiber, Milliseconds, delay, forkAff)
 import Effect.Aff.AVar as AVar
@@ -83,7 +86,8 @@ contracts (PollingInterval pollingInterval) (RequestInterval requestInterval) se
   { emitter, listener } <-
     liftEffect Subscription.create
 
-  _ :: Fiber Unit <- forkAff $ whileM_ (pure true) do
+  _ :: Fiber Unit <- forkAff $ forever do
+    traceM "Staring thread for contracts"
     void $ AVar.tryTake contractsAVar
     previousContracts <- liftEffect $ Ref.read contractsRef
     nextContracts :: Map ContractId GetContractsResponse <-
@@ -113,9 +117,9 @@ contracts (PollingInterval pollingInterval) (RequestInterval requestInterval) se
 type TransactionsEndpointsSource = Map ContractId TransactionsEndpoint
 
 -- | The resuling set of txs per contract.
-type ContractTransactionsMap = Map ContractId (Array Tx)
+type ContractTransactionsMap = Map ContractId (Array TxHeader)
 
-type ContractTransactionsEvent = ContractId /\ { new :: Array Tx, old :: Array Tx }
+type ContractTransactionsEvent = ContractId /\ { new :: Array TxHeader, old :: Array TxHeader }
 
 newtype ContractTransactionsStream = ContractTransactionsStream
   { emitter :: Subscription.Emitter ContractTransactionsEvent
@@ -136,8 +140,10 @@ contractsTransactions (PollingInterval pollingInterval) requestInterval getEndpo
 
   { emitter, listener } <- liftEffect Subscription.create
 
-  _ <- forkAff $ whileM_ (pure true) do
+  _ <- forkAff $ forever do
+    traceM "Staring thread for contractsTransactions"
     void $ AVar.tryTake stateAVar
+    traceM "TAKEN"
     previousState <- liftEffect $ Ref.read stateRef
     endpoints <- getEndpoints
     { contractsTransactions: newState, notify } <- fetchContractsTransactions endpoints previousState listener requestInterval serverUrl
@@ -165,37 +171,44 @@ fetchContractsTransactions
        , notify :: Effect Unit
        }
 fetchContractsTransactions endpoints prevContractTransactionMap listener (RequestInterval requestInterval) serverUrl = do
-  items <- forWithIndex endpoints \contractId endpoint -> do
-    (txHeaders :: Array { resource :: TxHeader, links :: { transaction :: TransactionEndpoint } }) <- getPages' serverUrl endpoint Nothing >>= Effect.liftEither <#> foldMap _.page
-    delay requestInterval
-
+  items <- map Map.catMaybes $ forWithIndex endpoints \contractId endpoint -> do
     let
-      prevTransactions = fromMaybe [] $ Map.lookup contractId prevContractTransactionMap
-
-      missingTransactionsDetails = do
+      action = do
         let
-          found { resource: TxHeader txHeader } = any (\(Tx prevTx) -> prevTx.transactionId == txHeader.transactionId) prevTransactions
-        filter (not <<< found) txHeaders
+          getTransactions = getPages' serverUrl endpoint Nothing >>= Effect.liftEither <#> foldMap _.page
+        (txHeaders :: Array { resource :: TxHeader, links :: { transaction :: TransactionEndpoint } }) <- getTransactions
+        delay requestInterval
 
-      preservedTransactions = do
+        -- let
+        --   prevTransactions = fromMaybe [] $ Map.lookup contractId prevContractTransactionMap
+
+        --   missingTransactionsDetails = do
+        --     let
+        --       found { resource: TxHeader txHeader } = any (\(Tx prevTx) -> prevTx.transactionId == txHeader.transactionId) prevTransactions
+        --     filter (not <<< found) txHeaders
+
+        --   preservedTransactions = do
+        --     let
+        --       found (Tx prevTx) = any (\{ resource: TxHeader txHeader } -> prevTx.transactionId == txHeader.transactionId) txHeaders
+        --     filter found prevTransactions
+
+        -- (addedTransactions :: Array Tx) <- for missingTransactionsDetails \{ links: { transaction: transactionEndpoint } } -> do
+        --   txs <- getResource' serverUrl transactionEndpoint {} >>= Effect.liftEither <#> (_.payload >>> _.resource)
+        --   delay requestInterval
+        --   pure txs
+
         let
-          found (Tx prevTx) = any (\{ resource: TxHeader txHeader } -> prevTx.transactionId == txHeader.transactionId) txHeaders
-        filter found prevTransactions
+          prevTransactions = fromMaybe [] $ Map.lookup contractId prevContractTransactionMap
+          newTransactions = map _.resource txHeaders -- preservedTransactions <> addedTransactions
+          change =
+            if newTransactions == prevTransactions then
+              Nothing
+            else
+              Just { old: prevTransactions, new: newTransactions }
 
-    (addedTransactions :: Array Tx) <- for missingTransactionsDetails \{ links: { transaction: transactionEndpoint } } -> do
-      txs <- getResource' serverUrl transactionEndpoint {} >>= Effect.liftEither <#> (_.payload >>> _.resource)
-      delay requestInterval
-      pure txs
-
-    let
-      newTransactions = preservedTransactions <> addedTransactions
-      change =
-        if newTransactions == prevTransactions then
-          Nothing
-        else
-          Just { old: prevTransactions, new: newTransactions }
-
-    pure $ change /\ contractId /\ newTransactions
+        pure $ Just $ change /\ contractId /\ newTransactions
+    action `catchError` \_ -> do
+      pure Nothing
 
   let
     doNotify =
@@ -211,7 +224,7 @@ fetchContractsTransactions endpoints prevContractTransactionMap listener (Reques
 
 type ContractWithTransactions =
   { contract :: GetContractsResponse
-  , transactions :: Array Tx
+  , transactions :: Array TxHeader
   }
 
 type ContractWithTransactionsMap = Map ContractId ContractWithTransactions

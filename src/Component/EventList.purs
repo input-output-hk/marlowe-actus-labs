@@ -6,11 +6,15 @@ import CardanoMultiplatformLib (CborHex)
 import CardanoMultiplatformLib.Transaction (TransactionWitnessSetObject)
 import Component.ContractForm (walletChangeAddress)
 import Component.Modal (mkModal)
-import Component.Types (ActusContractRole(..), CashFlowInfo(..), ContractInfo(..), MkComponentM, UserContractRole(..), WalletInfo(..))
-import Component.Widgets (link)
+import Component.Types (ActusContractRole(..), CashFlowInfo(..), ContractInfo(..), MkComponentM, UserCashFlowDirection(..), UserContractRole(..), WalletInfo(..))
+import Component.Types.ContractInfo as ContractInfo
+import Component.Widget.Table as Table
+import Component.Widgets (link, linkWithIcon)
 import Component.Widgets.Form (mkBooleanField)
+import Contrib.Data.BigInt.PositiveBigInt (PositiveBigInt(..))
 import Contrib.Fetch (FetchError)
 import Contrib.React.Bootstrap (overlayTrigger, tooltip)
+import Contrib.React.Bootstrap.Icons as Icons
 import Contrib.React.Bootstrap.Table (table)
 import Contrib.React.Bootstrap.Table as Table
 import Contrib.React.Bootstrap.Types as Bootstrap
@@ -20,11 +24,13 @@ import Data.Array as Array
 import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (adjust)
 import Data.Either (Either(..), hush)
-import Data.Foldable (foldMap)
+import Data.Foldable (foldMap, foldl, foldr)
 import Data.Formatter.DateTime (formatDateTime)
+import Data.Function (on)
 import Data.Lazy as Lazy
-import Data.Maybe (Maybe(..), fromMaybe, isJust)
-import Data.Newtype (unwrap)
+import Data.List as List
+import Data.Maybe (Maybe(..), fromMaybe, isJust, isNothing)
+import Data.Newtype (un, unwrap)
 import Data.Time.Duration as Duration
 import Debug (traceM)
 import Effect.Aff (Aff, launchAff_)
@@ -36,8 +42,9 @@ import Marlowe.Actus (currenciesWith6Decimals, evalVal)
 import Marlowe.Runtime.Web (post')
 import Marlowe.Runtime.Web.Client (put')
 import Marlowe.Runtime.Web.Types (PostTransactionsRequest(..), PostTransactionsResponse(..), PutTransactionRequest(..), Runtime(..), ServerURL, TextEnvelope(..), TransactionEndpoint, TransactionsEndpoint, toTextEnvelope)
+import Marlowe.Runtime.Web.Types as Runtime
 import React.Basic (fragment) as DOOM
-import React.Basic.DOM (span_, text) as DOOM
+import React.Basic.DOM (input, span_, text) as DOOM
 import React.Basic.DOM (text)
 import React.Basic.DOM as R
 import React.Basic.DOM.Simplified.Generated as DOM
@@ -80,6 +87,12 @@ submit witnesses serverUrl transactionEndpoint = do
     req = PutTransactionRequest textEnvelope
   put' serverUrl transactionEndpoint req
 
+data OrderBy
+  = OrderByCreationDate
+  | OrderByActusContractId
+  | OrderByLastUpdateDate
+derive instance Eq OrderBy
+
 mkEventList :: MkComponentM (Props -> JSX)
 mkEventList = do
   Runtime runtime <- asks _.runtime
@@ -89,9 +102,24 @@ mkEventList = do
 
   liftEffect $ component "EventList" \{ contractList, connectedWallet } -> React.do
     ((state :: EventListState) /\ updateState) <- useState { newInput: Nothing }
-
+    ordering /\ updateOrdering <- useState { orderBy: OrderByCreationDate, orderAsc: false }
+    showOnlyMyContracts /\ updateShowOnlyMyContracts <- useState false
     let
-      onEdit { party, token, value, transactionsEndpoint } = handler_ do
+      filterOwnContracts = Array.filter (isJust <<< _.userContractRole <<< un ContractInfo)
+      filterContracts = if showOnlyMyContracts then filterOwnContracts else identity
+      contractList' = filterContracts do
+        let
+          -- Quick and dirty hack to display just submited contracts as first
+          someFutureBlockNumber = Runtime.BlockNumber 2058430
+          sortedContracts = case ordering.orderBy of
+            OrderByCreationDate -> Array.sortBy (compare `on` (fromMaybe someFutureBlockNumber <<< map ( _.blockNo <<< un Runtime.BlockHeader) <<< ContractInfo.createdAt)) contractList
+            OrderByActusContractId -> Array.sortBy (compare `on` (ContractInfo.actusContractId)) contractList
+            OrderByLastUpdateDate -> Array.sortBy (compare `on` (fromMaybe someFutureBlockNumber <<< map (_.blockNo <<< un Runtime.BlockHeader) <<< ContractInfo.updatedAt)) contractList
+        if ordering.orderAsc
+        then sortedContracts
+        else Array.reverse sortedContracts
+
+      onEdit { party, token, value, transactionsEndpoint } = do
         updateState _ { newInput = Just { party, token, value, transactionsEndpoint } }
 
       onApplyInputs { party, token, value, transactionsEndpoint } cw = handler_ do
@@ -216,83 +244,155 @@ mkEventList = do
 
         , DOM.div { className: "row justify-content-end" } do
             let
-              disabled = true -- isNothing connectedWallet
-              showMyContracts = booleanField
-                { disabled
-                , initialValue: true
-                , label: DOOM.text "Show my cash flows"
-                , onToggle: const $ pure unit
-                }
+              disabled = isNothing connectedWallet
+              -- showMyContracts = booleanField
+              --   { disabled
+              --   , initialValue: true
+              --   , label: DOOM.text "Show my cash flows"
+              --   , onToggle: const $ pure unit
+              --   }
+              showMyContractsSwitch = do
+                let
+                  id = "show-my-contracts"
+                DOM.div { className: "form-check form-switch text-end px-3 py-2" }
+                  [ DOOM.input
+                      { className: "float-none form-check-input me-1"
+                      , type: "checkbox"
+                      , checked: showOnlyMyContracts
+                      , id
+                      -- This `if` covers single checkbox case
+                      , onChange: handler_ do
+                          updateShowOnlyMyContracts not
+                      , disabled
+                      , name: "radio"
+                      }
+                  , DOM.label
+                      { className: "form-check-label text-start", htmlFor: id }
+                      [ text "Show only my contracts" ]
+                  ]
+
             DOM.div { className: "col-3 text-end" } do
               if disabled then do
                 let
-                  tooltipJSX = tooltip {} (DOOM.text "Connect to a wallet to add a contract")
+                  tooltipJSX = tooltip {} (DOOM.text "This switch gonna be active when you connect your wallet")
                 overlayTrigger
                   { overlay: tooltipJSX
                   , placement: Bootstrap.placement.bottom
                   }
                   -- Disabled button doesn't trigger the hook,
                   -- so we wrap it in a `span`
-                  (DOOM.span_ [ showMyContracts ])
+                  [ showMyContractsSwitch ]
               else
-                showMyContracts
+                showMyContractsSwitch
 
         , table { striped: Table.striped.boolean true, hover: true } $
             [ DOM.thead {} do
               let
-                th label = DOM.th { className: "text-center" } [ text label ]
+                orderingTh = Table.orderingHeader ordering updateOrdering
+                th label = DOM.th { className: "text-center text-muted" } [ text label ]
               [ DOM.tr {}
-                  [ th "Contract Id"
+                  [ orderingTh (DOOM.text "Contract Id") OrderByActusContractId
+                  , do
+                    let
+                      label = DOOM.fragment [ DOOM.text "Contract created" ] --, DOOM.br {},  DOOM.text "(Block number)"]
+                    orderingTh label OrderByCreationDate
                   , th "Type"
                   , th "Date"
-                  , th "Amount"
+                  , if showOnlyMyContracts
+                    then
+                      th "Your balance"
+                    else
+                      th "Amount"
                   , th "Currency"
-                  , th "Execute debug"
+                  -- , th "Execute debug"
                   , th "Action"
                   ]
               ]
             , DOM.tbody {} $
-                map
-                  ( \(ContractInfo contractInfo@{ endpoints, userContractRole }) ->
+              Array.fromFoldable $ map
+                  (\ci@(ContractInfo contractInfo@{ endpoints, userContractRole }) ->
                       let
                         cashFlowInfo = Lazy.force contractInfo.cashFlowInfo
                         tdCentered = DOM.td { className: "text-center" }
-                      in
-                        cashFlowInfo `flip foldMap` \(CashFlowInfo { cashFlow, sender, token, value }) -> do
+                        formatAmount currency amount = fromMaybe "" $
+                          if elem currency currenciesWith6Decimals
+                          then Just $ show (((BigInt.toNumber amount / 1000000.0)))
+                          else BigInt.toString <$> (evalVal $ DivValue (Constant amount) (Constant $ BigInt.fromInt 1000000))
+                        step { prevExecuted, result } (CashFlowInfo { cashFlow, sender, token, value, transaction, userCashFlowDirection }) = do
                           let
                             cf = unwrap cashFlow
                             party = case sender of
                               ActusParty -> contractInfo.party
                               ActusCounterParty -> contractInfo.counterParty
-                          [ DOM.tr {}
+                            item = DOM.tr {}
                               [ DOM.td {} [ text $ cf.contractId ]
+                              , tdCentered [ text $ foldMap show $ map (un Runtime.BlockNumber <<< _.blockNo <<< un Runtime.BlockHeader) $ ContractInfo.createdAt ci ]
                               , tdCentered [ text $ show cf.event ]
                               , tdCentered [ foldMap text $ hush (formatDateTime "YYYY-DD-MM HH:mm:ss" cf.paymentDay) ]
-                              , DOM.td {className: "text-end"}
-                                [ text $ fromMaybe "" $
-                                  if elem cf.currency currenciesWith6Decimals
-                                  then show <$> (((_ / 1000000.0) <<< BigInt.toNumber) <$> evalVal cf.amount)
-                                  else BigInt.toString <$> (evalVal $ DivValue cf.amount (Constant $ BigInt.fromInt 1000000))
-                                  ]
+                              , do
+                                  let
+                                    moneyInfoStr /\ cellStyle =
+                                      if showOnlyMyContracts then
+                                        case userCashFlowDirection of
+                                          Just (IncomingFlow /\ PositiveBigInt absValue) -> ("+" <> formatAmount cf.currency absValue) /\ "table-success"
+                                          Just (OutgoingFlow /\ PositiveBigInt absValue) -> ("-" <> formatAmount cf.currency absValue) /\ "table-danger"
+                                          Just (InternalFlow /\ PositiveBigInt absValue) -> ("=" <> formatAmount cf.currency absValue) /\ ""
+                                          _ -> "" /\ ""
+                                      else
+                                        formatAmount cf.currency value /\ ""
+
+                                  --   if elem cf.currency currenciesWith6Decimals
+                                  --   then show <$> (((_ / 1000000.0) <<< BigInt.toNumber) <$> evalVal cf.amount)
+                                  --   else BigInt.toString <$> (evalVal $ DivValue cf.amount (Constant $ BigInt.fromInt 1000000))
+                                  -- ]
+                                  -- [ text $ fromMaybe "" $
+                                  -- ]
+                                  DOM.td { className: "text-end " <> cellStyle }
+                                    [ text $ moneyInfoStr ]
                               , tdCentered [ text $ if cf.currency == "" then "₳" else cf.currency ]
-                              , tdCentered $ Array.singleton $ text $
-                                  "user role: " <> show userContractRole <> ", sender: " <> show sender <> ", transaction endpoint: " <> show (isJust endpoints.transactions)
+                              -- , tdCentered $ Array.singleton $ text $
+                              --     "user role: " <> show userContractRole <> ", sender: " <> show sender <> ", transaction endpoint: " <> show (isJust endpoints.transactions)
                               , tdCentered $ Array.singleton $ case endpoints.transactions of
-                                  Just transactionsEndpoint -> do
-                                    let
-                                      button = DOM.button
-                                        { onClick: onEdit { party, token, value, transactionsEndpoint }, className: "btn btn-secondary btn-sm" }
-                                        "Execute"
-                                    case sender, userContractRole of
-                                      _, Just BothParties -> button
-                                      ActusParty, Just ContractParty -> button
-                                      ActusCounterParty, Just ContractCounterParty -> button
-                                      _, _ -> mempty
+                                  Just transactionsEndpoint -> case transaction of
+                                    Just (Runtime.TxHeader tx) -> do
+                                      let
+                                        txId = un Runtime.TxId tx.transactionId
+                                      DOM.a
+                                        { className: "btn btn-link text-decoration-none text-reset text-decoration-underline-hover"
+                                        , target: "_blank"
+                                        , href: "https://preprod.cardanoscan.io/transaction/" <> txId
+                                        }
+                                        [ DOM.span { className: "me-1" } $ Icons.toJSX Icons.eye
+                                        , text "Tx details"
+                                        ]
+
+
+                                    Nothing -> do
+                                      let
+                                        button = Lazy.defer \_ -> linkWithIcon
+                                          { icon: Icons.bullsEye
+                                          , label: DOOM.text "Execute"
+                                          , onClick: onEdit { party, token, value, transactionsEndpoint }
+                                          , disabled: not prevExecuted
+                                          }
+
+                                        -- button = DOM.button
+                                        --   { onClick: onEdit { party, token, value, transactionsEndpoint }
+                                        --   , className: "btn btn-secondary btn-sm",
+                                        --   }
+                                        --   "Execute"
+                                      case sender, userContractRole of
+                                        _, Just BothParties -> Lazy.force button
+                                        ActusParty, Just ContractParty -> Lazy.force button
+                                        ActusCounterParty, Just ContractCounterParty -> Lazy.force button
+                                        _, _ -> mempty
                                   Nothing -> mempty
                               ]
-                          ]
+                          { prevExecuted: isJust transaction, result: List.Cons item result }
+                      in
+                        Array.reverse $ Array.fromFoldable $ _.result $ foldl step { prevExecuted: true, result: List.Nil } cashFlowInfo
                   )
-                  contractList
+                  contractList'
             ]
         ]
 

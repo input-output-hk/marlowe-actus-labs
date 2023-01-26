@@ -11,6 +11,7 @@ import Component.Modal (mkModal)
 import Component.SubmitContract (mkSubmitContract)
 import Component.Types (ActusContractId(..), ContractInfo(..), MessageContent(..), MessageHub(..), MkComponentM, WalletInfo(..))
 import Component.Types.ContractInfo as ContractInfo
+import Component.Widget.Table as Table
 import Component.Widgets (linkWithIcon)
 import Contrib.React.Basic.Hooks.UseForm as UseForm
 import Contrib.React.Bootstrap (overlayTrigger, tooltip)
@@ -158,7 +159,7 @@ mkContractList = do
       onNewContract contractTerms = do
         updateState _ { newContract = Just (Submitting contractTerms) }
 
-      onView metadata = handler_ do
+      onView metadata = do
         updateState _ { metadata = Just metadata }
 
     pure $
@@ -226,30 +227,8 @@ mkContractList = do
         , table { striped: Table.striped.boolean true, hover: true }
             [ DOM.thead {} do
               let
-                orderingIcon = if ordering.orderAsc
-                  then Icons.arrowDownShort
-                  else Icons.arrowUpShort
-                orderingTh label headerOrdering = if ordering.orderBy == headerOrdering
-                    then DOM.th { className: "text-center" }
-                      [ Icons.toJSX orderingIcon
-                      , DOM.a
-                        { href: "#"
-                        , className: "text-decoration-none"
-                        , onClick: handler_ $ updateOrdering _ { orderAsc = not ordering.orderAsc }
-                        }
-                        [ label ]
-                      ]
-                    else DOM.th { className: "text-center" }
-                      [ DOM.span { className: "invisible" } $ Icons.toJSX orderingIcon
-                      , DOM.a
-                        { href: "#"
-                        , className: "text-decoration-none"
-                        , onClick: handler_ $ updateOrdering _ { orderBy = headerOrdering }
-                        }
-                        [ label ]
-                      ]
-
-                th label = DOM.th { className: "text-center" } [ label ]
+                orderingTh = Table.orderingHeader ordering updateOrdering
+                th label = DOM.th { className: "text-center text-muted" } [ label ]
               [ DOM.tr {}
                   [ orderingTh (DOOM.text "Actus Contract Id") OrderByActusContractId
                   , do
@@ -283,7 +262,8 @@ mkContractList = do
                               { overlay: tooltipJSX
                               , placement: OverlayTrigger.placement.bottom
                               } $ DOM.span {} [ show status ]
-                        , tdCentered [ DOM.button { onClick: onView metadata, className: "btn btn-secondary btn-sm" } "View" ]
+                        , tdCentered
+                          [ linkWithIcon { icon: Icons.eye, label: DOOM.text "View", onClick: onView metadata } ]
                         ]
                 )
                 contractList'

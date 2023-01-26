@@ -97,7 +97,7 @@ main configJson = do
   reactRoot <- createRoot container
   launchAff_ do
     let
-      reqInterval = RequestInterval (Milliseconds 1_000.0)
+      reqInterval = RequestInterval (Milliseconds 50.0)
       pollInterval = PollingInterval (Milliseconds 20_000.0)
 
     contractStream <- Streaming.mkContractsWithTransactions pollInterval reqInterval config.marloweWebServerUrl

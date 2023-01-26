@@ -38,6 +38,7 @@ import Data.Newtype as Newtype
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for, traverse)
 import Data.Tuple.Nested ((/\))
+import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
@@ -331,6 +332,9 @@ mkApp = do
 updateAppContractInfoMap :: AppContractInfoMap -> Maybe WalletContext -> ContractWithTransactionsMap -> AppContractInfoMap
 updateAppContractInfoMap (AppContractInfoMap { walletContext: prevWalletContext, map: prev }) walletContext updates = do
   let
+    x = do
+       traceM "UPDATING THE INFO MAP"
+       Nothing
     walletChanged = prevWalletContext /= walletContext
     usedAddresses = fromMaybe [] $ _.usedAddresses <<< un WalletContext <$> walletContext
 
@@ -402,23 +406,21 @@ contractCashFlowInfo
   -> V1.Party
   -> V1.Party
   -> Maybe UserContractRole
-  -> Array Runtime.Tx
+  -> Array Runtime.TxHeader
   -> Array CashFlowInfo
 contractCashFlowInfo contractTerms party counterParty possibleUserContractRole transactions = do
   let
-    numberOfTransactions = length transactions
     -- TODO: more reliable detection of active cashflows
-    projectedCashFlows =
-      Array.drop numberOfTransactions
-      $ Array.fromFoldable
-      $ genProjectedCashflows
-        (party /\ counterParty)
-        (defaultRiskFactors contractTerms)
-        contractTerms
+    cashFlows = Array.fromFoldable $ genProjectedCashflows
+      (party /\ counterParty)
+      (defaultRiskFactors contractTerms)
+      contractTerms
+    transactions' = map Just transactions <> (Array.replicate (length cashFlows) Nothing)
+    cashFlows' = Array.zipWith { tx: _, cf: _} transactions' cashFlows
 
   Array.catMaybes $
     map
-      ( \cf@(Actus.CashFlow { currency, amount }) -> do
+      (\{ cf: cf@(Actus.CashFlow { currency, amount }), tx } -> do
           actusValue <- Actus.evalVal' amount
           value <- PositiveBigInt.fromBigInt $ BigInt.abs actusValue
           let
@@ -429,6 +431,7 @@ contractCashFlowInfo contractTerms party counterParty possibleUserContractRole t
             { cashFlow: Actus.toMarloweCashflow cf
             , sender
             , token: currencyToToken currency
+            , transaction: tx
             , userCashFlowDirection: possibleUserContractRole <#> case _, sender of
                 BothParties, _ -> InternalFlow /\ value
                 ContractParty, ActusParty -> OutgoingFlow /\ value
@@ -439,4 +442,4 @@ contractCashFlowInfo contractTerms party counterParty possibleUserContractRole t
             , value: actusValue
             }
       )
-      projectedCashFlows
+      cashFlows'

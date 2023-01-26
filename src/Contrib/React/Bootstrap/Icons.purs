@@ -7,11 +7,14 @@ module Contrib.React.Bootstrap.Icons
   , bellFill
   , bellSlash
   , bellSlashFill
+  , bullsEye
   , cashStack
   , checkCircle
   , checkCircleFill
   , exclamationTriangle
   , exclamationTriangleFill
+  , eye
+  , eyeFill
   , infoSquare
   , infoCircle
   , infoCircleFill
@@ -54,6 +57,9 @@ bellSlash = unsafeIcon "bell-slash"
 bellSlashFill :: Icon
 bellSlashFill = unsafeIcon "bell-slash-fill"
 
+bullsEye :: Icon
+bullsEye = unsafeIcon "bullseye"
+
 cashStack :: Icon
 cashStack = unsafeIcon "cash-stack"
 
@@ -68,6 +74,12 @@ exclamationTriangle = unsafeIcon "exclamation-triangle"
 
 exclamationTriangleFill :: Icon
 exclamationTriangleFill = unsafeIcon "exclamation-triangle-fill"
+
+eye :: Icon
+eye = unsafeIcon "eye"
+
+eyeFill :: Icon
+eyeFill = unsafeIcon "eye-fill"
 
 fileEarmarkPlus :: Icon
 fileEarmarkPlus = unsafeIcon "file-earmark-plus"

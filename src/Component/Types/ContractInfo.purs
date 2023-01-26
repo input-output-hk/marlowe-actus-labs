@@ -40,6 +40,7 @@ newtype CashFlowInfo = CashFlowInfo
   -- From the current wallet perspective (if relatd to the user).
   , userCashFlowDirection :: Maybe (UserCashFlowDirection  /\ PositiveBigInt)
   , token :: V1.Token
+  , transaction :: Maybe Runtime.TxHeader
   -- Value from ACTUS perspective.
   , value :: BigInt
   }
@@ -59,7 +60,7 @@ newtype ContractInfo = ContractInfo
   -- should be precomputed and exposed as separated fields.
   , _runtime ::
     { contractHeader :: Runtime.ContractHeader
-    , transactions :: Array Runtime.Tx
+    , transactions :: Array Runtime.TxHeader
     }
   }
 derive instance Newtype ContractInfo _
@@ -83,7 +84,7 @@ createdAt (ContractInfo { _runtime: { contractHeader: Runtime.ContractHeader { b
 updatedAt :: ContractInfo -> Maybe Runtime.BlockHeader
 updatedAt ci@(ContractInfo { _runtime: { transactions } }) =
   do
-    Runtime.Tx tx <- Array.last transactions
+    Runtime.TxHeader tx <- Array.last transactions
     tx.block
   <|> createdAt ci
 
