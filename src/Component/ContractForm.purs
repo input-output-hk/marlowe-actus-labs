@@ -145,7 +145,7 @@ mkForm cardanoMultiplatformLib = FormBuilder.evalBuilder ado
     counterParty = bech32ToParty counterPartyAddress
     party = bech32ToParty partyAddress
     cashFlows = createCashFlows party counterParty contractTerms
-    contract = genContract cashFlows
+    contract = genContract contractTerms cashFlows
   in
     { contractTerms
     , cashFlows

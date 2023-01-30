@@ -43,7 +43,7 @@ spec = do
             party = Role "party"
             counterparty = Role "counterparty"
             cashFlows = genProjectedCashflows (party /\ counterparty) riskFactors $ contract
-            marloweContract = genContract cashFlows
+            marloweContract = genContract contract cashFlows
 
             payin = IDeposit party party (Token "" "DjedUSD") $ unsafePartial $ fromJust $ fromString "10000"
             interest = IDeposit counterparty counterparty (Token "" "DjedUSD") $ unsafePartial $ fromJust $ fromString "200"
@@ -88,7 +88,7 @@ spec = do
             party = Role "party"
             counterparty = Role "counterparty"
             cashFlows = genProjectedCashflows (party /\ counterparty) riskFactors $ contract
-            marloweContract = genContract cashFlows
+            marloweContract = genContract contract cashFlows
 
             payin = IDeposit party party (Token "" "") $ unsafePartial $ fromJust $ fromString "10000000000"
             interest = IDeposit counterparty counterparty (Token "" "") $ unsafePartial $ fromJust $ fromString "200000000"

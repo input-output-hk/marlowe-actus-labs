@@ -105,8 +105,6 @@ instance Show TxStatus where
   show Submitted = "Submitted"
   show Confirmed = "Confirmed"
 
---  deriving (Show, Eq, Ord)
-
 instance DecodeJson TxStatus where
   decodeJson = decodeFromString case _ of
     "unsigned" -> Just Unsigned

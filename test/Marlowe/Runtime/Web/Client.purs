@@ -98,7 +98,7 @@ spec serverUrl@(ServerURL serverUrlStr) = do
              metadataJson = encodeJson $ Metadata { contractTerms: contract, party: addr1, counterParty: addr2 }
              addr = unsafeBech32 "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
              cashflows = genProjectedCashflows (addr1 /\ addr2) (defaultRiskFactors contract) contract
-             marloweContract = genContract cashflows
+             marloweContract = genContract contract cashflows
              req = PostContractsRequest
                { metadata: RT.Metadata $ Map.singleton actusMetadataKey metadataJson
                -- , version :: MarloweVersion

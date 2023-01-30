@@ -14,18 +14,19 @@ module Marlowe.Actus
 
 import Prelude
 
-import Actus.Domain (CashFlow(..), ContractState, ContractTerms(..), EventType, Observation'(..), RiskFactors(..), Value'(..), _fromDecimal)
+import Actus.Domain (CashFlow(..), ContractState, ContractTerms(..), Observation'(..), RiskFactors(..), Value'(..))
+import Actus.Domain.BusinessEvents (EventType(..))
+import Actus.Domain.ContractTerms (CR(..))
 import Control.Apply (lift2)
 import Data.Array (elem)
 import Data.BigInt.Argonaut (BigInt, fromInt)
 import Data.DateTime (DateTime)
 import Data.DateTime.Instant (Instant, fromDateTime)
-import Data.Decimal (fromInt) as Decimal
 import Data.Foldable (foldl)
 import Data.List (List, reverse)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
-import Marlowe.Actus.Metadata (Metadata(..)) as Exports
 import Language.Marlowe.Core.V1.Semantics.Types (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), Token(..), Value(..))
+import Marlowe.Actus.Metadata (Metadata(..)) as Exports
 
 type CashFlows = List (CashFlow Value' Party)
 type ContractStateMarlowe = ContractState Value'
@@ -126,6 +127,7 @@ toMarloweCashflow
       , paymentDay
       , calculationDay
       , event
+      , contractRole
       , amount
       , notional
       , currency
@@ -137,6 +139,7 @@ toMarloweCashflow
   , paymentDay
   , calculationDay
   , event
+  , contractRole
   , amount: toMarloweValue amount
   , notional: toMarloweValue notional
   , currency
@@ -144,66 +147,106 @@ toMarloweCashflow
 
 -- | 'genContract' generates contract terms from projected cash-flows
 genContract
-  ::
-     -- | List of projected cash-flows
-     List (CashFlow Value' Party)
+  :: ContractTerms
+  -- | List of projected cash-flows
+  -> CashFlows
   ->
   -- | Marlowe contract
   Contract
-genContract cashFlows = foldl generator Close $ reverse (map toMarloweCashflow cashFlows)
+genContract contractTerms cashFlows = foldl (generator contractTerms) Close $ reverse (map toMarloweCashflow cashFlows)
   where
-  generator :: Contract -> CashFlow Value Party -> Contract
-  generator continuation cashFlow@(CashFlow { paymentDay })
+  generator :: ContractTerms -> Contract -> CashFlow Value Party -> Contract
+  generator
+    ( ContractTerms
+        { currency: Just currency'
+        , settlementCurrency: Just settlementCurrency'
+        }
+    )
+    continuation
+    cashFlow@
+      ( CashFlow
+          { party
+          , counterparty
+          , amount
+          , currency
+          , calculationDay
+          , paymentDay
+          , event
+          , contractRole
+          }
+      )
     | hasRiskFactor cashFlow =
-        When
-          [ Case
-              (Choice (cashFlowToChoiceId cashFlow) [ Bound (fromInt 0) (fromInt 1000000000) ])
-              (stub continuation cashFlow)
-          ]
-          (fromDateTime paymentDay)
-          Close
-  generator continuation cashFlow = stub continuation cashFlow
+        let
+          choiceId = ChoiceId (currency' <> settlementCurrency') oracle
+        in
+          When [] (fromDateTime calculationDay) $
+            When
+              [ Case
+                  (Choice choiceId [ Bound (fromInt 0) (fromInt 1000000000) ])
+                  ( stub event contractRole continuation
+                      ( CashFlow'
+                          { party
+                          , counterparty
+                          , token: currencyToToken currency
+                          , value: adjustDecimals currency amount
+                          , timeout: fromDateTime paymentDay
+                          }
+                      )
+                  )
+              ]
+              (fromDateTime paymentDay)
+              Close
+  generator
+    _
+    continuation
+    ( CashFlow
+        { amount
+        , paymentDay
+        , party
+        , counterparty
+        , currency
+        , event
+        , contractRole
+        }
+    ) =
+    stub event contractRole continuation
+      ( CashFlow'
+          { party
+          , counterparty
+          , token: currencyToToken currency
+          , value: adjustDecimals currency amount
+          , timeout: fromDateTime paymentDay
+          }
+      )
 
-  stub continuation (CashFlow { amount, paymentDay, party, counterparty, currency }) =
-    reduceContract $
-      If
-        ((Constant $ fromInt 0) `ValueLT` amount)
-        ( invoice
-            counterparty
-            party
-            (currencyToToken currency)
-            (adjustDecimals currency amount)
-            (fromDateTime paymentDay)
-            continuation
-        )
-        ( If
-            (amount `ValueLT` (Constant $ fromInt 0))
-            ( invoice
-                party
-                counterparty
-                (currencyToToken currency)
-                (NegValue $ adjustDecimals currency amount)
-                (fromDateTime paymentDay)
-                continuation
-            )
-            continuation
-        )
+  stub IED CR_RPA continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice party counterparty token value timeout continuation
+  stub IED CR_RPL continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice counterparty party token value timeout continuation
+
+  stub IP CR_RPA continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice counterparty party token value timeout continuation
+  stub IP CR_RPL continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice party counterparty token value timeout continuation
+
+  stub MD CR_RPA continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice counterparty party token value timeout continuation
+  stub MD CR_RPL continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice party counterparty token value timeout continuation
+
+  stub _ _ continuation (CashFlow' { party, counterparty, token, value, timeout }) =
+    If ((Constant $ fromInt 0) `ValueLT` value)
+      (invoice counterparty party token value timeout continuation)
+      ( If (value `ValueLT` (Constant $ fromInt 0))
+          (invoice party counterparty token (NegValue value) timeout continuation)
+          continuation
+      )
 
   invoice :: Party -> Party -> Token -> Value -> Instant -> Contract -> Contract
   invoice a b token amount timeout continue =
-    When
-      [ Case
-          (Deposit a a token amount)
-          ( Pay
-              a
-              (Party b)
-              token
-              amount
-              continue
-          )
-      ]
-      timeout
-      Close
+    When [ Case (Deposit a a token amount) (Pay a (Party b) token amount continue) ] timeout Close
+
+newtype CashFlow' = CashFlow'
+  { party :: Party
+  , counterparty :: Party
+  , token :: Token
+  , value :: Value
+  , timeout :: Instant
+  }
 
 -- TODO: use token registry for handling of decimals
 adjustDecimals :: String -> Value -> Value
@@ -217,19 +260,11 @@ currencyToToken :: String -> Token
 currencyToToken "DjedTestUSD" = Token "9772ff715b691c0444f333ba1db93b055c0864bec48fff92d1f2a7fe" "Djed_testMicroUSD"
 currencyToToken i = Token "" i
 
-cashFlowToChoiceId :: forall a b. CashFlow a b -> ChoiceId
-cashFlowToChoiceId (CashFlow { event, paymentDay }) =
-  let
-    l = show event <> show paymentDay
-  in
-    ChoiceId l (Role "RiskFactor")
-
 hasRiskFactor :: CashFlow Value Party -> Boolean
-hasRiskFactor cf@(CashFlow { amount }) = hasRiskFactor' amount
+hasRiskFactor (CashFlow { amount }) = hasRiskFactor' amount
   where
   hasRiskFactor' :: Value -> Boolean
-  hasRiskFactor' (ChoiceValue j) | cashFlowToChoiceId cf == j = true
-  hasRiskFactor' (ChoiceValue _) = false
+  hasRiskFactor' (ChoiceValue _) = true
   hasRiskFactor' (Constant _) = false
   hasRiskFactor' (AvailableMoney _ _) = false
   hasRiskFactor' (UseValue _) = false
@@ -243,16 +278,16 @@ hasRiskFactor cf@(CashFlow { amount }) = hasRiskFactor' amount
   hasRiskFactor' (Cond _ a b) = hasRiskFactor' a || hasRiskFactor' b
 
 oracle :: Party
-oracle = Address "" -- FIXME: oracle address
+oracle = Address "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn" -- FIXME: oracle address
 
 defaultRiskFactors :: ContractTerms -> EventType -> DateTime -> RiskFactorsMarlowe
-defaultRiskFactors (ContractTerms { currency, settlementCurrency }) _ _ = -- FIXME: just a stub
+defaultRiskFactors (ContractTerms { currency, settlementCurrency }) _ _ =
   let
-    o_rf_CURS = fromMaybe (_fromDecimal $ Decimal.fromInt 1) $ do
-      cur <- currency
-      settlementCur <- settlementCurrency
-      if cur == settlementCur then Nothing
-      else Just $ ChoiceValue' (ChoiceId (cur <> settlementCur) oracle)
+    o_rf_CURS = fromMaybe one $ do
+      currency' <- currency
+      settlementCurrency' <- settlementCurrency
+      if currency' == settlementCurrency' then Nothing
+      else Just $ ChoiceValue' (ChoiceId (currency' <> settlementCurrency') oracle)
   in
     RiskFactors
       { o_rf_CURS

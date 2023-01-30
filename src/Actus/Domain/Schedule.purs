@@ -8,9 +8,6 @@ type ShiftedDay =
   , calculationDay :: DateTime
   }
 
---  deriving stock (Eq, Ord, Show, Generic)
---  deriving anyclass (FromJSON, ToJSON)
-
 mkShiftedDay :: DateTime -> ShiftedDay
 mkShiftedDay d = { paymentDay: d, calculationDay: d }
 

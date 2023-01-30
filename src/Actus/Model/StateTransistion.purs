@@ -12,7 +12,6 @@ import Actus.Utility (annuity, inf, sup)
 import Actus.Utility.YearFraction (yearFraction)
 import Control.Monad.Reader (Reader, asks)
 import Data.DateTime (DateTime)
-import Data.Decimal (Decimal)
 import Data.Lens ((+~), (-~), (.~), (^.))
 import Data.List (List(..), filter, singleton, tail, zipWith, (:))
 import Data.Maybe (Maybe(..), fromMaybe)
@@ -61,7 +60,13 @@ stateTransition
   Reader (CtxSTF a) (ContractState a)
 stateTransition ev t sn = asks stateTransition'
   where
-  stateTransition' ctx = stf ev (ctx.riskFactors ev t) ctx.contractTerms sn
+  stateTransition'
+    { riskFactors
+    , contractTerms
+    , fpSchedule
+    , prSchedule
+    , maturity
+    } = stf ev (riskFactors ev t) contractTerms sn
     where
     stf AD _ ct st = _STF_AD_ALL ct st t
     stf IED _ ct@(ContractTerms { contractType: PAM }) st = _STF_IED_PAM ct st t
@@ -122,20 +127,20 @@ stateTransition ev t sn = asks stateTransition'
 
     fs =
       FeeSchedule
-        { latestFeePayment: (fromMaybe t (sup ctx.fpSchedule t))
-        , nextFeePayment: (fromMaybe t (inf ctx.fpSchedule t))
+        { latestFeePayment: (fromMaybe t (sup fpSchedule t))
+        , nextFeePayment: (fromMaybe t (inf fpSchedule t))
         }
 
     ps =
       PrincipalRedemptionSchedule
         { laterPrincipalRedemptionDates:
             ( let
-                principalRedemptionDates = ctx.prSchedule ++ (maybeToList ctx.maturity)
+                principalRedemptionDates = prSchedule ++ (maybeToList maturity)
                 ContractState sn' = sn
               in
                 filter (_ > sn'.sd) principalRedemptionDates
             )
-        , nextPrincipalRedemption: (fromMaybe t (inf ctx.prSchedule t))
+        , nextPrincipalRedemption: (fromMaybe t (inf prSchedule t))
         }
 
 append' :: forall a. List a -> List a -> List a

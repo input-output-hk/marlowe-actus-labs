@@ -121,6 +121,7 @@ newtype CashFlow a b = CashFlow
   , paymentDay :: DateTime
   , calculationDay :: DateTime
   , event :: EventType
+  , contractRole :: CR
   , amount :: a
   , notional :: a
   , currency :: String

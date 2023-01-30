@@ -38,7 +38,7 @@ payoff
   ->
   -- | Updated contract state
   Reader (CtxPOF a r) a
-payoff (ev /\ t) st = asks $ do \ctx -> let terms = ctx.contractTerms in pof ev (ctx.riskFactors ev t) terms st
+payoff (ev /\ t) st = asks $ do \{contractTerms, riskFactors} -> pof ev (riskFactors ev t) contractTerms st
   where
   ----------------------------
   -- Initial Exchange (IED) --
