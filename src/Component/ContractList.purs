@@ -28,7 +28,7 @@ import Data.Foldable (fold, foldMap)
 import Data.FormURLEncoded.Query as Query
 import Data.Function (on)
 import Data.List (List)
-import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
+import Data.Maybe (Maybe(..), fromMaybe, isJust, isNothing, maybe)
 import Data.Newtype (un, unwrap)
 import Data.Newtype as Newtype
 import Data.Traversable (traverse)

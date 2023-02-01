@@ -45,11 +45,18 @@ newtype CashFlowInfo = CashFlowInfo
   , value :: BigInt
   }
 
+newtype MarloweInfo = MarloweInfo
+  { initialContract :: V1.Contract
+  , state :: Maybe V1.State
+  , currentContract :: Maybe V1.Contract
+  }
+
 newtype ContractInfo = ContractInfo
   { cashFlowInfo :: Lazy (Array CashFlowInfo)
   , counterParty :: V1.Party
   , contractId :: Runtime.ContractId
   , contractTerms :: Actus.ContractTerms
+  , marloweInfo :: Maybe MarloweInfo
   , endpoints ::
     { contract :: Runtime.ContractEndpoint
     , transactions :: Maybe Runtime.TransactionsEndpoint

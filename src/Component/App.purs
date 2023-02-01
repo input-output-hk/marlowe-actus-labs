@@ -11,6 +11,7 @@ import Component.EventList (mkEventList)
 import Component.MessageHub (mkMessageBox, mkMessagePreview)
 import Component.Modal (Size(..), mkModal)
 import Component.Types (ActusContractRole(..), CashFlowInfo(..), ContractInfo(..), MessageContent(Success, Info), MessageHub(MessageHub), MkComponentMBase, UserCashFlowDirection(..), UserContractRole(..), WalletInfo(..))
+import Component.Types.ContractInfo (MarloweInfo(..))
 import Component.Widgets (link, linkWithIcon)
 import Contrib.Data.BigInt.PositiveBigInt as PositiveBigInt
 import Contrib.Data.Map (New(..), Old(..), additions, deletions) as Map
@@ -39,7 +40,6 @@ import Data.Newtype as Newtype
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for, traverse)
 import Data.Tuple.Nested ((/\))
-import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
@@ -336,9 +336,6 @@ mkApp = do
 updateAppContractInfoMap :: AppContractInfoMap -> Maybe WalletContext -> ContractWithTransactionsMap -> AppContractInfoMap
 updateAppContractInfoMap (AppContractInfoMap { walletContext: prevWalletContext, map: prev }) walletContext updates = do
   let
-    x = do
-       traceM "UPDATING THE INFO MAP"
-       Nothing
     walletChanged = prevWalletContext /= walletContext
     usedAddresses = fromMaybe [] $ _.usedAddresses <<< un WalletContext <$> walletContext
 
@@ -353,7 +350,16 @@ updateAppContractInfoMap (AppContractInfoMap { walletContext: prevWalletContext,
           _, _ -> Nothing
       else prevRole
 
-    map = Map.catMaybes $ updates <#> \{ contract: { resource: contractHeader@(Runtime.ContractHeader { contractId }), links: endpoints }, transactions } -> do
+    map = Map.catMaybes $ updates <#> \{ contract: { resource: contractHeader@(Runtime.ContractHeader { contractId }), links: endpoints }, contractState, transactions } -> do
+      let
+        marloweInfo = do
+          Runtime.ContractState contractState' <- contractState
+          pure $ MarloweInfo
+           { initialContract: contractState'.initialContract
+           , state: contractState'.state
+           , currentContract: contractState'.currentContract
+           }
+
       case contractId `Map.lookup` prev of
         Just (ContractInfo contractInfo) -> do
           let
@@ -370,6 +376,7 @@ updateAppContractInfoMap (AppContractInfoMap { walletContext: prevWalletContext,
                   contractInfo.contractTerms
                   contractInfo.party
                   contractInfo.counterParty
+                  contractInfo.marloweInfo
                   userContractRole
                   transactions
                 else contractInfo.cashFlowInfo
@@ -377,6 +384,7 @@ updateAppContractInfoMap (AppContractInfoMap { walletContext: prevWalletContext,
           pure $ ContractInfo $ contractInfo
             { cashFlowInfo = cashFlowInfo
             , userContractRole = userContractRole
+            , marloweInfo = marloweInfo
             , _runtime
               { contractHeader = contractHeader
               , transactions = transactions
@@ -385,19 +393,21 @@ updateAppContractInfoMap (AppContractInfoMap { walletContext: prevWalletContext,
         Nothing -> do
           Actus.Metadata { party, counterParty, contractTerms } <- Actus.Metadata.fromRuntimeResource contractHeader
           let
-            Runtime.ContractHeader { contractId, block } = contractHeader
+            Runtime.ContractHeader { contractId } = contractHeader
             userContractRole = mkUserContractRole Nothing party counterParty
           pure $ ContractInfo $
             { cashFlowInfo: Lazy.defer \_ -> contractCashFlowInfo
                 contractTerms
                 party
                 counterParty
+                marloweInfo
                 userContractRole
                 transactions
             , contractId
             , contractTerms
             , counterParty
             , endpoints
+            , marloweInfo
             , party
             , userContractRole
             , _runtime: { contractHeader, transactions }
@@ -409,10 +419,11 @@ contractCashFlowInfo
   :: Actus.ContractTerms
   -> V1.Party
   -> V1.Party
+  -> Maybe MarloweInfo
   -> Maybe UserContractRole
   -> Array Runtime.TxHeader
   -> Array CashFlowInfo
-contractCashFlowInfo contractTerms party counterParty possibleUserContractRole transactions = do
+contractCashFlowInfo contractTerms party counterParty marloweInfo possibleUserContractRole transactions = do
   let
     -- TODO: more reliable detection of active cashflows
     cashFlows = Array.fromFoldable $ genProjectedCashflows
