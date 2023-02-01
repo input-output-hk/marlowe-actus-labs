@@ -13,7 +13,6 @@ import Component.Modal (Size(..), mkModal)
 import Component.Types (ActusContractRole(..), CashFlowInfo(..), ContractInfo(..), MessageContent(Success, Info), MessageHub(MessageHub), MkComponentMBase, UserCashFlowDirection(..), UserContractRole(..), WalletInfo(..))
 import Component.Types.ContractInfo (MarloweInfo(..))
 import Component.Widgets (link, linkWithIcon)
-import Contrib.Data.BigInt.PositiveBigInt (PositiveBigInt(..))
 import Contrib.Data.BigInt.PositiveBigInt as PositiveBigInt
 import Contrib.Data.Map (New(..), Old(..), additions, deletions) as Map
 import Contrib.Halogen.Subscription (MinInterval(..))
@@ -26,12 +25,9 @@ import Contrib.React.Bootstrap.Tabs (tabs)
 import Contrib.React.Svg (SvgUrl(..), svgImg)
 import Control.Monad.Reader.Class (asks)
 import Data.Array as Array
-import Data.BigInt.Argonaut (BigInt(..))
 import Data.BigInt.Argonaut as BigInt
-import Data.DateTime.Instant (instant)
 import Data.Either (Either(..))
 import Data.Foldable (length)
-import Data.Int as Int
 import Data.Lazy as Lazy
 import Data.List (List)
 import Data.List as List
@@ -51,7 +47,7 @@ import Effect.Exception (throw)
 import Effect.Now (now)
 import Halogen.Subscription (Emitter) as Subscription
 import Language.Marlowe.Core.V1.Semantics (emptyState, evalValue)
-import Language.Marlowe.Core.V1.Semantics.Types (Environment(..), TimeInterval(..), Value)
+import Language.Marlowe.Core.V1.Semantics.Types (Environment(..), TimeInterval(..))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus (currencyToToken, defaultRiskFactors)
 import Marlowe.Actus (toMarloweValue, toMarloweCashflow) as Actus
@@ -376,10 +372,8 @@ updateAppContractInfoMap (AppContractInfoMap { walletContext: prevWalletContext,
               contractInfo.party
               contractInfo.counterParty
 
-            cashFlowInfo = do
-              let
-                recomputeCashFlows = walletChanged || transactions /= contractInfo._runtime.transactions
-              if recomputeCashFlows then Lazy.defer \_ -> contractCashFlowInfo
+            cashFlowInfo =
+              Lazy.defer \_ -> contractCashFlowInfo
                 block
                 contractInfo.contractTerms
                 contractInfo.party
@@ -387,7 +381,6 @@ updateAppContractInfoMap (AppContractInfoMap { walletContext: prevWalletContext,
                 contractInfo.marloweInfo
                 userContractRole
                 transactions
-              else contractInfo.cashFlowInfo
 
           pure $ ContractInfo $ contractInfo
             { cashFlowInfo = cashFlowInfo
