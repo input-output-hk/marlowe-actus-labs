@@ -37,13 +37,15 @@ import Debug (traceM)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Now (nowDateTime)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input(..), Party, Token, Value(Constant, DivValue))
+import Language.Marlowe.Core.V1.Semantics (emptyState, evalValue)
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, Environment(..), Input(..), Party, TimeInterval(..), Token, Value(Constant, DivValue))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
-import Marlowe.Actus (currenciesWith6Decimals, evalVal)
+import Marlowe.Actus (currenciesWith6Decimals)
 import Marlowe.Runtime.Web (post')
 import Marlowe.Runtime.Web.Client (put')
 import Marlowe.Runtime.Web.Types (PostTransactionsRequest(..), PostTransactionsResponse(..), PutTransactionRequest(..), Runtime(..), ServerURL, TextEnvelope(..), TransactionEndpoint, TransactionsEndpoint, toTextEnvelope)
 import Marlowe.Runtime.Web.Types as Runtime
+import Marlowe.Time (unixEpoch)
 import React.Basic (fragment) as DOOM
 import React.Basic.DOM (input, span_, text) as DOOM
 import React.Basic.DOM (text)
@@ -315,9 +317,9 @@ mkEventList = do
                         let
                           cashFlowInfo = Lazy.force contractInfo.cashFlowInfo
                           tdCentered = DOM.td { className: "text-center" }
-                          formatAmount currency amount = fromMaybe "" $
-                            if elem currency currenciesWith6Decimals then Just $ show (((BigInt.toNumber amount / 1000000.0)))
-                            else BigInt.toString <$> (evalVal $ DivValue (Constant amount) (Constant $ BigInt.fromInt 1000000))
+                          -- FIXME: decimals
+                          -- formatAmount currency amount | elem currency currenciesWith6Decimals = show (((BigInt.toNumber amount / 1000000.0)))
+                          formatAmount currency amount = show (((BigInt.toNumber amount / 1000000.0)))
                           step { prevExecuted, result } (CashFlowInfo { cashFlow, sender, token, value, transaction, userCashFlowDirection }) = do
                             let
                               cf = unwrap cashFlow
