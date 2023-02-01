@@ -92,14 +92,3 @@ type Props_select = BaseProps String (multiple :: Boolean)
 _internalSelect :: forall attrs attrs_. Row.Union attrs attrs_ Props_select => ReactComponent { | attrs }
 _internalSelect = unsafeCoerce _Control
 
-select
-  :: forall attrs attrs' attrs_
-   . Row.Union attrs' attrs_ Props_select
-  => Row.Nub (as :: String | attrs) attrs'
-  => Record attrs
-  -> JSX
-select props = element _internalSelect props'
-  where
-  props' :: { | attrs' }
-  props' = Record.merge { "as": "select" } props
-

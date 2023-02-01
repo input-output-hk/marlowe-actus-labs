@@ -1,6 +1,7 @@
 module Contrib.React.HTMLAttributes where
 
 import React.Basic (JSX)
+import React.Basic.Events (EventHandler)
 import Type.Row (type (+))
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -287,3 +288,94 @@ type HTMLAttributes otherProps =
   | DOMAttributes + otherProps
   )
 
+--     interface InputHTMLAttributes<T> extends HTMLAttributes<T> {
+--         accept?: string | undefined;
+--         alt?: string | undefined;
+--         autoComplete?: string | undefined;
+--         autoFocus?: boolean | undefined;
+--         capture?: boolean | 'user' | 'environment' | undefined; // https://www.w3.org/TR/html-media-capture/#the-capture-attribute
+--         checked?: boolean | undefined;
+--         crossOrigin?: string | undefined;
+--         disabled?: boolean | undefined;
+--         enterKeyHint?: 'enter' | 'done' | 'go' | 'next' | 'previous' | 'search' | 'send' | undefined;
+--         form?: string | undefined;
+--         formAction?: string | undefined;
+--         formEncType?: string | undefined;
+--         formMethod?: string | undefined;
+--         formNoValidate?: boolean | undefined;
+--         formTarget?: string | undefined;
+--         height?: number | string | undefined;
+--         list?: string | undefined;
+--         max?: number | string | undefined;
+--         maxLength?: number | undefined;
+--         min?: number | string | undefined;
+--         minLength?: number | undefined;
+--         multiple?: boolean | undefined;
+--         name?: string | undefined;
+--         pattern?: string | undefined;
+--         placeholder?: string | undefined;
+--         readOnly?: boolean | undefined;
+--         required?: boolean | undefined;
+--         size?: number | undefined;
+--         src?: string | undefined;
+--         step?: number | string | undefined;
+--         type?: HTMLInputTypeAttribute | undefined;
+--         value?: string | ReadonlyArray<string> | number | undefined;
+--         width?: number | string | undefined;
+-- 
+--         onChange?: ChangeEventHandler<T> | undefined;
+
+type InputHTMLAttributes otherProps =
+  HTMLAttributes +
+    ( accept :: String
+    , alt :: String
+    , autoComplete :: String
+    , autoFocus :: Boolean
+    , capture :: Boolean
+    , checked :: Boolean
+    , crossOrigin :: String
+    , disabled :: Boolean
+    , enterKeyHint :: String
+    , form :: String
+    , formAction :: String
+    , formEncType :: String
+    , formMethod :: String
+    , formNoValidate :: Boolean
+    , formTarget :: String
+    , height :: Number
+    , list :: String
+    , max :: Number
+    , maxLength :: Number
+    , min :: Number
+    , minLength :: Number
+    , multiple :: Boolean
+    , onChange :: EventHandler
+    , name :: String
+    , pattern :: String
+    , placeholder :: String
+    , readOnly :: Boolean
+    , required :: Boolean
+    , size :: Number
+    , src :: String
+    , step :: Number
+    -- This collides with `Check` - take care of it upstream
+    -- , type :: String
+    , value :: String
+    , width :: Number
+    | otherProps
+    )
+
+type SelectHTMLAttributes otherProps =
+  HTMLAttributes +
+    ( autoComplete :: String
+    , autoFocus :: Boolean
+    , disabled :: Boolean
+    , form :: String
+    , multiple :: Boolean
+    , name :: String
+    , required :: Boolean
+    , size :: Number
+    , value :: String
+    , onChange :: EventHandler
+    | otherProps
+    )
