@@ -14,8 +14,8 @@ derive newtype instance Eq PositiveBigInt
 derive newtype instance Ord PositiveBigInt
 derive newtype instance Semiring PositiveBigInt
 
-fromBigInt ∷ BigInt → Maybe PositiveBigInt
-fromBigInt n = if n >= BigInt.fromInt 0
-  then Just (PositiveBigInt n)
+fromBigInt :: BigInt -> Maybe PositiveBigInt
+fromBigInt n =
+  if n >= BigInt.fromInt 0 then Just (PositiveBigInt n)
   else Nothing
 

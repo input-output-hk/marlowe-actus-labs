@@ -92,6 +92,7 @@ data OrderBy
   = OrderByCreationDate
   | OrderByActusContractId
   | OrderByLastUpdateDate
+
 derive instance Eq OrderBy
 
 mkEventList :: MkComponentM (Props -> JSX)
@@ -114,11 +115,10 @@ mkEventList = do
           -- Quick and dirty hack to display just submited contracts as first
           someFutureBlockNumber = Runtime.BlockNumber 2058430
           sortedContracts = case ordering.orderBy of
-            OrderByCreationDate -> Array.sortBy (compare `on` (fromMaybe someFutureBlockNumber <<< map ( _.blockNo <<< un Runtime.BlockHeader) <<< ContractInfo.createdAt)) contractList
+            OrderByCreationDate -> Array.sortBy (compare `on` (fromMaybe someFutureBlockNumber <<< map (_.blockNo <<< un Runtime.BlockHeader) <<< ContractInfo.createdAt)) contractList
             OrderByActusContractId -> Array.sortBy (compare `on` (ContractInfo.actusContractId)) contractList
             OrderByLastUpdateDate -> Array.sortBy (compare `on` (fromMaybe someFutureBlockNumber <<< map (_.blockNo <<< un Runtime.BlockHeader) <<< ContractInfo.updatedAt)) contractList
-        if ordering.orderAsc
-        then sortedContracts
+        if ordering.orderAsc then sortedContracts
         else Array.reverse sortedContracts
 
       onEdit { party, token, value, transactionsEndpoint } = do
@@ -288,112 +288,110 @@ mkEventList = do
 
         , table { striped: Table.striped.boolean true, hover: true } $
             [ DOM.thead {} do
-              let
-                orderingTh = Table.orderingHeader ordering updateOrdering
-                th label = DOM.th { className: "text-center text-muted" } [ text label ]
-              [ DOM.tr {}
-                  [ orderingTh (DOOM.text "Contract Id") OrderByActusContractId
-                  , do
-                    let
-                      label = DOOM.fragment [ DOOM.text "Contract created" ] --, DOOM.br {},  DOOM.text "(Block number)"]
-                    orderingTh label OrderByCreationDate
-                  , th "Type"
-                  , th "Date"
-                  , if showOnlyMyContracts
-                    then
-                      th "Your balance"
-                    else
-                      th "Amount"
-                  , th "Currency"
-                  -- , th "Execute debug"
-                  , th "Action"
-                  ]
-              ]
-            , DOM.tbody {} $
-              Array.fromFoldable $ map
-                  (\ci@(ContractInfo contractInfo@{ endpoints, userContractRole }) ->
-                      let
-                        cashFlowInfo = Lazy.force contractInfo.cashFlowInfo
-                        tdCentered = DOM.td { className: "text-center" }
-                        formatAmount currency amount = fromMaybe "" $
-                          if elem currency currenciesWith6Decimals
-                          then Just $ show (((BigInt.toNumber amount / 1000000.0)))
-                          else BigInt.toString <$> (evalVal $ DivValue (Constant amount) (Constant $ BigInt.fromInt 1000000))
-                        step { prevExecuted, result } (CashFlowInfo { cashFlow, sender, token, value, transaction, userCashFlowDirection }) = do
-                          let
-                            cf = unwrap cashFlow
-                            party = case sender of
-                              ActusParty -> contractInfo.party
-                              ActusCounterParty -> contractInfo.counterParty
-                            item = DOM.tr {}
-                              [ DOM.td {} [ text $ cf.contractId ]
-                              , tdCentered [ text $ foldMap show $ map (un Runtime.BlockNumber <<< _.blockNo <<< un Runtime.BlockHeader) $ ContractInfo.createdAt ci ]
-                              , tdCentered [ text $ Actus.BussinessEvents.description cf.event ]
-                              , tdCentered [ foldMap text $ hush (formatDateTime "YYYY-DD-MM HH:mm:ss" cf.paymentDay) ]
-                              , do
-                                  let
-                                    moneyInfoStr /\ cellStyle =
-                                      if showOnlyMyContracts then
-                                        case userCashFlowDirection of
-                                          Just (IncomingFlow /\ PositiveBigInt absValue) -> ("+" <> formatAmount cf.currency absValue) /\ "table-success"
-                                          Just (OutgoingFlow /\ PositiveBigInt absValue) -> ("-" <> formatAmount cf.currency absValue) /\ "table-danger"
-                                          Just (InternalFlow /\ PositiveBigInt absValue) -> ("=" <> formatAmount cf.currency absValue) /\ "table-light"
-                                          _ -> "" /\ ""
-                                      else
-                                        formatAmount cf.currency value /\ ""
+                let
+                  orderingTh = Table.orderingHeader ordering updateOrdering
+                  th label = DOM.th { className: "text-center text-muted" } [ text label ]
+                [ DOM.tr {}
+                    [ orderingTh (DOOM.text "Contract Id") OrderByActusContractId
+                    , do
+                        let
+                          label = DOOM.fragment [ DOOM.text "Contract created" ] --, DOOM.br {},  DOOM.text "(Block number)"]
+                        orderingTh label OrderByCreationDate
+                    , th "Type"
+                    , th "Date"
+                    , if showOnlyMyContracts then
+                        th "Your balance"
+                      else
+                        th "Amount"
+                    , th "Currency"
+                    -- , th "Execute debug"
+                    , th "Action"
+                    ]
+                ]
+            , DOM.tbody {}
+                $ Array.fromFoldable
+                $ map
+                    ( \ci@(ContractInfo contractInfo@{ endpoints, userContractRole }) ->
+                        let
+                          cashFlowInfo = Lazy.force contractInfo.cashFlowInfo
+                          tdCentered = DOM.td { className: "text-center" }
+                          formatAmount currency amount = fromMaybe "" $
+                            if elem currency currenciesWith6Decimals then Just $ show (((BigInt.toNumber amount / 1000000.0)))
+                            else BigInt.toString <$> (evalVal $ DivValue (Constant amount) (Constant $ BigInt.fromInt 1000000))
+                          step { prevExecuted, result } (CashFlowInfo { cashFlow, sender, token, value, transaction, userCashFlowDirection }) = do
+                            let
+                              cf = unwrap cashFlow
+                              party = case sender of
+                                ActusParty -> contractInfo.party
+                                ActusCounterParty -> contractInfo.counterParty
+                              item = DOM.tr {}
+                                [ DOM.td {} [ text $ cf.contractId ]
+                                , tdCentered [ text $ foldMap show $ map (un Runtime.BlockNumber <<< _.blockNo <<< un Runtime.BlockHeader) $ ContractInfo.createdAt ci ]
+                                , tdCentered [ text $ Actus.BussinessEvents.description cf.event ]
+                                , tdCentered [ foldMap text $ hush (formatDateTime "YYYY-DD-MM HH:mm:ss" cf.paymentDay) ]
+                                , do
+                                    let
+                                      moneyInfoStr /\ cellStyle =
+                                        if showOnlyMyContracts then
+                                          case userCashFlowDirection of
+                                            Just (IncomingFlow /\ PositiveBigInt absValue) -> ("+" <> formatAmount cf.currency absValue) /\ "table-success"
+                                            Just (OutgoingFlow /\ PositiveBigInt absValue) -> ("-" <> formatAmount cf.currency absValue) /\ "table-danger"
+                                            Just (InternalFlow /\ PositiveBigInt absValue) -> ("=" <> formatAmount cf.currency absValue) /\ "table-light"
+                                            _ -> "" /\ ""
+                                        else
+                                          formatAmount cf.currency value /\ ""
 
-                                  --   if elem cf.currency currenciesWith6Decimals
-                                  --   then show <$> (((_ / 1000000.0) <<< BigInt.toNumber) <$> evalVal cf.amount)
-                                  --   else BigInt.toString <$> (evalVal $ DivValue cf.amount (Constant $ BigInt.fromInt 1000000))
-                                  -- ]
-                                  -- [ text $ fromMaybe "" $
-                                  -- ]
-                                  DOM.td { className: "text-end " <> cellStyle }
-                                    [ text $ moneyInfoStr ]
-                              , tdCentered [ text $ if cf.currency == "" then "₳" else cf.currency ]
-                              -- , tdCentered $ Array.singleton $ text $
-                              --     "user role: " <> show userContractRole <> ", sender: " <> show sender <> ", transaction endpoint: " <> show (isJust endpoints.transactions)
-                              , tdCentered $ Array.singleton $ case endpoints.transactions of
-                                  Just transactionsEndpoint -> case transaction of
-                                    Just (Runtime.TxHeader tx) -> do
-                                      let
-                                        txId = un Runtime.TxId tx.transactionId
-                                      DOM.a
-                                        { className: "btn btn-link text-decoration-none text-reset text-decoration-underline-hover"
-                                        , target: "_blank"
-                                        , href: "https://preprod.cardanoscan.io/transaction/" <> txId
-                                        }
-                                        [ DOM.span { className: "me-1" } $ Icons.toJSX Icons.eye
-                                        , text "Tx details"
-                                        ]
-
-
-                                    Nothing -> do
-                                      let
-                                        button = Lazy.defer \_ -> linkWithIcon
-                                          { icon: Icons.bullsEye
-                                          , label: DOOM.text "Execute"
-                                          , onClick: onEdit { party, token, value, transactionsEndpoint }
-                                          , disabled: not prevExecuted
+                                    --   if elem cf.currency currenciesWith6Decimals
+                                    --   then show <$> (((_ / 1000000.0) <<< BigInt.toNumber) <$> evalVal cf.amount)
+                                    --   else BigInt.toString <$> (evalVal $ DivValue cf.amount (Constant $ BigInt.fromInt 1000000))
+                                    -- ]
+                                    -- [ text $ fromMaybe "" $
+                                    -- ]
+                                    DOM.td { className: "text-end " <> cellStyle }
+                                      [ text $ moneyInfoStr ]
+                                , tdCentered [ text $ if cf.currency == "" then "₳" else cf.currency ]
+                                -- , tdCentered $ Array.singleton $ text $
+                                --     "user role: " <> show userContractRole <> ", sender: " <> show sender <> ", transaction endpoint: " <> show (isJust endpoints.transactions)
+                                , tdCentered $ Array.singleton $ case endpoints.transactions of
+                                    Just transactionsEndpoint -> case transaction of
+                                      Just (Runtime.TxHeader tx) -> do
+                                        let
+                                          txId = un Runtime.TxId tx.transactionId
+                                        DOM.a
+                                          { className: "btn btn-link text-decoration-none text-reset text-decoration-underline-hover"
+                                          , target: "_blank"
+                                          , href: "https://preprod.cardanoscan.io/transaction/" <> txId
                                           }
+                                          [ DOM.span { className: "me-1" } $ Icons.toJSX Icons.eye
+                                          , text "Tx details"
+                                          ]
+
+                                      Nothing -> do
+                                        let
+                                          button = Lazy.defer \_ -> linkWithIcon
+                                            { icon: Icons.bullsEye
+                                            , label: DOOM.text "Execute"
+                                            , onClick: onEdit { party, token, value, transactionsEndpoint }
+                                            , disabled: not prevExecuted
+                                            }
 
                                         -- button = DOM.button
                                         --   { onClick: onEdit { party, token, value, transactionsEndpoint }
                                         --   , className: "btn btn-secondary btn-sm",
                                         --   }
                                         --   "Execute"
-                                      case sender, userContractRole of
-                                        _, Just BothParties -> Lazy.force button
-                                        ActusParty, Just ContractParty -> Lazy.force button
-                                        ActusCounterParty, Just ContractCounterParty -> Lazy.force button
-                                        _, _ -> mempty
-                                  Nothing -> mempty
-                              ]
-                          { prevExecuted: isJust transaction, result: List.Cons item result }
-                      in
-                        Array.reverse $ Array.fromFoldable $ _.result $ foldl step { prevExecuted: true, result: List.Nil } cashFlowInfo
-                  )
-                  contractList'
+                                        case sender, userContractRole of
+                                          _, Just BothParties -> Lazy.force button
+                                          ActusParty, Just ContractParty -> Lazy.force button
+                                          ActusCounterParty, Just ContractCounterParty -> Lazy.force button
+                                          _, _ -> mempty
+                                    Nothing -> mempty
+                                ]
+                            { prevExecuted: isJust transaction, result: List.Cons item result }
+                        in
+                          Array.reverse $ Array.fromFoldable $ _.result $ foldl step { prevExecuted: true, result: List.Nil } cashFlowInfo
+                    )
+                    contractList'
             ]
         ]
 

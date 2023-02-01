@@ -20,6 +20,7 @@ newtype WalletContext = WalletContext
   { -- , balance :: V1.Assets
     usedAddresses :: Array Bech32
   }
+
 derive instance Newtype WalletContext _
 derive newtype instance Show WalletContext
 derive newtype instance Eq WalletContext

@@ -33,8 +33,9 @@ type TabPane_props r =
 type Props_tab =
   HTMLAttributes
     + TabPane_props
-    + ( disabled :: Boolean
-        -- tabAttrs - Object containing attributes to pass to underlying nav link.
+    +
+      ( disabled :: Boolean
+      -- tabAttrs - Object containing attributes to pass to underlying nav link.
       -- , tabAttrs :: Object
       , tabClassName :: String
       , title :: JSX

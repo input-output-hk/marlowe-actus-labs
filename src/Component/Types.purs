@@ -8,8 +8,7 @@ module Component.Types
   , MessageContent(..)
   , WalletInfo(..)
   , module Exports
-  )
-  where
+  ) where
 
 import Prelude
 

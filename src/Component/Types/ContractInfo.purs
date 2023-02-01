@@ -17,12 +17,16 @@ import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Runtime.Web.Types as Runtime
 
 data UserContractRole
-  = ContractParty | ContractCounterParty | BothParties
+  = ContractParty
+  | ContractCounterParty
+  | BothParties
+
 derive instance Generic UserContractRole _
 instance Show UserContractRole where
   show = genericShow
 
 data ActusContractRole = ActusParty | ActusCounterParty
+
 derive instance Generic ActusContractRole _
 instance Show ActusContractRole where
   show = genericShow
@@ -38,7 +42,7 @@ newtype CashFlowInfo = CashFlowInfo
     cashFlow :: Actus.CashFlow V1.Value V1.Party
   , sender :: ActusContractRole
   -- From the current wallet perspective (if relatd to the user).
-  , userCashFlowDirection :: Maybe (UserCashFlowDirection  /\ PositiveBigInt)
+  , userCashFlowDirection :: Maybe (UserCashFlowDirection /\ PositiveBigInt)
   , token :: V1.Token
   , transaction :: Maybe Runtime.TxHeader
   -- Value from ACTUS perspective.
@@ -58,21 +62,23 @@ newtype ContractInfo = ContractInfo
   , contractTerms :: Actus.ContractTerms
   , marloweInfo :: Maybe MarloweInfo
   , endpoints ::
-    { contract :: Runtime.ContractEndpoint
-    , transactions :: Maybe Runtime.TransactionsEndpoint
-    }
+      { contract :: Runtime.ContractEndpoint
+      , transactions :: Maybe Runtime.TransactionsEndpoint
+      }
   , party :: V1.Party
   , userContractRole :: Maybe UserContractRole
   -- Use this only for debugging - all domain specific data
   -- should be precomputed and exposed as separated fields.
   , _runtime ::
-    { contractHeader :: Runtime.ContractHeader
-    , transactions :: Array Runtime.TxHeader
-    }
+      { contractHeader :: Runtime.ContractHeader
+      , transactions :: Array Runtime.TxHeader
+      }
   }
+
 derive instance Newtype ContractInfo _
 
 newtype ActusContractId = ActusContractId String
+
 derive instance Newtype ActusContractId _
 derive newtype instance Eq ActusContractId
 derive newtype instance Ord ActusContractId
@@ -93,5 +99,5 @@ updatedAt ci@(ContractInfo { _runtime: { transactions } }) =
   do
     Runtime.TxHeader tx <- Array.last transactions
     tx.block
-  <|> createdAt ci
+    <|> createdAt ci
 

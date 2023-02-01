@@ -97,6 +97,7 @@ data OrderBy
   = OrderByCreationDate
   | OrderByActusContractId
   | OrderByLastUpdateDate
+
 derive instance Eq OrderBy
 
 testingSubmit :: Boolean
@@ -121,11 +122,10 @@ mkContractList = do
           -- Quick and dirty hack to display just submited contracts as first
           someFutureBlockNumber = Runtime.BlockNumber 2058430
           sortedContracts = case ordering.orderBy of
-            OrderByCreationDate -> Array.sortBy (compare `on` (fromMaybe someFutureBlockNumber <<< map ( _.blockNo <<< un Runtime.BlockHeader) <<< ContractInfo.createdAt)) contractList
+            OrderByCreationDate -> Array.sortBy (compare `on` (fromMaybe someFutureBlockNumber <<< map (_.blockNo <<< un Runtime.BlockHeader) <<< ContractInfo.createdAt)) contractList
             OrderByActusContractId -> Array.sortBy (compare `on` (ContractInfo.actusContractId)) contractList
             OrderByLastUpdateDate -> Array.sortBy (compare `on` (fromMaybe someFutureBlockNumber <<< map (_.blockNo <<< un Runtime.BlockHeader) <<< ContractInfo.updatedAt)) contractList
-        if ordering.orderAsc
-        then sortedContracts
+        if ordering.orderAsc then sortedContracts
         else Array.reverse sortedContracts
 
     useEffectOnce $ do
@@ -226,22 +226,22 @@ mkContractList = do
             Nothing -> mempty
         , table { striped: Table.striped.boolean true, hover: true }
             [ DOM.thead {} do
-              let
-                orderingTh = Table.orderingHeader ordering updateOrdering
-                th label = DOM.th { className: "text-center text-muted" } [ label ]
-              [ DOM.tr {}
-                  [ orderingTh (DOOM.text "Actus Contract Id") OrderByActusContractId
-                  , do
-                    let
-                      label = DOOM.fragment [ DOOM.text "Created" ] --, DOOM.br {},  DOOM.text "(Block number)"]
-                    orderingTh label OrderByCreationDate
-                  , th $ DOOM.text "Type"
-                  , th $ DOOM.text "Party"
-                  , th $ DOOM.text "Counter Party"
-                  , th $ DOOM.text "Status"
-                  , th $ DOOM.text "Contract"
-                  ]
-              ]
+                let
+                  orderingTh = Table.orderingHeader ordering updateOrdering
+                  th label = DOM.th { className: "text-center text-muted" } [ label ]
+                [ DOM.tr {}
+                    [ orderingTh (DOOM.text "Actus Contract Id") OrderByActusContractId
+                    , do
+                        let
+                          label = DOOM.fragment [ DOOM.text "Created" ] --, DOOM.br {},  DOOM.text "(Block number)"]
+                        orderingTh label OrderByCreationDate
+                    , th $ DOOM.text "Type"
+                    , th $ DOOM.text "Party"
+                    , th $ DOOM.text "Counter Party"
+                    , th $ DOOM.text "Status"
+                    , th $ DOOM.text "Contract"
+                    ]
+                ]
             , DOM.tbody {} $ map
                 ( \ci@(ContractInfo { _runtime, counterParty, party }) -> -- { resource: ContractHeader { contractId, status, metadata } } ->
                     let
@@ -263,7 +263,7 @@ mkContractList = do
                               , placement: OverlayTrigger.placement.bottom
                               } $ DOM.span {} [ show status ]
                         , tdCentered
-                          [ linkWithIcon { icon: Icons.eye, label: DOOM.text "View", onClick: onView metadata } ]
+                            [ linkWithIcon { icon: Icons.eye, label: DOOM.text "View", onClick: onView metadata } ]
                         ]
                 )
                 contractList'

@@ -113,6 +113,7 @@ instance DecodeJson TxStatus where
     _ -> Nothing
 
 newtype BlockNumber = BlockNumber Int
+
 derive instance Generic BlockNumber _
 derive instance Newtype BlockNumber _
 derive instance Eq BlockNumber
@@ -121,6 +122,7 @@ instance DecodeJson BlockNumber where
   decodeJson json = BlockNumber <$> decodeJson json
 
 newtype SlotNumber = SlotNumber Int
+
 derive instance Generic SlotNumber _
 derive instance Newtype SlotNumber _
 derive instance Eq SlotNumber
@@ -445,9 +447,9 @@ instance DecodeJson PostContractsResponseContent where
   decodeJson = decodeNewtypedRecord
     { txBody: map decodeTransactionObjectTextEnvelope :: Maybe _ -> Maybe _ }
 
-type ContractEndpointRow r = ( "contract" :: ContractEndpoint | r)
+type ContractEndpointRow r = ("contract" :: ContractEndpoint | r)
 
-type TransactionsEndpointRow r = ( "transactions" :: Maybe TransactionsEndpoint | r)
+type TransactionsEndpointRow r = ("transactions" :: Maybe TransactionsEndpoint | r)
 
 type PostContractsResponse = ResourceWithLinks PostContractsResponseContent (ContractEndpointRow + ())
 
@@ -456,8 +458,8 @@ type GetContractsResponseContent = ContractHeader
 type GetContractsResponse = ResourceWithLinks GetContractsResponseContent (ContractEndpointRow + TransactionsEndpointRow + ())
 
 newtype ContractsEndpoint = ContractsEndpoint
-  (IndexEndpoint PostContractsRequest PostContractsResponseContent (ContractEndpointRow + ()) GetContractsResponseContent
-    ( ContractEndpointRow + TransactionsEndpointRow + ())
+  ( IndexEndpoint PostContractsRequest PostContractsResponseContent (ContractEndpointRow + ()) GetContractsResponseContent
+      (ContractEndpointRow + TransactionsEndpointRow + ())
   )
 
 derive instance Eq ContractsEndpoint

@@ -96,8 +96,8 @@ getPage
 getPage serverUrl path possibleRange = runExceptT do
   { headers, payload, status } <- ExceptT
     $ case possibleRange of
-      Just range -> getResource serverUrl path { "Range": coerce range }
-      Nothing -> getResource serverUrl path {}
+        Just range -> getResource serverUrl path { "Range": coerce range }
+        Nothing -> getResource serverUrl path {}
   pure
     { page: payload
     , nextRange:

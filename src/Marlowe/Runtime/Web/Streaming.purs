@@ -272,7 +272,6 @@ fetchContractsStates endpoints prevContractStateMap listener (RequestInterval re
             Alternative.guard $ newContractState /= oldContractState'
             pure { old: oldContractState', new: newContractState }
 
-
         pure $ Just $ change /\ contractId /\ newContractState
     action `catchError` \_ -> do
       pure Nothing
@@ -288,8 +287,6 @@ fetchContractsStates endpoints prevContractStateMap listener (RequestInterval re
     { contractsStates: Map.fromFoldable (items <#> snd)
     , notify: doNotify
     }
-
-
 
 type ContractWithTransactions =
   { contract :: GetContractsResponse
@@ -338,8 +335,7 @@ contractsWithTransactions (ContractStream contractStream) (ContractStateStream c
           contractState = Map.lookup contractId contractStateMap
         pure { contract, contractState, transactions }
 
-    emitter
-      = (ContractEvent <$> contractStream.emitter)
+    emitter = (ContractEvent <$> contractStream.emitter)
       <|> (ContractTransactionsEvent <$> contractTransactionsStream.emitter)
       <|> (ContractStateEvent <$> contractStateStream.emitter)
 

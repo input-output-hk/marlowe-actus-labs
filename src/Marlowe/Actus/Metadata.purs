@@ -334,7 +334,7 @@ decodeMetadata :: Runtime.Metadata -> Maybe Metadata
 decodeMetadata (Runtime.Metadata md) = Map.lookup actusMetadataKey md >>= decodeJson >>> hush
 
 -- | Grab metadata from `Runtime.Contract` or from `Runtime.ContractHeader`.
-fromRuntimeResource :: forall resource r. Newtype resource { metadata :: Runtime.Metadata | r} => resource -> Maybe Metadata
+fromRuntimeResource :: forall resource r. Newtype resource { metadata :: Runtime.Metadata | r } => resource -> Maybe Metadata
 fromRuntimeResource resource = do
   let
     { metadata } = unwrap resource

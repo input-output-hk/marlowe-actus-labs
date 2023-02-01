@@ -61,7 +61,6 @@ foldMapThrottle f (MinInterval minInterval) origEmitter = do
           Ref.write mempty valueRef
         Ref.write (Just timeoutId) timeoutIdRef
 
-
 bindEffect :: forall a b. (a -> Effect b) -> Emitter a -> Emitter b
 bindEffect f origEmitter = _Emitter \k -> do
   let

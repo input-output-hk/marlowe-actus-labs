@@ -108,6 +108,7 @@ debugWallet :: Maybe WalletBrand
 debugWallet = Nothing -- Just Nami -- Nothing
 
 data DisplayOption = Default | About
+
 derive instance Eq DisplayOption
 
 type ContractInfoMap = Map Runtime.ContractId ContractInfo
@@ -158,7 +159,7 @@ mkApp = do
       pwc <- liftEffect $ readRef possibleWalletContextRef
       case pwi, pwc of
         Nothing, Nothing -> pure unit
-        Nothing , Just _ -> liftEffect $ setWalletContext Nothing
+        Nothing, Just _ -> liftEffect $ setWalletContext Nothing
         Just (WalletInfo walletInfo), _ -> do
           walletContext <- WalletContext.walletContext cardanoMultiplatformLib walletInfo.wallet
           liftEffect $ setWalletContext $ Just walletContext
@@ -214,123 +215,124 @@ mkApp = do
       AppContractInfoMap { map: contracts } = contractMap
 
     pure $ provider walletInfoCtx possibleWalletInfo $ Array.singleton $ DOM.div { className: "mt-6" } $
-          [ DOM.div { className: "fixed-top" }
-              [ DOM.nav { className: "navbar mb-lg-3 navbar-expand-sm navbar-light bg-light py-0" } $
-                  DOM.div { className: "container-xl" }
-                    [ DOM.a { href: "#", className: "navbar-brand" }
-                      [ svgImg { src: marloweLogoUrl, height: "30px", className: "me-2" }
-                      , DOOM.text "Marlowe Actus Labs"
-                      ]
-                    , DOM.div { className: "navbar-collapse justify-content-end text-end" } $
-                        [ DOM.ul { className: "navbar-nav gap-2" }
-                            [ DOM.li { className: "nav-item" } $
-                                linkWithIcon
-                                  { icon: Icons.infoSquare
-                                  , label: (DOOM.text "About")
-                                  , extraClassNames: "nav-link"
-                                  , onClick: setDisplayOption About
-                                  }
-                            , DOM.li { className: "nav-item" } $ ReactContext.consumer msgHubProps.ctx \msgs ->
-                                [ linkWithIcon
-                                    { icon: if List.null msgs then Icons.bellSlash else Icons.bellFill
-                                    , label: DOOM.text "Notifications"
-                                    , extraClassNames: "nav-link"
-                                    , onClick: setCheckingNotifications true
-                                    , disabled: List.null msgs
-                                    }
-                                ]
-                            -- FIXME: This should be moved to submenu
-                            -- , DOM.li { className: "nav-item" } $
-                            --     linkWithIcon
-                            --       { icon: Icons.cashStack
-                            --       , label: DOOM.text "Cash flows"
-                            --       , extraClassNames: "nav-link"
-                            --       , onClick: pure unit
-                            --       }
-                            , DOM.li { className: "nav-item" } $
-                                case possibleWalletInfo of
-                                  Just (WalletInfo wallet) -> link
-                                    { label: DOOM.span_
-                                        [ DOOM.img { src: wallet.icon, alt: wallet.name, className: "w-1_2rem me-1" }
-                                        , DOOM.span_ [ DOOM.text $ wallet.name <> " wallet" ]
-                                        ]
-                                    , extraClassNames: "nav-link"
-                                    , onClick: setConfiguringWallet true
-                                    }
-                                  Nothing -> linkWithIcon
-                                    { icon: Icons.wallet2
-                                    , label: DOOM.text "Connect Wallet"
-                                    , extraClassNames: "nav-link"
-                                    , onClick: setConfiguringWallet true
-                                    }
+      [ DOM.div { className: "fixed-top" }
+          [ DOM.nav { className: "navbar mb-lg-3 navbar-expand-sm navbar-light bg-light py-0" } $
+              DOM.div { className: "container-xl" }
+                [ DOM.a { href: "#", className: "navbar-brand" }
+                    [ svgImg { src: marloweLogoUrl, height: "30px", className: "me-2" }
+                    , DOOM.text "Marlowe Actus Labs"
+                    ]
+                , DOM.div { className: "navbar-collapse justify-content-end text-end" } $
+                    [ DOM.ul { className: "navbar-nav gap-2" }
+                        [ DOM.li { className: "nav-item" } $
+                            linkWithIcon
+                              { icon: Icons.infoSquare
+                              , label: (DOOM.text "About")
+                              , extraClassNames: "nav-link"
+                              , onClick: setDisplayOption About
+                              }
+                        , DOM.li { className: "nav-item" } $ ReactContext.consumer msgHubProps.ctx \msgs ->
+                            [ linkWithIcon
+                                { icon: if List.null msgs then Icons.bellSlash else Icons.bellFill
+                                , label: DOOM.text "Notifications"
+                                , extraClassNames: "nav-link"
+                                , onClick: setCheckingNotifications true
+                                , disabled: List.null msgs
+                                }
                             ]
+                        -- FIXME: This should be moved to submenu
+                        -- , DOM.li { className: "nav-item" } $
+                        --     linkWithIcon
+                        --       { icon: Icons.cashStack
+                        --       , label: DOOM.text "Cash flows"
+                        --       , extraClassNames: "nav-link"
+                        --       , onClick: pure unit
+                        --       }
+                        , DOM.li { className: "nav-item" } $
+                            case possibleWalletInfo of
+                              Just (WalletInfo wallet) -> link
+                                { label: DOOM.span_
+                                    [ DOOM.img { src: wallet.icon, alt: wallet.name, className: "w-1_2rem me-1" }
+                                    , DOOM.span_ [ DOOM.text $ wallet.name <> " wallet" ]
+                                    ]
+                                , extraClassNames: "nav-link"
+                                , onClick: setConfiguringWallet true
+                                }
+                              Nothing -> linkWithIcon
+                                { icon: Icons.wallet2
+                                , label: DOOM.text "Connect Wallet"
+                                , extraClassNames: "nav-link"
+                                , onClick: setConfiguringWallet true
+                                }
                         ]
                     ]
-              , DOM.div { className: "container-xl" }
-                  $ DOM.div { className: "row" }
-                  $ messagePreview msgHub
-              ]
-          , ReactContext.consumer msgHubProps.ctx \_ ->
-              pure $ offcanvas
-                { onHide: setCheckingNotifications false
-                , placement: Offcanvas.placement.end
-                , show: checkingNotifications -- && (not $ List.null msgs)
-                , scroll: false
-                }
-                [ DOM.div { className: "p-3 overflow-auto" } $ messageBox msgHub
                 ]
-          , Monoid.guard (displayOption == About) $
-              modal $
-                { onDismiss: setDisplayOption Default
-                , title: DOOM.text "About"
-                , body: DOOM.div { dangerouslySetInnerHTML: { __html: about } }
-                , size: Large
-                }
-          , Monoid.guard configuringWallet do
-              let
-                jsx = subcomponents.connectWallet
-                  { currentlyConnected: possibleWalletInfo
-                  , onWalletConnect: \result -> do
-                      case result of
-                        ConnectWallet.Connected walletInfo -> do
-                          let
-                            WalletInfo { name } = walletInfo
-                          msgHubProps.add $ Success $ DOOM.text $ "Connected to " <> name
-                          setWalletInfo (Just walletInfo)
-                        ConnectWallet.ConnectionError _ -> pure unit
-                        ConnectWallet.NoWallets -> pure unit
-                      setConfiguringWallet false
-                  , onDismiss: setConfiguringWallet false
-                  , inModal: true
-                  }
-              jsx
-          , DOM.div { className: "container-xl" } do
-              let
-                renderTab props children = tab props $ DOM.div { className: "row pt-4" } children
-                contractArray = Array.fromFoldable contracts
-              [ tabs {fill: true, justify: true, defaultActiveKey: "contracts" }
-                [ renderTab
+          , DOM.div { className: "container-xl" }
+              $ DOM.div { className: "row" }
+              $ messagePreview msgHub
+          ]
+      , ReactContext.consumer msgHubProps.ctx \_ ->
+          pure $ offcanvas
+            { onHide: setCheckingNotifications false
+            , placement: Offcanvas.placement.end
+            , show: checkingNotifications -- && (not $ List.null msgs)
+            , scroll: false
+            }
+            [ DOM.div { className: "p-3 overflow-auto" } $ messageBox msgHub
+            ]
+      , Monoid.guard (displayOption == About)
+          $ modal
+          $
+            { onDismiss: setDisplayOption Default
+            , title: DOOM.text "About"
+            , body: DOOM.div { dangerouslySetInnerHTML: { __html: about } }
+            , size: Large
+            }
+      , Monoid.guard configuringWallet do
+          let
+            jsx = subcomponents.connectWallet
+              { currentlyConnected: possibleWalletInfo
+              , onWalletConnect: \result -> do
+                  case result of
+                    ConnectWallet.Connected walletInfo -> do
+                      let
+                        WalletInfo { name } = walletInfo
+                      msgHubProps.add $ Success $ DOOM.text $ "Connected to " <> name
+                      setWalletInfo (Just walletInfo)
+                    ConnectWallet.ConnectionError _ -> pure unit
+                    ConnectWallet.NoWallets -> pure unit
+                  setConfiguringWallet false
+              , onDismiss: setConfiguringWallet false
+              , inModal: true
+              }
+          jsx
+      , DOM.div { className: "container-xl" } do
+          let
+            renderTab props children = tab props $ DOM.div { className: "row pt-4" } children
+            contractArray = Array.fromFoldable contracts
+          [ tabs { fill: true, justify: true, defaultActiveKey: "contracts" }
+              [ renderTab
                   { eventKey: "contracts"
                   , title: DOM.div
-                    { className: "text-body" }
-                    [ DOM.span { className: "me-2" } $ Icons.toJSX Icons.files
-                    , DOOM.text "Contracts"
-                    ]
+                      { className: "text-body" }
+                      [ DOM.span { className: "me-2" } $ Icons.toJSX Icons.files
+                      , DOOM.text "Contracts"
+                      ]
                   }
                   $ subcomponents.contractListComponent { contractList: contractArray, connectedWallet: possibleWalletInfo }
-                , renderTab
+              , renderTab
                   { eventKey: "cash-flows"
                   , title: DOM.div
-                    { className: "text-body" }
-                    [ DOM.span { className: "me-2" } $ Icons.toJSX Icons.cashStack
-                    , DOOM.text "Cash flows"
-                    ]
+                      { className: "text-body" }
+                      [ DOM.span { className: "me-2" } $ Icons.toJSX Icons.cashStack
+                      , DOOM.text "Cash flows"
+                      ]
 
                   }
                   $ subcomponents.eventListComponent { contractList: contractArray, connectedWallet: possibleWalletInfo }
-                ]
               ]
           ]
+      ]
 
 -- TODO: Currently we ignore role tokens.
 updateAppContractInfoMap :: AppContractInfoMap -> Maybe WalletContext -> ContractWithTransactionsMap -> AppContractInfoMap
@@ -340,14 +342,13 @@ updateAppContractInfoMap (AppContractInfoMap { walletContext: prevWalletContext,
     usedAddresses = fromMaybe [] $ _.usedAddresses <<< un WalletContext <$> walletContext
 
     mkUserContractRole prevRole party counterParty = do
-      if walletChanged
-      then case partyToBech32 party, partyToBech32 counterParty of
-          Just addr1, Just addr2 -> case Array.elem addr1 usedAddresses, Array.elem addr2 usedAddresses of
-            true, true -> Just BothParties
-            true, false -> Just ContractParty
-            false, true -> Just ContractCounterParty
-            false, false -> Nothing
-          _, _ -> Nothing
+      if walletChanged then case partyToBech32 party, partyToBech32 counterParty of
+        Just addr1, Just addr2 -> case Array.elem addr1 usedAddresses, Array.elem addr2 usedAddresses of
+          true, true -> Just BothParties
+          true, false -> Just ContractParty
+          false, true -> Just ContractCounterParty
+          false, false -> Nothing
+        _, _ -> Nothing
       else prevRole
 
     map = Map.catMaybes $ updates <#> \{ contract: { resource: contractHeader@(Runtime.ContractHeader { contractId }), links: endpoints }, contractState, transactions } -> do
@@ -355,10 +356,10 @@ updateAppContractInfoMap (AppContractInfoMap { walletContext: prevWalletContext,
         marloweInfo = do
           Runtime.ContractState contractState' <- contractState
           pure $ MarloweInfo
-           { initialContract: contractState'.initialContract
-           , state: contractState'.state
-           , currentContract: contractState'.currentContract
-           }
+            { initialContract: contractState'.initialContract
+            , state: contractState'.state
+            , currentContract: contractState'.currentContract
+            }
 
       case contractId `Map.lookup` prev of
         Just (ContractInfo contractInfo) -> do
@@ -371,24 +372,23 @@ updateAppContractInfoMap (AppContractInfoMap { walletContext: prevWalletContext,
             cashFlowInfo = do
               let
                 recomputeCashFlows = walletChanged || transactions /= contractInfo._runtime.transactions
-              if recomputeCashFlows
-                then Lazy.defer \_ -> contractCashFlowInfo
-                  contractInfo.contractTerms
-                  contractInfo.party
-                  contractInfo.counterParty
-                  contractInfo.marloweInfo
-                  userContractRole
-                  transactions
-                else contractInfo.cashFlowInfo
+              if recomputeCashFlows then Lazy.defer \_ -> contractCashFlowInfo
+                contractInfo.contractTerms
+                contractInfo.party
+                contractInfo.counterParty
+                contractInfo.marloweInfo
+                userContractRole
+                transactions
+              else contractInfo.cashFlowInfo
 
           pure $ ContractInfo $ contractInfo
             { cashFlowInfo = cashFlowInfo
             , userContractRole = userContractRole
             , marloweInfo = marloweInfo
             , _runtime
-              { contractHeader = contractHeader
-              , transactions = transactions
-              }
+                { contractHeader = contractHeader
+                , transactions = transactions
+                }
             }
         Nothing -> do
           Actus.Metadata { party, counterParty, contractTerms } <- Actus.Metadata.fromRuntimeResource contractHeader
@@ -414,7 +414,6 @@ updateAppContractInfoMap (AppContractInfoMap { walletContext: prevWalletContext,
             }
   AppContractInfoMap { walletContext, map }
 
-
 contractCashFlowInfo
   :: Actus.ContractTerms
   -> V1.Party
@@ -431,16 +430,16 @@ contractCashFlowInfo contractTerms party counterParty marloweInfo possibleUserCo
       (defaultRiskFactors contractTerms)
       contractTerms
     transactions' = map Just transactions <> (Array.replicate (length cashFlows) Nothing)
-    cashFlows' = Array.zipWith { tx: _, cf: _} transactions' cashFlows
+    cashFlows' = Array.zipWith { tx: _, cf: _ } transactions' cashFlows
 
   Array.catMaybes $
     map
-      (\{ cf: cf@(Actus.CashFlow { currency, amount }), tx } -> do
+      ( \{ cf: cf@(Actus.CashFlow { currency, amount }), tx } -> do
           actusValue <- Actus.evalVal' amount
           value <- PositiveBigInt.fromBigInt $ BigInt.abs actusValue
           let
-            sender = if actusValue < (BigInt.fromInt 0)
-              then ActusParty
+            sender =
+              if actusValue < (BigInt.fromInt 0) then ActusParty
               else ActusCounterParty
           pure $ CashFlowInfo
             { cashFlow: Actus.toMarloweCashflow cf
