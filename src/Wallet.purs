@@ -36,7 +36,8 @@ module Wallet
 
 import Prelude
 
-import CardanoMultiplatformLib (AddressObject, CborHex)
+import CardanoMultiplatformLib (AddressObject, Bech32, CborHex, bech32FromCborHex, bech32FromString, runGarbageCollector)
+import CardanoMultiplatformLib as CardanoMultiplatformLib
 import CardanoMultiplatformLib.Transaction (TransactionObject, TransactionUnspentOutputObject, TransactionWitnessSetObject, TransactionHashObject)
 import Control.Alt ((<|>))
 import Control.Monad.Except (runExcept, runExceptT)
@@ -47,8 +48,10 @@ import Data.Maybe (Maybe(..), fromMaybe')
 import Data.Nullable (Nullable)
 import Data.Nullable as Nullable
 import Data.Tuple.Nested (type (/\), (/\))
+import Data.Undefined.NoProblem (undefined)
 import Data.Variant (Variant)
 import Data.Variant as Variant
+import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, makeAff)
 import Effect.Class (liftEffect)
@@ -343,9 +346,17 @@ getRewardAddresses = toAffEitherE rejectionAPIError <<< _Api.getRewardAddresses
 getUnusedAddresses :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (Array (CborHex AddressObject)))
 getUnusedAddresses = toAffEitherE rejectionAPIError <<< _Api.getUnusedAddresses
 
+-- Most wallets return cbor hex of an AddrssObject as an output even though it is
+-- against the spec which says that it should be a Bech32 string.
+newtype SomeAddress = SomeAddress String
+
+fromSomeAddress :: CardanoMultiplatformLib.Lib -> SomeAddress -> Effect (Maybe Bech32)
+fromSomeAddress lib (SomeAddress s) = do
+  (<|>) <*> bech32FromString lib s <*> runGarbageCollector lib (bech32FromCborHex (cborHex s) undefined)
+
 -- | Manually tested and works with Nami.
 getUsedAddresses :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (Array (CborHex AddressObject)))
-getUsedAddresses = toAffEitherE rejectionAPIError <<< _Api.getUsedAddresses
+getUsedAddresses api = toAffEitherE rejectionAPIError <<<  _Api.getUsedAddresses $ api
 
 -- | Manually tested and works with Nami.
 getUtxos

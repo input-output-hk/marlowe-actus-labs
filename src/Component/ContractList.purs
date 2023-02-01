@@ -5,8 +5,10 @@ import Prelude
 import Actus.Domain (CashFlow)
 import Actus.Domain.ContractTerms (ContractTerms)
 import Component.ConnectWallet (walletInfo)
-import Component.ContractForm (initialJson, mkContractForm, mkForm)
-import Component.ContractForm as ContractForm
+import Component.CreateContract as CreateContract
+import Component.CreateContract.FirstStep as FirstStep
+import Component.CreateContract.Forms (mkForm)
+import Component.CreateContract.SecondStep (initialJson)
 import Component.Modal (mkModal)
 import Component.SubmitContract (mkSubmitContract)
 import Component.Types (ActusContractId(..), ContractInfo(..), MessageContent(..), MessageHub(..), MkComponentM, WalletInfo(..))
@@ -34,6 +36,7 @@ import Data.Newtype as Newtype
 import Data.Traversable (traverse)
 import Data.Tuple.Nested (type (/\))
 import Data.Validation.Semigroup (V(..))
+import Debug (traceM)
 import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import JS.Unsafe.Stringify (unsafeStringify)
@@ -79,7 +82,7 @@ type SubmissionError = String
 
 data NewContractState
   = Creating
-  | Submitting ContractForm.Result
+  | Submitting CreateContract.Result
   | SubmissionError SubmissionError
   | SubmissionsSuccess ContractTerms ContractId
 
@@ -105,12 +108,13 @@ testingSubmit = false
 
 mkContractList :: MkComponentM (Props -> JSX)
 mkContractList = do
-  contractForm <- mkContractForm
   submitContract <- mkSubmitContract
   modal <- liftEffect $ mkModal
   cardanoMultiplatformLib <- asks _.cardanoMultiplatformLib
   logger <- asks _.logger
   msgHub@(MessageHub msgHubProps) <- asks _.msgHub
+
+  createContractComponent <- CreateContract.mkComponent
 
   liftEffect $ component "ContractList" \{ connectedWallet, contractList } -> React.do
     ((state :: ContractListState) /\ updateState) <- useState { newContract: Nothing, metadata: Nothing }
@@ -165,11 +169,13 @@ mkContractList = do
     pure $
       DOOM.div_
         [ case state.newContract, connectedWallet of
-            Just Creating, Just cw -> contractForm
-              { onDismiss: updateState _ { newContract = Nothing }
-              , onSuccess: onNewContract
+            Just Creating, Just cw -> createContractComponent
+              { connectedWallet: cw
+              , onDismiss: updateState _ { newContract = Nothing }
+              , onSuccess: \result -> do
+                traceM result
+                -- onNewContract
               , inModal: true
-              , connectedWallet: cw
               }
             Just (Submitting contractData), Just wallet -> submitContract
               { onDismiss: do

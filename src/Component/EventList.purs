@@ -5,7 +5,7 @@ import Prelude
 import Actus.Domain.BusinessEvents as Actus.BussinessEvents
 import CardanoMultiplatformLib (CborHex)
 import CardanoMultiplatformLib.Transaction (TransactionWitnessSetObject)
-import Component.ContractForm (walletChangeAddress)
+import Component.CreateContract (walletChangeAddress)
 import Component.Modal (mkModal)
 import Component.Types (ActusContractRole(..), CashFlowInfo(..), ContractInfo(..), MessageContent(..), MessageHub(..), MkComponentM, UserCashFlowDirection(..), UserContractRole(..), WalletInfo(..))
 import Component.Types.ContractInfo as ContractInfo

@@ -59,9 +59,7 @@ spec serverUrl@(ServerURL serverUrlStr) = do
             , collateralUTxOs: []
             }
         post' serverUrl api req >>= case _ of
-          Right ({ resource: PostContractsResponseContent res, links }) -> do
-            traceM "NO ERRORS"
-            traceM res
+          Right _ -> do
             pure unit
           Left (FetchError (InvalidStatusCode res)) -> do
             traceM "STATUS CODE ERROR"
@@ -125,34 +123,26 @@ spec serverUrl@(ServerURL serverUrlStr) = do
                pure unit
 
      it "GET contracts" do
-      -- let
-      --   getContracts :: Int
-      --   getContracts = foldMapMPages' serverUrl api (pure <<< _.page) Nothing
-      -- => ServerURL
-      -- -> t
-      -- -> ({ currRange :: Maybe Range, page :: a } -> m b)
-      -- -> Maybe Range
-
       contracts <- getItems' serverUrl api Nothing `catchError` \err -> do
         log "Get contracts error: "
         log $ unsafeStringify err
         throwError err
 
       (hush contracts >>= Array.head) # case _ of
-            Just getContractsResponse -> do
-              traceM getContractsResponse
-              pure unit
-              -- contract <- fetchContract serverUrl contractHeader.links.contract
-              -- transactionHeaders <- fetchTransactionHeaders serverUrl contract.links.transactions
-              -- case head transactionHeaders of
-              --  Just transactionHeader -> do
-              --     transaction <- fetchTransaction serverUrl transactionHeader.links.transaction
-              --     let (Tx tx) = transaction.resource
-              --     case tx.block of
-              --            Just _ -> pure unit
-              --            _ -> fail "Expected block"
-              --  _ -> fail "Expected transaction"
-            _ -> fail "Expected contract"
+        Just getContractsResponse -> do
+          traceM getContractsResponse
+          pure unit
+          -- contract <- fetchContract serverUrl contractHeader.links.contract
+          -- transactionHeaders <- fetchTransactionHeaders serverUrl contract.links.transactions
+          -- case head transactionHeaders of
+          --  Just transactionHeader -> do
+          --     transaction <- fetchTransaction serverUrl transactionHeader.links.transaction
+          --     let (Tx tx) = transaction.resource
+          --     case tx.block of
+          --            Just _ -> pure unit
+          --            _ -> fail "Expected block"
+          --  _ -> fail "Expected transaction"
+        _ -> fail "Expected contract"
 
 
      it "GET transactions" do

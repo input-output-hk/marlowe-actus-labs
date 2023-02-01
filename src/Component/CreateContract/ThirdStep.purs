@@ -1,4 +1,4 @@
-module Component.ContractForm where
+module Component.CreateContract.ThirdStep where
 
 import Prelude
 
@@ -17,17 +17,19 @@ import Contrib.React.Bootstrap.FormBuilder (FormBuilder, BootstrapForm)
 import Contrib.React.Bootstrap.FormBuilder as FormBuilder
 import Control.Monad.Reader.Class (asks)
 import Data.Argonaut (decodeJson, parseJson)
-import Data.Array (elem, fromFoldable)
+import Data.Array (elem)
 import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.BigInt.Argonaut (fromInt, toNumber, toString)
 import Data.Either (Either(..), hush)
+import Data.Foldable (foldMap)
 import Data.FormURLEncoded.Query (FieldId(..), Query)
 import Data.Formatter.DateTime (formatDateTime)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (unwrap)
 import Data.String (toUpper)
+import Data.Newtype (un, unwrap)
 import Data.String as String
 import Data.Time.Duration (Seconds(..))
 import Data.Undefined.NoProblem as NoProblem
@@ -38,6 +40,7 @@ import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
 import Language.Marlowe.Core.V1.Semantics (emptyState, evalValue)
 import Language.Marlowe.Core.V1.Semantics.Types (Environment(..), Party, TimeInterval(..), Value(..))
+import Language.Marlowe.Core.V1.Semantics.Types (Value(..))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus (CashFlows, defaultRiskFactors, genContract, toMarloweCashflow)
 import Marlowe.Runtime.Web.Types (TxOutRef, bech32ToParty)
@@ -54,6 +57,21 @@ import React.Basic.Hooks (component, useEffectOnce, useState', (/\))
 import React.Basic.Hooks as React
 import Wallet as Wallet
 import WalletContext (walletAddresses)
+
+addressInput :: CardanoMultiplatformLib.Lib -> String -> String -> Maybe String -> FormBuilder Effect Bech32
+addressInput cardanoMultiplatformLib label initial name = do
+  let
+    props =
+      { initial
+      , label: Just $ DOOM.text label
+      , name
+      , validator: Validator.liftFnMMaybe (const $ pure [ "Invalid address" ]) \str -> do
+          bech32FromString cardanoMultiplatformLib str
+      }
+  FormBuilder.textInput props
+
+initialAddress :: String
+initialAddress = "" -- "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
 
 type FormSpec m = UseForm.Form m Unit -- JSX
 
@@ -76,91 +94,6 @@ type Props =
   , inModal :: Boolean
   , connectedWallet :: WalletInfo Wallet.Api
   }
-
-createCashFlows :: Party -> Party -> ContractTerms -> CashFlows
-createCashFlows party counterParty terms =
-  genProjectedCashflows
-    (party /\ counterParty)
-    (defaultRiskFactors terms)
-    terms
-
-walletChangeAddress :: CardanoMultiplatformLib.Lib -> Wallet.Api -> Aff (Maybe Bech32)
-walletChangeAddress lib wallet = do
-  Wallet.getChangeAddress wallet >>= case _ of
-    Right address ->
-      map Just $ liftEffect $ runGarbageCollector lib $ bech32FromBytes (cborHexToCbor address) NoProblem.undefined
-    Left _ -> pure Nothing
-
-initialJson :: String
-initialJson = String.joinWith "\n"
-  [ "{"
-  , """ "contractType": "PAM", """
-  , """ "contractID": "pam01", """
-  , """ "statusDate": "2023-12-31T00:00:00", """
-  , """ "contractDealDate": "2023-12-28T00:00:00", """
-  , """ "currency": "DjedTestUSD", """
-  , """ "notionalPrincipal": "1000", """
-  , """ "initialExchangeDate": "2024-01-01T00:00:00", """
-  , """ "maturityDate": "2025-01-01T00:00:00", """
-  , """ "nominalInterestRate": "0.1", """
-  , """ "cycleAnchorDateOfInterestPayment": "2025-01-01T00:00:00", """
-  , """ "cycleOfInterestPayment": "P1YL0", """
-  , """ "dayCountConvention": "30E360", """
-  , """ "endOfMonthConvention": "SD", """
-  , """ "premiumDiscountAtIED": "   0", """
-  , """ "rateMultiplier": "1.0", """
-  , """ "contractRole": "RPA" """
-  , "}"
-  ]
-
-initialAddress :: String
-initialAddress = "" -- "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn"
-
-error :: forall errs. String -> Batteries.Errors' (raw :: Array String | errs)
-error = Array.singleton <<< rawError
-
-addressInput :: CardanoMultiplatformLib.Lib -> String -> String -> Maybe String -> FormBuilder Effect Bech32
-addressInput cardanoMultiplatformLib label initial name = do
-  let
-    props =
-      { initial
-      , label: Just $ DOOM.text label
-      , name
-      , validator: Validator.liftFnMMaybe (const $ pure [ "Invalid address" ]) \str -> do
-          bech32FromString cardanoMultiplatformLib str
-      }
-  FormBuilder.textInput props
-
-mkForm :: CardanoMultiplatformLib.Lib -> BootstrapForm Effect Query Result
-mkForm cardanoMultiplatformLib = FormBuilder.evalBuilder ado
-  contractTerms <- FormBuilder.textArea
-    { missingError: "Please provide contract terms JSON value"
-    , initial: initialJson
-    , validator: Validator.liftFnEither \jsonString -> do
-        json <- lmap (const $ [ "Invalid JSON" ]) $ parseJson jsonString
-        lmap (Array.singleton <<< show) (decodeJson json)
-    , rows: 15
-    , name: (Just $ "contract-terms")
-    }
-  partyAddress <- addressInput cardanoMultiplatformLib "Your address" "" $ Just "party"
-  counterPartyAddress <- addressInput cardanoMultiplatformLib "Counter-party address" initialAddress $ Just "counter-party"
-  let
-    counterParty = bech32ToParty counterPartyAddress
-    party = bech32ToParty partyAddress
-    cashFlows = createCashFlows party counterParty contractTerms
-    contract = genContract contractTerms cashFlows
-  in
-    { contractTerms
-    , cashFlows
-    , contract
-    , counterParty
-    , party
-
-    -- Ugly hack
-    , usedAddresses: []
-    , changeAddress: partyAddress
-    , collateralUTxOs: []
-    }
 
 mkContractForm :: MkComponentM (Props -> JSX)
 mkContractForm = do
@@ -201,14 +134,12 @@ mkContractForm = do
       pure (pure unit)
     pure $ do
       let
-        formBody = DOM.div { className: "form-group" } do
-          let
-            mb3 = DOM.div { className: "mb-3" }
-            fields = UseForm.renderForm form formState
-          DOOM.fragment
-            (fields <#> \field -> mb3 field)
-            <> case result of
-              Just (V (Right { cashFlows })) ->
+        fields = UseForm.renderForm form formState
+        formBody =
+          DOM.div { className: "form-group" } $
+            fields
+            <> (result >>= un V >>> hush) `flip foldMap` \{ cashFlows } -> do
+               Array.singleton $
                 DOM.table { className: "table table-hover" } $
                   [ DOM.thead {} $
                       [ DOM.tr {}
@@ -242,8 +173,23 @@ mkContractForm = do
                               ]
                         )
                         (map toMarloweCashflow cashFlows)
+-- =======
+--                   , DOM.tbody {} $ Array.fromFoldable $ cashFlows <#> \cashFlow -> do
+--                       let
+--                         cf = unwrap $ toMarloweCashflow cashFlow
+--                       DOM.tr {}
+--                         [ DOM.td {} [ DOOM.text cf.contractId ]
+--                         , DOM.td {} [ DOOM.text $ show cf.event ]
+--                         , DOM.td {} [ DOOM.text <$> hush (formatDateTime "YYYY-DD-MM HH:mm:ss:SSS" cf.paymentDay) ]
+--                         , DOM.td {}
+--                             [ DOOM.text $ fromMaybe "" $
+--                                 if elem cf.currency currenciesWith6Decimals then show <$> (((_ / 1000000.0) <<< toNumber) <$> evalVal cf.amount)
+--                                 else toString <$> (evalVal $ DivValue cf.amount (Constant $ fromInt 1000000))
+--                             ]
+--                         , DOM.td {} [ DOOM.text $ if cf.currency == "" then "₳" else cf.currency ]
+--                         ]
+-- >>>>>>> e42a028 (Ongoing work on the contract wizzard):src/Component/CreateContract/ThirdStep.purs
                   ]
-              _ -> mempty
         formActions = DOOM.fragment
           [ link
               { label: DOOM.text "Cancel"
@@ -273,10 +219,71 @@ mkContractForm = do
       else
         formBody
 
--- useInput :: String -> Hook (UseState String) (String /\ EventHandler)
--- useInput initialValue = React.do
---   value /\ setValue <- useState initialValue
---   let onChange = handler targetValue (setValue <<< const <<< fromMaybe "")
---   pure (value /\ onChange)
--- 
 
+
+
+initialJson :: String
+initialJson = String.joinWith "\n"
+  [ "{"
+  , """ "contractType": "PAM", """
+  , """ "contractID": "pam01", """
+  , """ "statusDate": "2023-12-31T00:00:00", """
+  , """ "contractDealDate": "2023-12-28T00:00:00", """
+  , """ "currency": "DjedTestUSD", """
+  , """ "notionalPrincipal": "1000", """
+  , """ "initialExchangeDate": "2024-01-01T00:00:00", """
+  , """ "maturityDate": "2025-01-01T00:00:00", """
+  , """ "nominalInterestRate": "0.1", """
+  , """ "cycleAnchorDateOfInterestPayment": "2025-01-01T00:00:00", """
+  , """ "cycleOfInterestPayment": "P1YL0", """
+  , """ "dayCountConvention": "30E360", """
+  , """ "endOfMonthConvention": "SD", """
+  , """ "premiumDiscountAtIED": "   0", """
+  , """ "rateMultiplier": "1.0", """
+  , """ "contractRole": "RPA" """
+  , "}"
+  ]
+
+
+mkForm :: _ -> BootstrapForm Effect Query Result
+mkForm cardanoMultiplatformLib = FormBuilder.evalBuilder ado
+  contractTerms <- FormBuilder.textArea
+    { missingError: "Please provide contract terms JSON value"
+    , initial: initialJson
+    , validator: Validator.liftFnEither \jsonString -> do
+        json <- lmap (const $ [ "Invalid JSON" ]) $ parseJson jsonString
+        lmap (Array.singleton <<< show) (decodeJson json)
+    , rows: 15
+    , name: (Just $ "contract-terms")
+    }
+  partyAddress <- addressInput cardanoMultiplatformLib "Your address" "" $ Just "party"
+  counterPartyAddress <- addressInput cardanoMultiplatformLib "Counter-party address" initialAddress $ Just "counter-party"
+  let
+    counterParty = bech32ToParty counterPartyAddress
+    party = bech32ToParty partyAddress
+    cashFlows =
+      genProjectedCashflows
+        (party /\ counterParty)
+        (defaultRiskFactors contractTerms)
+        contractTerms
+    contract = genContract cashFlows
+  in
+    { contractTerms
+    , cashFlows
+    , contract
+    , counterParty
+    , party
+
+    -- Ugly hack
+    , usedAddresses: []
+    , changeAddress: partyAddress
+    , collateralUTxOs: []
+    }
+
+
+walletChangeAddress :: CardanoMultiplatformLib.Lib -> Wallet.Api -> Aff (Maybe Bech32)
+walletChangeAddress lib wallet = do
+  Wallet.getChangeAddress wallet >>= case _ of
+    Right address ->
+      map Just $ liftEffect $ runGarbageCollector lib $ bech32FromBytes (cborHexToCbor address) NoProblem.undefined
+    Left _ -> pure Nothing

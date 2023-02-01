@@ -12,6 +12,7 @@ import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype)
 import Data.Traversable (for)
 import Data.Undefined.NoProblem as NoProblem
+import Debug (traceM)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Wallet as Wallet
@@ -31,7 +32,10 @@ walletAddresses cardanoMultiplatformLib wallet = do
   possibleUsedAddresses <- Wallet.getUsedAddresses wallet
   -- let
   --   possibleUsedAddresses = Right []
-  possibleUTxOs <- Wallet.getUtxos wallet
+  -- traceM "Getting UTxOs"
+  -- possibleUTxOs <- Wallet.getUtxos wallet
+  let
+    possibleUTxOs = Right (Just [])
 
   case possibleUsedAddresses, possibleUTxOs of
     Right addresses, Right (Just utxos) -> do
@@ -55,5 +59,6 @@ walletAddresses cardanoMultiplatformLib wallet = do
 
 walletContext :: CardanoMultiplatformLib.Lib -> Wallet.Api -> Aff WalletContext
 walletContext cardanoMultiplatformLib wallet = do
+  traceM "Getting wallet context"
   usedAddresses <- walletAddresses cardanoMultiplatformLib wallet
   pure $ WalletContext { usedAddresses }

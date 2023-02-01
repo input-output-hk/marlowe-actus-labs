@@ -7,7 +7,7 @@ import CardanoMultiplatformLib (CborHex)
 import CardanoMultiplatformLib.Lib as Lib
 import CardanoMultiplatformLib.Transaction (TransactionWitnessSetObject)
 import CardanoMultiplatformLib.Types (cborHexToCbor)
-import Component.ContractForm as ContractForm
+import Component.CreateContract as CreateContract
 import Component.Modal (mkModal)
 import Component.Modal as Modal
 import Component.Types (MkComponentM, WalletInfo(..))
@@ -38,7 +38,7 @@ import React.Basic.Hooks as React
 import Wallet as Wallet
 
 type Props =
-  { contractData :: ContractForm.Result
+  { contractData :: CreateContract.Result
   , inModal :: Boolean
   , onDismiss :: Effect Unit
   , onSuccess :: ContractEndpoint -> Effect Unit
@@ -143,7 +143,7 @@ mkSubmitContract = do
           , footer
           ]
 
-create :: ContractForm.Result -> ServerURL -> ContractsEndpoint -> Aff _
+create :: CreateContract.Result -> ServerURL -> ContractsEndpoint -> Aff _
 create contractData serverUrl contractsEndpoint = do
   let
     { contractTerms, contract, party, counterParty, changeAddress, usedAddresses } = contractData

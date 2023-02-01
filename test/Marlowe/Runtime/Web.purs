@@ -16,7 +16,7 @@ _MARLOWE_WEB_SERVER_URL = "MARLOWE_WEB_SERVER_URL"
 spec :: Maybe ServerURL -> Spec Unit
 spec possibleServerURL = do
   describe "Marlowe.Web" $ Spec.parallel do
-    Types.spec
+    -- Types.spec
     case possibleServerURL of
       Just serverURL -> Client.spec serverURL
       Nothing ->

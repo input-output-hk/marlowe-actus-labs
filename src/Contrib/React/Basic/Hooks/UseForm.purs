@@ -1,5 +1,12 @@
 module Contrib.React.Basic.Hooks.UseForm where
 
+-- | This hook is render agnostic and you construct rendering
+-- | function during `Form` type composition.
+-- | You can use any monoidal stracture for the resulting
+-- | rendering - it can be `JSX`, `Map String JSX` or even
+-- | `Foreign.Object Json` so the result of the validation
+-- | can be sent over the wire.
+
 import Prelude
 
 import Data.Array as Array
@@ -52,6 +59,9 @@ newtype Form m doc err i o = Form
 renderForm :: forall doc err i o m. Form m doc err i o -> FormState err -> doc
 renderForm (Form { render }) = render
 
+mapRender :: forall doc doc' err i o m. (doc -> doc') -> Form m doc err i o -> Form m doc' err i o
+mapRender f (Form { fields, validator, render }) = Form { fields, validator, render: f <<< render }
+
 derive instance Applicative m => Functor (Form m doc err i)
 
 instance (Monad m, Semigroup doc) => Apply (Form m doc err i) where
@@ -81,7 +91,7 @@ hoistForm f (Form { fields, validator, render }) =
   Form { fields, validator: Validator.hoist f validator, render }
 
 type InputFieldStateRow err r =
-  ( errors :: Maybe (Array err)
+  ( errors :: Maybe (Array err) -- `Maybe` indicates if a field was validated
   , onChange :: String -> Effect Unit
   , touched :: Boolean
   , value :: String

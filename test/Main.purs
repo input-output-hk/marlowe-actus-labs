@@ -7,6 +7,8 @@ import Actus.TestFramework as TestFramework
 import Control.Monad.Error.Class (throwError)
 import Data.Argonaut (Json, JsonDecodeError, decodeJson, jsonParser)
 import Data.Either (Either, either)
+import Data.Maybe (Maybe(..))
+import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (traverse)
 import Data.TraversableWithIndex (forWithIndex)
 import Data.Tuple.Nested ((/\))
@@ -28,7 +30,7 @@ import Test.Marlowe.Runtime.Web as Web
 import Test.Spec as Spec
 import Test.Spec.Reporter (specReporter)
 import Test.Spec.Reporter.Console (consoleReporter)
-import Test.Spec.Runner (runSpec)
+import Test.Spec.Runner (defaultConfig, runSpec')
 
 main :: Effect Unit
 main = do
@@ -39,8 +41,10 @@ main = do
     testsLAM <- readFile "./test/Actus/Domain/actus-tests-lam.json"
     testsNAM <- readFile "./test/Actus/Domain/actus-tests-nam.json"
     testsANN <- readFile "./test/Actus/Domain/actus-tests-ann.json"
+    let
+      config = defaultConfig { timeout = Just (Milliseconds 10000.0) }
 
-    runSpec [ consoleReporter, specReporter ] $ do
+    runSpec' config [ consoleReporter, specReporter ] $ do
       Spec.parallel do
         ContractTerms.spec
         Metadata.spec

@@ -30,7 +30,10 @@ import Data.String.Regex (match)
 import Data.String.Regex.Unsafe (unsafeRegex)
 import Data.String.Utils (trimStart) as String
 import Effect.Unsafe (unsafePerformEffect)
+import Prim.Row as Row
+import Record as Record
 import Type.Prelude (Proxy(..))
+import Type.Row (type (+))
 
 -- |ContractType
 data CT
@@ -215,8 +218,8 @@ instance DecodeJson BDC where
   decodeJson = decodeJsonEnumWith (tryStripPrefix $ Pattern "BDC_")
 
 data Calendar
-  = CLDR_MF -- ^ Monday to Friday
-  | CLDR_NC -- ^ No calendar
+  = CLDR_NC -- ^ No calendar
+  | CLDR_MF -- ^ Monday to Friday
 
 derive instance Generic Calendar _
 derive instance Eq Calendar
@@ -705,21 +708,20 @@ instance Show TermValidationError where
 {-| ACTUS contract terms and attributes are defined in
     https://github.com/actusfrf/actus-dictionary/blob/master/actus-dictionary-terms.json
 -}
-newtype ContractTerms :: Type
-newtype ContractTerms = ContractTerms
-  { -- General
-    contractId :: String
-  , contractType :: CT
-  , contractRole :: CR
-  , settlementCurrency :: Maybe String
+type ContractTermsOptsRow r =
+  ( -- General
+    --   contractId :: String
+    -- , contractType :: CT
+    -- , contractRole :: CR
+    settlementCurrency :: Maybe String
 
   -- Calendar
   , initialExchangeDate :: Maybe DateTime -- ^ Initial Exchange Date
   , dayCountConvention :: Maybe DCC -- ^ Day Count Convention
-  , scheduleConfig :: ScheduleConfig
+  -- , scheduleConfig :: ScheduleConfig
 
   -- -- Contract Identification
-  , statusDate :: DateTime -- ^ Status Date
+  -- , statusDate :: DateTime -- ^ Status Date
   , marketObjectCode :: Maybe String -- ^ Market Object Code
 
   -- -- Counterparty
@@ -810,7 +812,25 @@ newtype ContractTerms = ContractTerms
   , cycleOfDividendPayment :: Maybe Cycle -- ^ Cycle Of Dividend
   , cycleAnchorDateOfDividendPayment :: Maybe DateTime -- ^ Cycle Anchor Date Of Dividend
   , nextDividendPaymentAmount :: Maybe Decimal -- ^ Next Dividend Payment Amount
-  }
+  | r
+  )
+
+type ContractTermsRow =
+  ContractTermsOptsRow +
+    ( -- General
+      contractId :: String
+    , contractType :: CT
+    , contractRole :: CR
+
+    -- Calendar
+    , scheduleConfig :: ScheduleConfig
+
+    -- Contract Identification
+    , statusDate :: DateTime -- ^ Status Date
+    )
+
+newtype ContractTerms :: Type
+newtype ContractTerms = ContractTerms { | ContractTermsRow }
 
 derive instance Newtype ContractTerms _
 derive instance Generic ContractTerms _
@@ -948,3 +968,118 @@ instance DecodeJson ContractTerms where
       (Proxy :: Proxy "cycleOfDividendPayment") :=? decodeFromString decodeCycle
       (Proxy :: Proxy "cycleAnchorDateOfDividendPayment") :=? decodeDateTime
       (Proxy :: Proxy "nextDividendPaymentAmount") :=? decodeDecimal
+
+mkContractTerms
+  :: forall r r'
+   . Row.Union r (ContractTermsOptsRow + ()) r'
+  => Row.Nub r' ContractTermsRow
+  => { | r }
+  -> ContractTerms
+mkContractTerms props = ContractTerms $ Record.merge props emptyOpts
+  where
+  emptyOpts :: { | ContractTermsOptsRow + () }
+  emptyOpts =
+    { -- General
+      --  contractId :: String
+      -- , contractType :: CT
+      -- , contractRole :: CR
+      settlementCurrency: Nothing :: Maybe String
+
+    -- Calendar
+    , initialExchangeDate: Nothing :: Maybe DateTime -- ^ Initial Exchange Date
+    , dayCountConvention: Nothing :: Maybe DCC -- ^ Day Count Convention
+    -- , scheduleConfig :: ScheduleConfig
+
+    -- -- Contract Identification
+    -- , statusDate :: DateTime -- ^ Status Date
+    , marketObjectCode: Nothing :: Maybe String -- ^ Market Object Code
+
+    -- -- Counterparty
+    , contractPerformance: Nothing :: Maybe PRF -- ^ Contract Performance
+    , creditEventTypeCovered: Nothing :: Maybe CETC -- ^ Credit Event Type Covered
+    , coverageOfCreditEnhancement: Nothing :: Maybe Decimal -- ^ Coverage Of Credit Enhancement
+    , guaranteedExposure: Nothing :: Maybe CEGE -- ^ Guaranteed Exposure
+
+    -- -- Fees
+    , cycleOfFee: Nothing :: Maybe Cycle -- ^ Cycle Of Fee
+    , cycleAnchorDateOfFee: Nothing :: Maybe DateTime -- ^ Cycle Anchor Date Of Fee
+    , feeAccrued: Nothing :: Maybe Decimal -- ^ Fee Accrued
+    , feeBasis: Nothing :: Maybe FEB -- ^ Fee Basis
+    , feeRate: Nothing :: Maybe Decimal -- ^ Fee Rate
+
+    -- Interest
+    , cycleAnchorDateOfInterestPayment: Nothing :: Maybe DateTime -- ^ Cycle Anchor Date Of Interest Payment
+    , cycleOfInterestPayment: Nothing :: Maybe Cycle -- ^ Cycle Of Interest Payment
+    , accruedInterest: Nothing :: Maybe Decimal -- ^ Accrued Interest
+    , capitalizationEndDate: Nothing :: Maybe DateTime -- ^ Capitalization End Date
+    , cycleAnchorDateOfInterestCalculationBase: Nothing :: Maybe DateTime -- ^ Cycle Anchor Date Of Interest Calculation Base
+    , cycleOfInterestCalculationBase: Nothing :: Maybe Cycle -- ^ Cycle Of Interest Calculation Base
+    , interestCalculationBase: Nothing :: Maybe IPCB -- ^ Interest Calculation Base
+    , interestCalculationBaseAmount: Nothing :: Maybe Decimal -- ^ Interest Calculation Base Amount
+    , nominalInterestRate: Nothing :: Maybe Decimal -- ^ Nominal Interest Rate
+    , nominalInterestRate2: Nothing :: Maybe Decimal -- ^ Nominal Interest Rate (Second Leg in Plain Vanilla Swap)
+    , interestScalingMultiplier: Nothing :: Maybe Decimal -- ^ Interest Scaling Multiplier
+
+    -- Dates
+    , maturityDate: Nothing :: Maybe DateTime -- ^ Maturity Date
+    , amortizationDate: Nothing :: Maybe DateTime -- ^ Amortization Date
+    , exerciseDate: Nothing :: Maybe DateTime -- ^ Exercise Date
+
+    -- -- Notional Principal
+    , notionalPrincipal: Nothing :: Maybe Decimal -- ^ Notional Principal
+    , premiumDiscountAtIED: Nothing :: Maybe Decimal -- ^ Premium Discount At IED
+    , cycleAnchorDateOfPrincipalRedemption: Nothing :: Maybe DateTime -- ^ Cycle Anchor Date Of Principal Redemption
+    , cycleOfPrincipalRedemption: Nothing :: Maybe Cycle -- ^ Cycle Of Principal Redemption
+    , nextPrincipalRedemptionPayment: Nothing :: Maybe Decimal -- ^ Next Principal Redemption Payment
+    , purchaseDate: Nothing :: Maybe DateTime -- ^ Purchase Date
+    , priceAtPurchaseDate: Nothing :: Maybe Decimal -- ^ Price At Purchase Date
+    , terminationDate: Nothing :: Maybe DateTime -- ^ Termination Date
+    , priceAtTerminationDate: Nothing :: Maybe Decimal -- ^ Price At Termination Date
+    , quantity: Nothing :: Maybe Decimal -- ^ Quantity
+    , currency: Nothing :: Maybe String -- ^ The currency of the cash flows
+    , currency2: Nothing :: Maybe String -- ^ The currency of the cash flows of the second leg
+
+    -- Scaling Index
+    , scalingIndexAtStatusDate: Nothing :: Maybe Decimal -- ^ Scaling Index At Status Date
+    , cycleAnchorDateOfScalingIndex: Nothing :: Maybe DateTime -- ^ Cycle Anchor Date Of Scaling Index
+    , cycleOfScalingIndex: Nothing :: Maybe Cycle -- ^ Cycle Of Scaling Index
+    , scalingEffect: Nothing :: Maybe SCEF -- ^ Scaling Effect
+    , scalingIndexAtContractDealDate: Nothing :: Maybe Decimal -- ^ Scaling Index At Contract Deal Date
+    , marketObjectCodeOfScalingIndex: Nothing :: Maybe String -- ^ Market Object Code Of Scaling Index
+    , notionalScalingMultiplier: Nothing :: Maybe Decimal -- ^ Notional Scaling Multiplier
+
+    -- Optionality
+    , cycleOfOptionality: Nothing :: Maybe Cycle -- ^ Cycle Of Optionality
+    , cycleAnchorDateOfOptionality: Nothing :: Maybe DateTime -- ^ Cycle Anchor Date Of Optionality
+    , optionType: Nothing :: Maybe OPTP -- ^ Option Type
+    , optionStrike1: Nothing :: Maybe Decimal -- ^ Option Strike 1
+    , optionExerciseType: Nothing :: Maybe OPXT -- ^ Option Exercise Type
+
+    -- Settlement
+    , settlementPeriod: Nothing :: Maybe Cycle -- ^ Settlement Period
+    , deliverySettlement: Nothing :: Maybe DS -- ^ Delivery Settlement
+    , exerciseAmount: Nothing :: Maybe Decimal -- ^ Exercise Amount
+    , futuresPrice: Nothing :: Maybe Decimal -- ^ Futures Price
+
+    -- Penalty
+    , penaltyRate: Nothing :: Maybe Decimal -- ^ Penalty Rate
+    , penaltyType: Nothing :: Maybe PYTP -- ^ Penalty Type
+    , prepaymentEffect: Nothing :: Maybe PPEF -- ^ Prepayment Effect
+
+    -- Rate Reset
+    , cycleOfRateReset: Nothing :: Maybe Cycle -- ^ Cycle Of Rate Reset
+    , cycleAnchorDateOfRateReset: Nothing :: Maybe DateTime -- ^ Cycle Anchor Date Of Rate Reset
+    , nextResetRate: Nothing :: Maybe Decimal -- ^ Next Reset Rate
+    , rateSpread: Nothing :: Maybe Decimal -- ^ Rate Spread
+    , rateMultiplier: Nothing :: Maybe Decimal -- ^ Rate Multiplier
+    , periodFloor: Nothing :: Maybe Decimal -- ^ Period Floor
+    , periodCap: Nothing :: Maybe Decimal -- ^ Period Cap
+    , lifeCap: Nothing :: Maybe Decimal -- ^ Life Cap
+    , lifeFloor: Nothing :: Maybe Decimal -- ^ Life Floor
+    , marketObjectCodeOfRateReset: Nothing :: Maybe String -- ^ Market Object Code Of Rate Reset
+
+    -- Dividend
+    , cycleOfDividendPayment: Nothing :: Maybe Cycle -- ^ Cycle Of Dividend
+    , cycleAnchorDateOfDividendPayment: Nothing :: Maybe DateTime -- ^ Cycle Anchor Date Of Dividend
+    , nextDividendPaymentAmount: Nothing :: Maybe Decimal -- ^ Next Dividend Payment Amount
+    }

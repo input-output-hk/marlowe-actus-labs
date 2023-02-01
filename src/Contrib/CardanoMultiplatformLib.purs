@@ -5,7 +5,8 @@ module CardanoMultiplatformLib
   , module Exports
   , GarbageCollector
   , allocate
-  , bech32FromBytes
+  , bech32FromCbor
+  , bech32FromCborHex
   , bech32FromString
   , runGarbageCollector
   , transactionWitnessSetFromBytes
@@ -27,7 +28,7 @@ import Control.Monad.Error.Class (throwError)
 import Control.Monad.Except (catchError)
 import Control.Monad.Reader (ReaderT, runReaderT)
 import Control.Monad.Reader.Class (asks)
-import Data.Foldable (length, sequence_)
+import Data.Foldable (sequence_)
 import Data.List (List)
 import Data.List as List
 import Data.Maybe (Maybe(..))
@@ -35,7 +36,6 @@ import Data.Newtype (class Newtype, unwrap)
 import Data.Nullable (Nullable)
 import Data.Nullable as Nullable
 import Data.Undefined.NoProblem (Opt)
-import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Effect.Class (class MonadEffect, liftEffect)
@@ -77,7 +77,6 @@ runGarbageCollector lib (GarbageCollector action) = do
   let
     release = do
       frees <- Ref.read freesRef
-      traceM $ "Releasing resource(s): " <> show (length frees :: Int)
       sequence_ frees
     run = do
       a <- runReaderT action { frees: freesRef, lib }
@@ -113,11 +112,17 @@ transactionWitnessSetFromBytes twCbor = do
   { "TransactionWitnessSet": tws } <- GarbageCollector $ asks (Lib.props <<< _.lib)
   allocate $ Transaction.transactionWitnessSet.from_bytes tws twCbor
 
-bech32FromBytes :: Cbor AddressObject -> Opt String -> GarbageCollector Bech32
-bech32FromBytes cbor prefix = do
+bech32FromCbor :: Cbor AddressObject -> Opt String -> GarbageCollector Bech32
+bech32FromCbor cbor prefix = do
   { "Address": addrClass } <- GarbageCollector $ asks (Lib.props <<< _.lib)
   addrObject <- allocate $ Address.address.from_bytes addrClass cbor
   liftEffect $ addressObject.to_bech32 addrObject prefix
+
+bech32FromCborHex :: CborHex AddressObject -> Opt String -> GarbageCollector Bech32
+bech32FromCborHex cborHex prefix = do
+  let
+    cbor = cborHexToCbor cborHex
+  bech32FromCbor cbor prefix
 
 bech32FromString :: Lib -> String -> Effect (Maybe Bech32)
 bech32FromString lib addrStr = do

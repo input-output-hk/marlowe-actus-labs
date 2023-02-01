@@ -3,42 +3,28 @@ module Main where
 import Prelude
 
 import CardanoMultiplatformLib as CardanoMultiplatformLib
-import CardanoMultiplatformLib.Transaction (transaction)
 import Component.App (mkApp)
 import Component.MessageHub (mkMessageHub)
 import Contrib.Data.Argonaut (JsonParser)
-import Contrib.Data.Map as Contrib.Map
 import Contrib.Effect as Effect
 import Control.Monad.Reader (runReaderT)
-import Control.Monad.Rec.Loops (whileM_)
 import Data.Argonaut (Json, decodeJson, (.:))
-import Data.Either (Either, either)
-import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), isJust, maybe)
-import Data.Newtype as Newtype
-import Data.Traversable (for_)
 import Data.Tuple.Nested ((/\))
 import Debug (traceM)
 import Effect (Effect)
-import Effect.Aff (Aff, Fiber, Milliseconds(..), delay, forkAff, launchAff_)
-import Effect.Class (class MonadEffect, liftEffect)
+import Effect.Aff (Milliseconds(..), delay, launchAff_)
+import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Effect.Exception (throw)
-import Effect.Ref (Ref)
-import Effect.Ref as Ref
-import Halogen.Subscription as Subscription
 import JS.Unsafe.Stringify (unsafeStringify)
 import Marlowe.Actus.Metadata (actusMetadataKey)
 import Marlowe.Runtime.Web as Marlowe.Runtime.Web
-import Marlowe.Runtime.Web.Client (foldMapMContractPages)
-import Marlowe.Runtime.Web.Client (getPage')
-import Marlowe.Runtime.Web.Streaming (ContractStream(..), PollingInterval(..), RequestInterval(..))
+import Marlowe.Runtime.Web.Streaming (PollingInterval(..), RequestInterval(..))
 import Marlowe.Runtime.Web.Streaming as Streaming
-import Marlowe.Runtime.Web.Types (GetContractsResponse, ServerURL(..), TxOutRef, api)
-import Marlowe.Runtime.Web.Types (Metadata(..), ServerURL(..), GetContractsResponse, TxOutRef, api)
+import Marlowe.Runtime.Web.Types (ServerURL(..))
 import Marlowe.Runtime.Web.Types as Runtime
-import Prim.TypeError (class Warn, Text)
 import React.Basic (createContext)
 import React.Basic.DOM.Client (createRoot, renderRoot)
 import Wallet as Wallet
@@ -101,7 +87,13 @@ main configJson = do
     let
       reqInterval = RequestInterval (Milliseconds 50.0)
       pollInterval = PollingInterval (Milliseconds 20_000.0)
-      isActus { resource: Runtime.ContractHeader { metadata: Runtime.Metadata md } } = isJust $ Map.lookup actusMetadataKey md
+      isActus { resource: Runtime.ContractHeader { metadata: Runtime.Metadata md } } = do
+        let
+          actus = isJust $ Map.lookup actusMetadataKey md
+          x = do
+            actusJson <- Map.lookup actusMetadataKey md
+            traceM actusJson
+        actus
 
     contractStream <- Streaming.mkContractsWithTransactions pollInterval reqInterval isActus config.marloweWebServerUrl
 

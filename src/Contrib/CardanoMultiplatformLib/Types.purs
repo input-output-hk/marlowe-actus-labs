@@ -3,10 +3,11 @@ module CardanoMultiplatformLib.Types
   , jsonStringToString
   , jsonStringFromString
   , unsafeJsonString
-  -- FIXME: Import only the type
   , cborHexToHex
   , cborHexToCbor
   , cborToCborHex
+  , unsafeCborHex
+  -- FIXME: Import only the type
   , CborHex(..)
   , Cbor
   , Bech32
@@ -38,6 +39,9 @@ cborHexToCbor = Cbor <<< HexString.decode <<< cborHexToHex
 
 cborToCborHex :: forall a. Cbor a -> CborHex a
 cborToCborHex = CborHex <<< HexString.encode <<< unCbor
+
+unsafeCborHex :: forall a. Hex -> CborHex a
+unsafeCborHex = CborHex
 
 newtype Cbor :: Type -> Type
 newtype Cbor a = Cbor Uint8Array
