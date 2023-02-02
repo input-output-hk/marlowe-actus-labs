@@ -120,74 +120,36 @@ genContract contractTerms cashFlows = foldl (generator contractTerms) Close $ re
             When
               [ Case
                   (Choice choiceId [ Bound (fromInt 0) (fromInt 1000000000) ]) $
-                  Let (ValueId $ label <> show timestamp) (ChoiceValue (ChoiceId label oracle))
-                    ( stub event contractRole continuation
-                        ( CashFlow'
-                            { party
-                            , counterparty
-                            , token: currencyToToken currency
-                            , value: adjustDecimals currency amount
-                            , timeout: fromDateTime paymentDay
-                            }
-                        )
-                    )
+                  Let (ValueId $ label <> show timestamp) (ChoiceValue (ChoiceId label oracle)) (stub continuation cashFlow)
               ]
               (fromDateTime paymentDay)
               Close
-  generator
-    _
-    continuation
-    ( CashFlow
-        { amount
-        , paymentDay
-        , party
-        , counterparty
-        , currency
-        , event
-        , contractRole
-        }
-    ) =
-    stub event contractRole continuation
-      ( CashFlow'
-          { party
-          , counterparty
-          , token: currencyToToken currency
-          , value: adjustDecimals currency amount
-          , timeout: fromDateTime paymentDay
-          }
-      )
+  generator _ continuation cashFlow = stub continuation cashFlow
 
-  stub IED CR_RPA continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice party counterparty token (absValue value) timeout continuation
-  stub IED CR_RPL continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice counterparty party token (absValue value) timeout continuation
-
-  stub IP CR_RPA continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice counterparty party token (absValue value) timeout continuation
-  stub IP CR_RPL continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice party counterparty token (absValue value) timeout continuation
-
-  stub MD CR_RPA continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice counterparty party token (absValue value) timeout continuation
-  stub MD CR_RPL continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice party counterparty token (absValue value) timeout continuation
-
-  stub _ _ continuation (CashFlow' { party, counterparty, token, value, timeout }) =
-    If ((Constant $ fromInt 0) `ValueLT` value)
-      (invoice counterparty party token value timeout continuation)
-      ( If (value `ValueLT` (Constant $ fromInt 0))
-          (invoice party counterparty token (NegValue value) timeout continuation)
-          continuation
-      )
-
-  maxValue x y = Cond (ValueGT x y) x y
-  absValue a = maxValue a (NegValue a)
+  stub continuation (CashFlow { party, counterparty, currency, amount, paymentDay, contractRole, event }) =
+    let
+      value = adjustDecimals currency $ amount
+      negValue = adjustDecimals currency $ NegValue amount
+      token = currencyToToken currency
+      timeout = fromDateTime paymentDay
+    in
+      case event, contractRole of
+        IED, CR_RPA -> invoice party counterparty token negValue timeout continuation
+        IED, CR_RPL -> invoice counterparty party token value timeout continuation
+        IP, CR_RPA -> invoice counterparty party token value timeout continuation
+        IP, CR_RPL -> invoice party counterparty token negValue timeout continuation
+        MD, CR_RPA -> invoice counterparty party token value timeout continuation
+        MD, CR_RPL -> invoice party counterparty token negValue timeout continuation
+        _, _ -> If ((Constant $ fromInt 0) `ValueLT` value)
+          (invoice counterparty party token value timeout continuation)
+          ( If (value `ValueLT` (Constant $ fromInt 0))
+              (invoice party counterparty token (NegValue value) timeout continuation)
+              continuation
+          )
 
   invoice :: Party -> Party -> Token -> Value -> Instant -> Contract -> Contract
   invoice a b token amount timeout continue =
     When [ Case (Deposit a a token amount) (Pay a (Party b) token amount continue) ] timeout Close
-
-newtype CashFlow' = CashFlow'
-  { party :: Party
-  , counterparty :: Party
-  , token :: Token
-  , value :: Value
-  , timeout :: Instant
-  }
 
 -- TODO: use token registry for handling of decimals
 adjustDecimals :: String -> Value -> Value

@@ -75,7 +75,7 @@ spec = do
               shouldEqual (totalPayments (Token "" "DjedUSD") (Party counterparty) out.txOutPayments) (unsafePartial $ fromJust $ fromString "10000")
 
   describe "Marlowe.Actus" $ Spec.parallel do
-    it "Contract generation" do
+    it "Contract generation - currency is ADA" do
       jsonStr <- readTextFile UTF8 "./test/Marlowe/Actus/ex_pam2.json"
       json <- either (throwError <<< error) pure $ jsonParser jsonStr
 
@@ -118,6 +118,50 @@ spec = do
               shouldEqual (isClose out.txOutContract) true
               shouldEqual (totalPayments (Token "" "") (Party party) out.txOutPayments) (unsafePartial $ fromJust $ fromString "12000000000")
               shouldEqual (totalPayments (Token "" "") (Party counterparty) out.txOutPayments) (unsafePartial $ fromJust $ fromString "10000000000")
+
+    it "Contract generation - change contract role to RPL" do
+      jsonStr <- readTextFile UTF8 "./test/Marlowe/Actus/ex_pam3.json"
+      json <- either (throwError <<< error) pure $ jsonParser jsonStr
+
+      let
+        (terms :: Either JsonDecodeError ContractTerms) = decodeJson json
+      case terms of
+        Left err -> fail (show err)
+        Right contract -> do
+          let
+            party = Role "party"
+            counterparty = Role "counterparty"
+            cashFlows = genProjectedCashflows (party /\ counterparty) riskFactors $ contract
+            marloweContract = genContract contract cashFlows
+
+            payin = IDeposit counterparty counterparty (Token "" "DjedUSD") $ unsafePartial $ fromJust $ fromString "10000"
+            interest = IDeposit party party (Token "" "DjedUSD") $ unsafePartial $ fromJust $ fromString "200"
+            payout = IDeposit party party (Token "" "DjedUSD") $ unsafePartial $ fromJust $ fromString "10000"
+
+            inputs = toUnfoldable
+              [ payin
+              , interest
+              , interest
+              , interest
+              , interest
+              , interest
+              , interest
+              , interest
+              , interest
+              , interest
+              , interest
+              , payout
+              ]
+
+            interval = TimeInterval unixEpoch unixEpoch
+            output = playTrace unixEpoch marloweContract (toUnfoldable [ TransactionInput { interval, inputs } ])
+
+          case output of
+            Error err -> fail $ "PlayTrace error: " <> show err
+            TransactionOutput out -> do
+              shouldEqual (isClose out.txOutContract) true
+              shouldEqual (totalPayments (Token "" "DjedUSD") (Party counterparty) out.txOutPayments) (unsafePartial $ fromJust $ fromString "12000")
+              shouldEqual (totalPayments (Token "" "DjedUSD") (Party party) out.txOutPayments) (unsafePartial $ fromJust $ fromString "10000")
 
 totalPayments :: Token -> Payee -> List Payment -> BigInt
 totalPayments token payee = sum <<< map m <<< filter f
