@@ -168,7 +168,7 @@ genContract contractTerms cashFlows = foldl (generator contractTerms) Close $ re
   stub MD CR_RPL continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice party counterparty token value timeout continuation
   -}
 
-  stub _ _ continuation (CashFlow' { party, counterparty, token, value, timeout }) = reduceContract $
+  stub _ _ continuation (CashFlow' { party, counterparty, token, value, timeout }) =
     If ((Constant $ fromInt 0) `ValueLT` value)
       (invoice counterparty party token value timeout continuation)
       ( If (value `ValueLT` (Constant $ fromInt 0))
