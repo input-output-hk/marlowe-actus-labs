@@ -157,16 +157,14 @@ genContract contractTerms cashFlows = foldl (generator contractTerms) Close $ re
           }
       )
 
-  {-
-  stub IED CR_RPA continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice party counterparty token value timeout continuation
-  stub IED CR_RPL continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice counterparty party token value timeout continuation
+  stub IED CR_RPA continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice party counterparty token (absValue value) timeout continuation
+  stub IED CR_RPL continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice counterparty party token (absValue value) timeout continuation
 
-  stub IP CR_RPA continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice counterparty party token value timeout continuation
-  stub IP CR_RPL continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice party counterparty token value timeout continuation
+  stub IP CR_RPA continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice counterparty party token (absValue value) timeout continuation
+  stub IP CR_RPL continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice party counterparty token (absValue value) timeout continuation
 
-  stub MD CR_RPA continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice counterparty party token value timeout continuation
-  stub MD CR_RPL continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice party counterparty token value timeout continuation
-  -}
+  stub MD CR_RPA continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice counterparty party token (absValue value) timeout continuation
+  stub MD CR_RPL continuation (CashFlow' { party, counterparty, token, value, timeout }) = invoice party counterparty token (absValue value) timeout continuation
 
   stub _ _ continuation (CashFlow' { party, counterparty, token, value, timeout }) =
     If ((Constant $ fromInt 0) `ValueLT` value)
@@ -175,6 +173,9 @@ genContract contractTerms cashFlows = foldl (generator contractTerms) Close $ re
           (invoice party counterparty token (NegValue value) timeout continuation)
           continuation
       )
+
+  maxValue x y = Cond (ValueGT x y) x y
+  absValue a = maxValue a (NegValue a)
 
   invoice :: Party -> Party -> Token -> Value -> Instant -> Contract -> Contract
   invoice a b token amount timeout continue =

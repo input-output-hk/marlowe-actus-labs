@@ -90,8 +90,6 @@ instance ActusOps Value' where
   _min x y = Cond' (ValueLT' x y) x y
   _max x y = Cond' (ValueGT' x y) x y
   _abs a = _max a (NegValue' a)
-    where
-    _max x y = Cond' (ValueGT' x y) x y
   _fromDecimal n = Constant' $ toMarloweFixedPoint n
     where
     toMarloweFixedPoint :: Decimal -> BigInt
