@@ -1,9 +1,7 @@
 {
-  "scheduleConfig": {
-    "businessDayConvention": "NULL",
-    "endOfMonthConvention": "EOM",
-    "calendar": "NC"
-  },
+  "businessDayConvention": "NULL",
+  "endOfMonthConvention": "EOM",
+  "calendar": "NC",
   "maturityDate": "2030-01-01T00:00:00",
   "contractId": "ex_pam1",
   "currency": "",
