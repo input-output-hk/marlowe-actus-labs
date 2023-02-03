@@ -225,7 +225,7 @@ _SCHED_MD_PAM
         , scheduleConfig
         }
     ) = case maturityDate <|> maturity ct of
-  Just m -> singleton $ let d = applyBDCWithCfg scheduleConfig m in d { paymentDay = m }
+  Just m -> singleton $ applyBDCWithCfg scheduleConfig m
   Nothing -> Nil
 
 _SCHED_PP_PAM :: ContractTerms -> List ShiftedDay

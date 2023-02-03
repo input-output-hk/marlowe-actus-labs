@@ -9,6 +9,7 @@ module Marlowe.Actus
   , toMarloweValue
   , currencyToToken
   , currenciesWith6Decimals
+  , oracleParty
   , module Exports
   ) where
 
@@ -20,10 +21,13 @@ import Actus.Domain.ContractTerms (CR(..))
 import Data.Array (elem)
 import Data.BigInt.Argonaut (fromInt)
 import Data.DateTime (DateTime)
-import Data.DateTime.Instant (Instant, fromDateTime)
+import Data.DateTime.Instant (Instant, fromDateTime, unInstant)
 import Data.Foldable (foldl)
+import Data.Int (round)
 import Data.List (List, reverse)
 import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Time.Duration (Seconds(..), convertDuration)
+import Language.Marlowe.Core.V1.Semantics (reduceContract)
 import Language.Marlowe.Core.V1.Semantics.Types (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), Token(..), Value(..), ValueId(..))
 import Marlowe.Actus.Metadata (Metadata(..)) as Exports
 
@@ -88,7 +92,7 @@ genContract
   ->
   -- | Marlowe contract
   Contract
-genContract contractTerms cashFlows = foldl (generator contractTerms) Close $ reverse (map toMarloweCashflow cashFlows)
+genContract contractTerms cashFlows = reduceContract $ foldl (generator contractTerms) Close $ reverse (map toMarloweCashflow cashFlows)
   where
   generator :: ContractTerms -> Contract -> CashFlow Value Party -> Contract
   generator
@@ -100,29 +104,22 @@ genContract contractTerms cashFlows = foldl (generator contractTerms) Close $ re
     continuation
     cashFlow@
       ( CashFlow
-          { party
-          , counterparty
-          , amount
-          , currency
-          , calculationDay
+          { calculationDay
           , paymentDay
-          , event
-          , contractRole
           }
       )
     | hasRiskFactor cashFlow =
         let
           label = currency' <> settlementCurrency'
-          timestamp = fromDateTime calculationDay
-          choiceId = ChoiceId label oracle
+          choiceId = ChoiceId label oracleParty
         in
-          When [] timestamp $
+          When [] (fromDateTime calculationDay) $
             When
               [ Case
                   (Choice choiceId [ Bound (fromInt 0) (fromInt 1000000000) ]) $
-                  Let (ValueId $ label <> show timestamp) (ChoiceValue (ChoiceId label oracle)) (stub continuation cashFlow)
+                  Let (ValueId $ label <> dateTimeToTimestamp calculationDay) (ChoiceValue (ChoiceId label oracleParty)) (stub continuation cashFlow)
               ]
-              (fromDateTime paymentDay)
+              (fromDateTime paymentDay) -- precondition: calculationDay < paymentDay
               Close
   generator _ continuation cashFlow = stub continuation cashFlow
 
@@ -140,7 +137,7 @@ genContract contractTerms cashFlows = foldl (generator contractTerms) Close $ re
         IP, CR_RPL -> invoice party counterparty token negValue timeout continuation
         MD, CR_RPA -> invoice counterparty party token value timeout continuation
         MD, CR_RPL -> invoice party counterparty token negValue timeout continuation
-        _, _ -> If ((Constant $ fromInt 0) `ValueLT` value)
+        _, _ -> reduceContract $ If ((Constant $ fromInt 0) `ValueLT` value)
           (invoice counterparty party token value timeout continuation)
           ( If (value `ValueLT` (Constant $ fromInt 0))
               (invoice party counterparty token (NegValue value) timeout continuation)
@@ -180,8 +177,17 @@ hasRiskFactor (CashFlow { amount }) = hasRiskFactor' amount
   hasRiskFactor' TimeIntervalEnd = false
   hasRiskFactor' (Cond _ a b) = hasRiskFactor' a || hasRiskFactor' b
 
-oracle :: Party
-oracle = Address "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn" -- FIXME: oracle address
+oracleParty :: Party
+oracleParty = Address "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn" -- FIXME: oracle address
+
+dateTimeToTimestamp :: DateTime -> String
+dateTimeToTimestamp dateTime =
+  let
+    instant = fromDateTime dateTime
+    millis = unInstant instant
+    (Seconds seconds) = convertDuration millis
+  in
+    show $ round seconds
 
 defaultRiskFactors :: ContractTerms -> EventType -> DateTime -> RiskFactorsMarlowe
 defaultRiskFactors (ContractTerms { currency, settlementCurrency }) _ eventTime =
@@ -190,7 +196,7 @@ defaultRiskFactors (ContractTerms { currency, settlementCurrency }) _ eventTime 
       currency' <- currency
       settlementCurrency' <- settlementCurrency
       if currency' == settlementCurrency' then Nothing
-      else Just $ UseValue' (ValueId (currency' <> settlementCurrency' <> (show $ fromDateTime eventTime)))
+      else Just $ UseValue' (ValueId (currency' <> settlementCurrency' <> dateTimeToTimestamp eventTime))
   in
     RiskFactors
       { o_rf_CURS

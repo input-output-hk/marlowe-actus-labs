@@ -4,7 +4,7 @@
   "calendar": "MF",
   "maturityDate": "2023-01-01T00:00:00",
   "contractId": "ex_pam1",
-  "currency": "USD",
+  "currency": "DjedTestUSD",
   "settlementCurrency": "CHF",
   "enableSettlement": false,
   "initialExchangeDate": "2022-01-01T00:00:00",
