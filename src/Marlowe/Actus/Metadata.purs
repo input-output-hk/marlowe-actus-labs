@@ -25,7 +25,7 @@ import Marlowe.Runtime.Web.Types as Runtime
 import Marlowe.Time (instantFromJson, instantToJson)
 
 actusMetadataKey :: Int
-actusMetadataKey = 123 -- FIXME: define a proper key
+actusMetadataKey = 124 -- FIXME: define a proper key
 
 newtype Metadata = Metadata
   { contractTerms :: ContractTerms

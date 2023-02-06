@@ -32,6 +32,7 @@ import Data.Lazy as Lazy
 import Data.List as List
 import Data.Maybe (Maybe(..), fromMaybe, isJust, isNothing)
 import Data.Newtype (un, unwrap)
+import Data.String (toUpper)
 import Data.Time.Duration as Duration
 import Debug (traceM)
 import Effect.Aff (Aff, launchAff_)
@@ -40,7 +41,6 @@ import Effect.Now (nowDateTime)
 import Language.Marlowe.Core.V1.Semantics (emptyState, evalValue)
 import Language.Marlowe.Core.V1.Semantics.Types (Contract, Environment(..), Input(..), Party, TimeInterval(..), Token, Value(Constant, DivValue))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
-import Marlowe.Actus (currenciesWith6Decimals)
 import Marlowe.Runtime.Web (post')
 import Marlowe.Runtime.Web.Client (put')
 import Marlowe.Runtime.Web.Types (PostTransactionsRequest(..), PostTransactionsResponse(..), PutTransactionRequest(..), Runtime(..), ServerURL, TextEnvelope(..), TransactionEndpoint, TransactionsEndpoint, toTextEnvelope)
@@ -317,9 +317,7 @@ mkEventList = do
                         let
                           cashFlowInfo = Lazy.force contractInfo.cashFlowInfo
                           tdCentered = DOM.td { className: "text-center" }
-                          -- FIXME: decimals
-                          -- formatAmount currency amount | elem currency currenciesWith6Decimals = show (((BigInt.toNumber amount / 1000000.0)))
-                          formatAmount currency amount = show (((BigInt.toNumber amount / 1000000.0)))
+                          formatAmount amount = show $ BigInt.toNumber amount / 1000000.0
                           step { prevExecuted, result } (CashFlowInfo { cashFlow, sender, token, value, transaction, userCashFlowDirection }) = do
                             let
                               cf = unwrap cashFlow
@@ -336,12 +334,12 @@ mkEventList = do
                                       moneyInfoStr /\ cellStyle =
                                         if showOnlyMyContracts then
                                           case userCashFlowDirection of
-                                            Just (IncomingFlow /\ PositiveBigInt absValue) -> ("+" <> formatAmount cf.currency absValue) /\ "table-success"
-                                            Just (OutgoingFlow /\ PositiveBigInt absValue) -> ("-" <> formatAmount cf.currency absValue) /\ "table-danger"
-                                            Just (InternalFlow /\ PositiveBigInt absValue) -> ("=" <> formatAmount cf.currency absValue) /\ "table-light"
+                                            Just (IncomingFlow /\ PositiveBigInt absValue) -> ("+" <> formatAmount absValue) /\ "table-success"
+                                            Just (OutgoingFlow /\ PositiveBigInt absValue) -> ("-" <> formatAmount absValue) /\ "table-danger"
+                                            Just (InternalFlow /\ PositiveBigInt absValue) -> ("=" <> formatAmount absValue) /\ "table-light"
                                             _ -> "" /\ ""
                                         else
-                                          formatAmount cf.currency value /\ ""
+                                          formatAmount value /\ ""
 
                                     --   if elem cf.currency currenciesWith6Decimals
                                     --   then show <$> (((_ / 1000000.0) <<< BigInt.toNumber) <$> evalVal cf.amount)
@@ -351,7 +349,7 @@ mkEventList = do
                                     -- ]
                                     DOM.td { className: "text-end " <> cellStyle }
                                       [ text $ moneyInfoStr ]
-                                , tdCentered [ text $ if cf.currency == "" then "₳" else cf.currency ]
+                                , tdCentered [ text $ if elem (toUpper cf.currency) [ "", "ADA" ] then "₳" else cf.currency ]
                                 -- , tdCentered $ Array.singleton $ text $
                                 --     "user role: " <> show userContractRole <> ", sender: " <> show sender <> ", transaction endpoint: " <> show (isJust endpoints.transactions)
                                 , tdCentered $ Array.singleton $ case endpoints.transactions of

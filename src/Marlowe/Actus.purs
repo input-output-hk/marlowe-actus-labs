@@ -8,7 +8,6 @@ module Marlowe.Actus
   , toMarloweCashflow
   , toMarloweValue
   , currencyToToken
-  , currenciesWith6Decimals
   , oracleParty
   , module Exports
   ) where
@@ -19,7 +18,7 @@ import Actus.Domain (CashFlow(..), ContractState, ContractTerms(..), Observation
 import Actus.Domain.BusinessEvents (EventType(..))
 import Actus.Domain.ContractTerms (CR(..))
 import Data.Array (elem)
-import Data.BigInt.Argonaut (fromInt)
+import Data.BigInt.Argonaut (fromInt, fromString)
 import Data.DateTime (DateTime)
 import Data.DateTime.Instant (Instant, fromDateTime, unInstant)
 import Data.Foldable (foldl)
@@ -116,7 +115,7 @@ genContract contractTerms cashFlows = reduceContract $ foldl (generator contract
           When [] (fromDateTime calculationDay) $
             When
               [ Case
-                  (Choice choiceId [ Bound (fromInt 0) (fromInt 1000000000) ]) $
+                  (Choice choiceId [ Bound (fromInt 0) (fromMaybe (fromInt 1000000000) $ fromString "1000000000000000000") ]) $
                   Let (ValueId $ label <> dateTimeToTimestamp calculationDay) (ChoiceValue (ChoiceId label oracleParty)) (stub continuation cashFlow)
               ]
               (fromDateTime paymentDay) -- precondition: calculationDay < paymentDay
@@ -125,22 +124,21 @@ genContract contractTerms cashFlows = reduceContract $ foldl (generator contract
 
   stub continuation (CashFlow { party, counterparty, currency, amount, paymentDay, contractRole, event }) =
     let
-      value = adjustDecimals currency $ amount
-      negValue = adjustDecimals currency $ NegValue amount
+      negAmount = NegValue amount
       token = currencyToToken currency
       timeout = fromDateTime paymentDay
     in
       case event, contractRole of
-        IED, CR_RPA -> invoice party counterparty token negValue timeout continuation
-        IED, CR_RPL -> invoice counterparty party token value timeout continuation
-        IP, CR_RPA -> invoice counterparty party token value timeout continuation
-        IP, CR_RPL -> invoice party counterparty token negValue timeout continuation
-        MD, CR_RPA -> invoice counterparty party token value timeout continuation
-        MD, CR_RPL -> invoice party counterparty token negValue timeout continuation
-        _, _ -> reduceContract $ If ((Constant $ fromInt 0) `ValueLT` value)
-          (invoice counterparty party token value timeout continuation)
-          ( If (value `ValueLT` (Constant $ fromInt 0))
-              (invoice party counterparty token (NegValue value) timeout continuation)
+        IED, CR_RPA -> invoice party counterparty token negAmount timeout continuation
+        IED, CR_RPL -> invoice counterparty party token amount timeout continuation
+        IP, CR_RPA -> invoice counterparty party token amount timeout continuation
+        IP, CR_RPL -> invoice party counterparty token negAmount timeout continuation
+        MD, CR_RPA -> invoice counterparty party token amount timeout continuation
+        MD, CR_RPL -> invoice party counterparty token negAmount timeout continuation
+        _, _ -> reduceContract $ If ((Constant $ fromInt 0) `ValueLT` amount)
+          (invoice counterparty party token amount timeout continuation)
+          ( If (amount `ValueLT` (Constant $ fromInt 0))
+              (invoice party counterparty token negAmount timeout continuation)
               continuation
           )
 
@@ -148,16 +146,10 @@ genContract contractTerms cashFlows = reduceContract $ foldl (generator contract
   invoice a b token amount timeout continue =
     When [ Case (Deposit a a token amount) (Pay a (Party b) token amount continue) ] timeout Close
 
--- TODO: use token registry for handling of decimals
-adjustDecimals :: String -> Value -> Value
-adjustDecimals name v | elem name currenciesWith6Decimals = v
-adjustDecimals _ v = DivValue v (Constant $ fromInt 1000000)
-
-currenciesWith6Decimals :: Array String
-currenciesWith6Decimals = [ "", "DjedTestUSD" ]
-
 currencyToToken :: String -> Token
 currencyToToken "DjedTestUSD" = Token "9772ff715b691c0444f333ba1db93b055c0864bec48fff92d1f2a7fe" "Djed_testMicroUSD"
+currencyToToken "USD" = Token "9772ff715b691c0444f333ba1db93b055c0864bec48fff92d1f2a7fe" "Djed_testMicroUSD"
+currencyToToken "ADA" = Token "" ""
 currencyToToken i = Token "" i
 
 hasRiskFactor :: CashFlow Value Party -> Boolean
@@ -178,7 +170,7 @@ hasRiskFactor (CashFlow { amount }) = hasRiskFactor' amount
   hasRiskFactor' (Cond _ a b) = hasRiskFactor' a || hasRiskFactor' b
 
 oracleParty :: Party
-oracleParty = Address "addr_test1qz4y0hs2kwmlpvwc6xtyq6m27xcd3rx5v95vf89q24a57ux5hr7g3tkp68p0g099tpuf3kyd5g80wwtyhr8klrcgmhasu26qcn" -- FIXME: oracle address
+oracleParty = Address "addr_test1qp5e9feu4hkp4qwvgqasq02na05z3eg33zzjquf2d86e6qzznwng4gtlladnxm7d486psa003jy6dv230t82rvv3pflq62lz84" -- Oracle preprod
 
 dateTimeToTimestamp :: DateTime -> String
 dateTimeToTimestamp dateTime =
@@ -196,7 +188,10 @@ defaultRiskFactors (ContractTerms { currency, settlementCurrency }) _ eventTime 
       currency' <- currency
       settlementCurrency' <- settlementCurrency
       if currency' == settlementCurrency' then Nothing
-      else Just $ UseValue' (ValueId (currency' <> settlementCurrency' <> dateTimeToTimestamp eventTime))
+      else Just $
+        DivValue'
+          (UseValue' $ ValueId (currency' <> settlementCurrency' <> dateTimeToTimestamp eventTime)) -- value in micro cents
+          (Constant' $ fromInt 100) -- therefore we divide by cents
   in
     RiskFactors
       { o_rf_CURS
