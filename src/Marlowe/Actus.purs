@@ -147,10 +147,16 @@ genContract contractTerms cashFlows = reduceContract $ foldl (generator contract
     When [ Case (Deposit a a token amount) (Pay a (Party b) token amount continue) ] timeout Close
 
 currencyToToken :: String -> Token
-currencyToToken "DjedTestUSD" = Token "9772ff715b691c0444f333ba1db93b055c0864bec48fff92d1f2a7fe" "Djed_testMicroUSD"
-currencyToToken "USD" = Token "9772ff715b691c0444f333ba1db93b055c0864bec48fff92d1f2a7fe" "Djed_testMicroUSD"
-currencyToToken "ADA" = Token "" ""
+currencyToToken "DjedTestUSD" = djed
+currencyToToken "USD" = djed
+currencyToToken "ADA" = ada
 currencyToToken i = Token "" i
+
+ada :: Token
+ada = Token "" ""
+
+djed :: Token
+djed = Token "9772ff715b691c0444f333ba1db93b055c0864bec48fff92d1f2a7fe" "Djed_testMicroUSD"
 
 hasRiskFactor :: CashFlow Value Party -> Boolean
 hasRiskFactor (CashFlow { amount }) = hasRiskFactor' amount
@@ -182,20 +188,15 @@ dateTimeToTimestamp dateTime =
     show $ round seconds
 
 defaultRiskFactors :: ContractTerms -> EventType -> DateTime -> RiskFactorsMarlowe
-defaultRiskFactors (ContractTerms { currency, settlementCurrency }) _ eventTime =
-  let
-    o_rf_CURS = fromMaybe one $ do
-      currency' <- currency
-      settlementCurrency' <- settlementCurrency
-      if currency' == settlementCurrency' then Nothing
-      else Just $
-        DivValue'
-          (UseValue' $ ValueId (currency' <> settlementCurrency' <> dateTimeToTimestamp eventTime)) -- value in micro cents
-          (Constant' $ fromInt 100) -- therefore we divide by cents
-  in
-    RiskFactors
-      { o_rf_CURS
-      , o_rf_RRMO: UseValue' (ValueId "rrmo") -- TODO: add to oracle
-      , o_rf_SCMO: UseValue' (ValueId "scmo") -- TODO: add to oracle
-      , pp_payoff: UseValue' (ValueId "pp") -- TODO: add to oracle
-      }
+defaultRiskFactors contractTerms _ eventTime =
+  RiskFactors
+    { o_rf_CURS: case contractTerms of
+        (ContractTerms { currency: Just currency', settlementCurrency: Just settlementCurrency' }) | currency' /= settlementCurrency' ->
+          DivValue'
+            (UseValue' $ ValueId (currency' <> settlementCurrency' <> dateTimeToTimestamp eventTime)) -- value in micro cents
+            (Constant' $ fromInt 100) -- therefore we divide by cents
+        _ -> one
+    , o_rf_RRMO: UseValue' (ValueId "rrmo") -- TODO: add to oracle
+    , o_rf_SCMO: UseValue' (ValueId "scmo") -- TODO: add to oracle
+    , pp_payoff: UseValue' (ValueId "pp") -- TODO: add to oracle
+    }
