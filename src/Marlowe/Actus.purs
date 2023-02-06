@@ -17,7 +17,6 @@ import Prelude
 import Actus.Domain (CashFlow(..), ContractState, ContractTerms(..), Observation'(..), RiskFactors(..), Value'(..))
 import Actus.Domain.BusinessEvents (EventType(..))
 import Actus.Domain.ContractTerms (CR(..))
-import Data.Array (elem)
 import Data.BigInt.Argonaut (fromInt, fromString)
 import Data.DateTime (DateTime)
 import Data.DateTime.Instant (Instant, fromDateTime, unInstant)

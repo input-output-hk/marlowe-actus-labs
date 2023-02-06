@@ -9,7 +9,7 @@ import Component.ContractForm (walletChangeAddress)
 import Component.Modal (mkModal)
 import Component.Types (ActusContractRole(..), CashFlowInfo(..), ContractInfo(..), MessageContent(..), MessageHub(..), MkComponentM, UserCashFlowDirection(..), UserContractRole(..), WalletInfo(..))
 import Component.Types.ContractInfo as ContractInfo
-import Component.Widget.Table as Table
+import Component.Widget.Table (orderingHeader) as Table
 import Component.Widgets (link, linkWithIcon)
 import Component.Widgets.Form (mkBooleanField)
 import Contrib.Data.BigInt.PositiveBigInt (PositiveBigInt(..))
@@ -17,7 +17,7 @@ import Contrib.Fetch (FetchError)
 import Contrib.React.Bootstrap (overlayTrigger, tooltip)
 import Contrib.React.Bootstrap.Icons as Icons
 import Contrib.React.Bootstrap.Table (table)
-import Contrib.React.Bootstrap.Table as Table
+import Contrib.React.Bootstrap.Table (striped) as Table
 import Contrib.React.Bootstrap.Types as Bootstrap
 import Control.Monad.Reader.Class (asks)
 import Data.Array (elem, singleton)
@@ -25,7 +25,7 @@ import Data.Array as Array
 import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (adjust)
 import Data.Either (Either(..), hush)
-import Data.Foldable (foldMap, foldl, foldr)
+import Data.Foldable (foldMap, foldl)
 import Data.Formatter.DateTime (formatDateTime)
 import Data.Function (on)
 import Data.Lazy as Lazy
@@ -38,16 +38,14 @@ import Debug (traceM)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Now (nowDateTime)
-import Language.Marlowe.Core.V1.Semantics (emptyState, evalValue)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, Environment(..), Input(..), Party, TimeInterval(..), Token, Value(Constant, DivValue))
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input(..), Party, Token)
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Runtime.Web (post')
 import Marlowe.Runtime.Web.Client (put')
 import Marlowe.Runtime.Web.Types (PostTransactionsRequest(..), PostTransactionsResponse(..), PutTransactionRequest(..), Runtime(..), ServerURL, TextEnvelope(..), TransactionEndpoint, TransactionsEndpoint, toTextEnvelope)
 import Marlowe.Runtime.Web.Types as Runtime
-import Marlowe.Time (unixEpoch)
 import React.Basic (fragment) as DOOM
-import React.Basic.DOM (input, span_, text) as DOOM
+import React.Basic.DOM (input, text) as DOOM
 import React.Basic.DOM (text)
 import React.Basic.DOM as R
 import React.Basic.DOM.Simplified.Generated as DOM
@@ -365,7 +363,6 @@ mkEventList = do
                                           [ DOM.span { className: "me-1" } $ Icons.toJSX Icons.eye
                                           , text "Tx details"
                                           ]
-
                                       Nothing -> do
                                         let
                                           button = Lazy.defer \_ -> linkWithIcon
@@ -398,4 +395,3 @@ mkEventList = do
 partyToString :: Party -> String
 partyToString (V1.Address addr) = addr
 partyToString (V1.Role role) = role
-
