@@ -131,10 +131,6 @@ correction
   _
   schedule = init' schedule
 
-addEndDay :: Boolean -> DateTime -> ShiftedSchedule -> ShiftedSchedule
-addEndDay true endDate schedule = snoc schedule (mkShiftedDay endDate)
-addEndDay _ _ schedule = schedule
-
 generateRecurrentSchedule' :: Cycle -> DateTime -> DateTime -> List DateTime
 generateRecurrentSchedule' cycle anchorDate endDate =
   let
@@ -163,10 +159,14 @@ generateRecurrentSchedule
   , calendar: Just cal
   , businessDayConvention: Just bdc
   } =
-  addEndDay c.includeEndDay e
-    <<< map (applyBDC bdc cal <<< applyEOMC a c eomc)
-    <<<
-      correction c a e $ generateRecurrentSchedule' c a e
+  let
+    addEndDay true endDate schedule = snoc schedule (applyBDC bdc cal endDate)
+    addEndDay _ _ schedule = schedule
+  in
+    addEndDay c.includeEndDay e
+      <<< map (applyBDC bdc cal <<< applyEOMC a c eomc)
+      <<<
+        correction c a e $ generateRecurrentSchedule' c a e
 generateRecurrentSchedule _ _ _ _ = Nil
 
 plus_sched :: DateTime -> Cycle -> DateTime

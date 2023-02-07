@@ -27,6 +27,7 @@ import Data.Formatter.DateTime (formatDateTime)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (unwrap)
+import Data.String (toUpper)
 import Data.String as String
 import Data.Time.Duration (Seconds(..))
 import Data.Undefined.NoProblem as NoProblem
@@ -35,10 +36,12 @@ import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
-import Language.Marlowe.Core.V1.Semantics.Types (Party, Value(..))
+import Language.Marlowe.Core.V1.Semantics (emptyState, evalValue)
+import Language.Marlowe.Core.V1.Semantics.Types (Environment(..), Party, TimeInterval(..), Value(..))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
-import Marlowe.Actus (CashFlows, currenciesWith6Decimals, defaultRiskFactors, evalVal, genContract, toMarloweCashflow)
+import Marlowe.Actus (CashFlows, defaultRiskFactors, genContract, toMarloweCashflow)
 import Marlowe.Runtime.Web.Types (TxOutRef, bech32ToParty)
+import Marlowe.Time (unixEpoch)
 import Polyform.Batteries (rawError)
 import Polyform.Batteries as Batteries
 import Polyform.Validator (liftFnEither, liftFnMMaybe) as Validator
@@ -220,18 +223,21 @@ mkContractForm = do
                       map
                         ( \cashflow ->
                             let
-                              cf = unwrap cashflow
+                              { contractId, event, paymentDay, amount, currency } = unwrap cashflow
                             in
                               [ DOM.tr {}
-                                  [ DOM.td {} [ DOOM.text cf.contractId ]
-                                  , DOM.td {} [ DOOM.text $ show cf.event ]
-                                  , DOM.td {} [ DOOM.text <$> hush (formatDateTime "YYYY-DD-MM HH:mm:ss:SSS" cf.paymentDay) ]
+                                  [ DOM.td {} [ DOOM.text contractId ]
+                                  , DOM.td {} [ DOOM.text $ show event ]
+                                  , DOM.td {} [ DOOM.text <$> hush (formatDateTime "YYYY-DD-MM HH:mm:ss:SSS" paymentDay) ]
                                   , DOM.td {}
-                                      [ DOOM.text $ fromMaybe "" $
-                                          if elem cf.currency currenciesWith6Decimals then show <$> (((_ / 1000000.0) <<< toNumber) <$> evalVal cf.amount)
-                                          else toString <$> (evalVal $ DivValue cf.amount (Constant $ fromInt 1000000))
+                                      [ DOOM.text $ do
+                                          -- empty state and environment at contract creation
+                                          let
+                                            environment = Environment { timeInterval: TimeInterval unixEpoch unixEpoch }
+                                            state = emptyState
+                                          show <<< (_ / 1000000.0) <<< toNumber $ evalValue environment state amount
                                       ]
-                                  , DOM.td {} [ DOOM.text $ if cf.currency == "" then "₳" else cf.currency ]
+                                  , DOM.td {} [ DOOM.text $ if elem (toUpper currency) [ "", "ADA" ] then "₳" else currency ]
                                   ]
                               ]
                         )

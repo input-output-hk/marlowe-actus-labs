@@ -3,7 +3,8 @@ module Component.App where
 import Prelude
 
 import Actus.Core (genProjectedCashflows)
-import Actus.Domain (CashFlow(..), ContractTerms, evalVal') as Actus
+import Actus.Domain (CashFlow(..), ContractTerms) as Actus
+import Actus.Domain (CashFlow(..), Value'(..))
 import Component.ConnectWallet (mkConnectWallet, walletInfo)
 import Component.ConnectWallet as ConnectWallet
 import Component.ContractList (mkContractList)
@@ -46,14 +47,17 @@ import Effect.Class (liftEffect)
 import Effect.Exception (throw)
 import Effect.Now (now)
 import Halogen.Subscription (Emitter) as Subscription
+import Language.Marlowe.Core.V1.Semantics (emptyState, evalValue)
+import Language.Marlowe.Core.V1.Semantics.Types (Environment(..), TimeInterval(..))
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus (currencyToToken, defaultRiskFactors)
-import Marlowe.Actus (toMarloweCashflow) as Actus
+import Marlowe.Actus (toMarloweValue, toMarloweCashflow) as Actus
 import Marlowe.Actus.Metadata (Metadata(..)) as Actus
 import Marlowe.Actus.Metadata as Actus.Metadata
 import Marlowe.Runtime.Web.Streaming (ContractWithTransactionsEvent, ContractWithTransactionsMap, ContractWithTransactionsStream(..))
-import Marlowe.Runtime.Web.Types (partyToBech32)
+import Marlowe.Runtime.Web.Types (BlockHeader(..), SlotNumber(..), partyToBech32)
 import Marlowe.Runtime.Web.Types as Runtime
+import Marlowe.Time (unsafeInstantFromInt)
 import React.Basic (JSX)
 import React.Basic as ReactContext
 import React.Basic.DOM (div, img, span_, text) as DOOM
@@ -351,7 +355,7 @@ updateAppContractInfoMap (AppContractInfoMap { walletContext: prevWalletContext,
         _, _ -> Nothing
       else prevRole
 
-    map = Map.catMaybes $ updates <#> \{ contract: { resource: contractHeader@(Runtime.ContractHeader { contractId }), links: endpoints }, contractState, transactions } -> do
+    map = Map.catMaybes $ updates <#> \{ contract: { resource: contractHeader@(Runtime.ContractHeader { contractId, block }), links: endpoints }, contractState, transactions } -> do
       let
         marloweInfo = do
           Runtime.ContractState contractState' <- contractState
@@ -369,17 +373,15 @@ updateAppContractInfoMap (AppContractInfoMap { walletContext: prevWalletContext,
               contractInfo.party
               contractInfo.counterParty
 
-            cashFlowInfo = do
-              let
-                recomputeCashFlows = walletChanged || transactions /= contractInfo._runtime.transactions
-              if recomputeCashFlows then Lazy.defer \_ -> contractCashFlowInfo
+            cashFlowInfo =
+              Lazy.defer \_ -> contractCashFlowInfo
+                block
                 contractInfo.contractTerms
                 contractInfo.party
                 contractInfo.counterParty
                 contractInfo.marloweInfo
                 userContractRole
                 transactions
-              else contractInfo.cashFlowInfo
 
           pure $ ContractInfo $ contractInfo
             { cashFlowInfo = cashFlowInfo
@@ -397,6 +399,7 @@ updateAppContractInfoMap (AppContractInfoMap { walletContext: prevWalletContext,
             userContractRole = mkUserContractRole Nothing party counterParty
           pure $ ContractInfo $
             { cashFlowInfo: Lazy.defer \_ -> contractCashFlowInfo
+                block
                 contractTerms
                 party
                 counterParty
@@ -415,48 +418,74 @@ updateAppContractInfoMap (AppContractInfoMap { walletContext: prevWalletContext,
   AppContractInfoMap { walletContext, map }
 
 contractCashFlowInfo
-  :: Actus.ContractTerms
+  :: Maybe BlockHeader
+  -> Actus.ContractTerms
   -> V1.Party
   -> V1.Party
   -> Maybe MarloweInfo
   -> Maybe UserContractRole
   -> Array Runtime.TxHeader
   -> Array CashFlowInfo
-contractCashFlowInfo contractTerms party counterParty marloweInfo possibleUserContractRole transactions = do
+contractCashFlowInfo (Just (BlockHeader { slotNo: SlotNumber slot })) contractTerms party counterParty (Just (MarloweInfo { state })) possibleUserContractRole transactions = do
   let
-    -- TODO: more reliable detection of active cashflows
-    cashFlows = Array.fromFoldable $ genProjectedCashflows
+    cashFlows = genProjectedCashflows
       (party /\ counterParty)
       (defaultRiskFactors contractTerms)
       contractTerms
-    transactions' = map Just transactions <> (Array.replicate (length cashFlows) Nothing)
-    cashFlows' = Array.zipWith { tx: _, cf: _ } transactions' cashFlows
+    cashFlows' = addChoiceMarker $ map Just cashFlows
+    transactions' = map Just transactions <> (Array.replicate (length cashFlows') Nothing)
+    transactionsAndCashFlows = Array.zipWith { tx: _, cf: _ } transactions' (Array.fromFoldable cashFlows')
 
   Array.catMaybes $
     map
-      ( \{ cf: cf@(Actus.CashFlow { currency, amount }), tx } -> do
-          actusValue <- Actus.evalVal' amount
-          value <- PositiveBigInt.fromBigInt $ BigInt.abs actusValue
-          let
-            sender =
-              if actusValue < (BigInt.fromInt 0) then ActusParty
-              else ActusCounterParty
-          pure $ CashFlowInfo
-            { cashFlow: Actus.toMarloweCashflow cf
-            , sender
-            , token: currencyToToken currency
-            , transaction: tx
-            , userCashFlowDirection: possibleUserContractRole <#> case _, sender of
-                BothParties, _ -> InternalFlow /\ value
-                ContractParty, ActusParty -> OutgoingFlow /\ value
-                ContractCounterParty, ActusCounterParty -> OutgoingFlow /\ value
-                _, _ -> IncomingFlow /\ value
-            -- FIXME: Shoule I bring in this logic from last merge of EventList
-            --  , value: if elem currency currenciesWith6Decimals then value else value / (BigInt.fromInt 1000000)
-            , value: actusValue
-            }
+      ( case _ of
+          { cf: Just cashFlow@(Actus.CashFlow { currency, amount }), tx } -> do
+            let
+              -- FIXME: correct conversions
+              slotZeroTime = 1655683200
+              beginInterval = unsafeInstantFromInt (slot + slotZeroTime)
+              endInterval = unsafeInstantFromInt (slot + slotZeroTime)
+              environment = Environment { timeInterval: TimeInterval beginInterval endInterval }
+              actusValue = evalValue environment (fromMaybe emptyState state) (Actus.toMarloweValue amount)
+
+            value <- PositiveBigInt.fromBigInt $ BigInt.abs actusValue
+            let
+              sender =
+                if actusValue < (BigInt.fromInt 0) then ActusParty
+                else ActusCounterParty
+            pure $ CashFlowInfo
+              { cashFlow: Actus.toMarloweCashflow cashFlow
+              , sender
+              , token: currencyToToken currency
+              , transaction: tx
+              , userCashFlowDirection: possibleUserContractRole <#> case _, sender of
+                  BothParties, _ -> InternalFlow /\ value
+                  ContractParty, ActusParty -> OutgoingFlow /\ value
+                  ContractCounterParty, ActusCounterParty -> OutgoingFlow /\ value
+                  _, _ -> IncomingFlow /\ value
+              , value: actusValue
+              }
+          _ -> Nothing
       )
-      cashFlows'
+      transactionsAndCashFlows
+  where
+  addChoiceMarker List.Nil = List.Nil
+  addChoiceMarker (List.Cons (Just x) xs) | hasRiskFactor x = List.Cons Nothing (List.Cons (Just x) (addChoiceMarker xs))
+  addChoiceMarker (List.Cons x xs) = List.Cons x (addChoiceMarker xs)
+
+  hasRiskFactor (CashFlow { amount }) = hasRiskFactor' amount
+    where
+    hasRiskFactor' :: Value' -> Boolean
+    hasRiskFactor' (UseValue' _) = true
+    hasRiskFactor' (Constant' _) = false
+    hasRiskFactor' (AddValue' a b) = hasRiskFactor' a || hasRiskFactor' b
+    hasRiskFactor' (SubValue' a b) = hasRiskFactor' a || hasRiskFactor' b
+    hasRiskFactor' (MulValue' a b) = hasRiskFactor' a || hasRiskFactor' b
+    hasRiskFactor' (DivValue' a b) = hasRiskFactor' a || hasRiskFactor' b
+    hasRiskFactor' (NegValue' a) = hasRiskFactor' a
+    hasRiskFactor' (Cond' _ a b) = hasRiskFactor' a || hasRiskFactor' b
+
+contractCashFlowInfo _ _ _ _ _ _ _ = mempty
 
 marloweLogoUrl :: SvgUrl
 marloweLogoUrl = SvgUrl "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB3aWR0aD0iNTAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA1MCA2MCI+CiAgICA8ZGVmcz4KICAgICAgICA8cGF0aCBpZD0idG82NzR1ODZhYSIgZD0iTTAgMEw1MCAwIDUwIDYwIDAgNjB6Ii8+CiAgICA8L2RlZnM+CiAgICA8ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPgogICAgICAgIDxnPgogICAgICAgICAgICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtODQ5IC0zNjgpIHRyYW5zbGF0ZSg4NDkgMzY4KSI+CiAgICAgICAgICAgICAgICA8bWFzayBpZD0ibDk5N3EzbWw4YiIgZmlsbD0iI2ZmZiI+CiAgICAgICAgICAgICAgICAgICAgPHVzZSB4bGluazpocmVmPSIjdG82NzR1ODZhYSIvPgogICAgICAgICAgICAgICAgPC9tYXNrPgogICAgICAgICAgICAgICAgPHBhdGggZmlsbD0iIzAwRTM5QyIgZD0iTTUuOTEgNjBjLS41NiAwLTEuMTE3LS4wOC0xLjY1OS0uMjM5LTEuNTEzLS40NDMtMi43NjUtMS40NS0zLjUyMi0yLjgzNi0uNzU4LTEuMzg1LS45MzItMi45ODMtLjQ5LTQuNUwxMS4yIDE0Ljg0NmMuMzYtMS4yMzMgMS4wOTItMi4yOTQgMi4xMTctMy4wNjcgMS4wMjQtLjc3MiAyLjI0NC0xLjE4NCAzLjUyNy0xLjE4OWguMDI0YzEuMjc4IDAgMi40OTYuNDA0IDMuNTIyIDEuMTY3IDEuMDI2Ljc2NCAxLjc2MyAxLjgxNiAyLjEzMiAzLjA0M2wyLjM5NyA3Ljk3NyA1LjQxLTE4LjUyM2MuMzYtMS4yMzMgMS4wOTItMi4yOTQgMi4xMTgtMy4wNjZDMzMuNDcyLjQxNiAzNC42OTIuMDA1IDM1Ljk3NCAwaC4wMjJjMS4yNzkgMCAyLjQ5Ny40MDQgMy41MjMgMS4xNjggMS4wMjYuNzY1IDEuNzYzIDEuODE3IDIuMTMyIDMuMDQ1TDQ5Ljc0NyAzMS4yYy40NTQgMS41MTMuMjkzIDMuMTEzLS40NTQgNC41MDQtLjc0NyAxLjM5Mi0xLjk5IDIuNDA4LTMuNTAxIDIuODYzLS41NTQuMTY3LTEuMTI3LjI1Mi0xLjcwMS4yNTItMS4yNDMgMC0yLjQ4My0uNDA3LTMuNDktMS4xNDYtMS4wNDMtLjc2NS0xLjc5LTEuODI2LTIuMTYzLTMuMDY4bC0yLjM2Ni03Ljg4Ny01LjQwNSAxOC41MDZjLS4zNiAxLjIzNC0xLjA5MiAyLjI5NC0yLjExNyAzLjA2Ni0xLjAyNS43NzItMi4yNDQgMS4xODMtMy41MjcgMS4xODhIMjVjLTEuMjc4IDAtMi40OTYtLjQwMy0zLjUyMi0xLjE2Ny0xLjAyNi0uNzY0LTEuNzYzLTEuODE2LTIuMTMyLTMuMDQybC0yLjM5My03Ljk2NS01LjM3OCAxOC40MzhjLS4zNjUgMS4yNTItMS4xMTEgMi4zMjMtMi4xNTcgMy4wOTdDOC40MDcgNTkuNTg4IDcuMTYxIDYwIDUuOTEgNjAiIG1hc2s9InVybCgjbDk5N3EzbWw4YikiLz4KICAgICAgICAgICAgPC9nPgogICAgICAgIDwvZz4KICAgIDwvZz4KPC9zdmc+Cg=="

@@ -1,9 +1,7 @@
 {
-  "scheduleConfig": {
-    "businessDayConvention": "NULL",
-    "endOfMonthConvention": "EOM",
-    "calendar": "NC"
-  },
+  "businessDayConvention": "NULL",
+  "endOfMonthConvention": "EOM",
+  "calendar": "NC",
   "maturityDate": "2030-01-01T00:00:00",
   "contractId": "ex_pam1",
   "currency": "DjedUSD",
@@ -11,7 +9,7 @@
   "initialExchangeDate": "2020-01-01T00:00:00",
   "contractRole": "RPA",
   "penaltyType": "O",
-  "cycleAnchorDateOfInterestPayment": "2020-01-01T00:00:00",
+  "cycleAnchorDateOfInterestPayment": "2021-01-01T00:00:00",
   "contractType": "PAM",
   "notionalPrincipal": "10000",
   "contractPerformance": "PF",

@@ -122,7 +122,7 @@ genCashflow
   ->
   -- | Projected cash flow
   CashFlow a b
-genCashflow (party /\ counterparty) (ContractTerms { contractId, contractRole, currency }) ((event /\ { paymentDay, calculationDay }) /\ ContractState { nt } /\ amount) =
+genCashflow (party /\ counterparty) (ContractTerms { contractId, contractRole, currency, settlementCurrency }) ((event /\ { paymentDay, calculationDay }) /\ ContractState { nt } /\ amount) =
   CashFlow
     { contractId
     , party
@@ -133,7 +133,7 @@ genCashflow (party /\ counterparty) (ContractTerms { contractId, contractRole, c
     , contractRole
     , amount
     , notional: nt
-    , currency: fromMaybe "" currency
+    , currency: fromMaybe "" $ settlementCurrency <|> currency
     }
 
 -- |Generate projected cash flows

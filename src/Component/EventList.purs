@@ -9,7 +9,7 @@ import Component.ContractForm (walletChangeAddress)
 import Component.Modal (mkModal)
 import Component.Types (ActusContractRole(..), CashFlowInfo(..), ContractInfo(..), MessageContent(..), MessageHub(..), MkComponentM, UserCashFlowDirection(..), UserContractRole(..), WalletInfo(..))
 import Component.Types.ContractInfo as ContractInfo
-import Component.Widget.Table as Table
+import Component.Widget.Table (orderingHeader) as Table
 import Component.Widgets (link, linkWithIcon)
 import Component.Widgets.Form (mkBooleanField)
 import Contrib.Data.BigInt.PositiveBigInt (PositiveBigInt(..))
@@ -17,7 +17,7 @@ import Contrib.Fetch (FetchError)
 import Contrib.React.Bootstrap (overlayTrigger, tooltip)
 import Contrib.React.Bootstrap.Icons as Icons
 import Contrib.React.Bootstrap.Table (table)
-import Contrib.React.Bootstrap.Table as Table
+import Contrib.React.Bootstrap.Table (striped) as Table
 import Contrib.React.Bootstrap.Types as Bootstrap
 import Control.Monad.Reader.Class (asks)
 import Data.Array (elem, singleton)
@@ -25,27 +25,27 @@ import Data.Array as Array
 import Data.BigInt.Argonaut as BigInt
 import Data.DateTime (adjust)
 import Data.Either (Either(..), hush)
-import Data.Foldable (foldMap, foldl, foldr)
+import Data.Foldable (foldMap, foldl)
 import Data.Formatter.DateTime (formatDateTime)
 import Data.Function (on)
 import Data.Lazy as Lazy
 import Data.List as List
 import Data.Maybe (Maybe(..), fromMaybe, isJust, isNothing)
 import Data.Newtype (un, unwrap)
+import Data.String (toUpper)
 import Data.Time.Duration as Duration
 import Debug (traceM)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Now (nowDateTime)
-import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input(..), Party, Token, Value(Constant, DivValue))
+import Language.Marlowe.Core.V1.Semantics.Types (Contract, Input(..), Party, Token)
 import Language.Marlowe.Core.V1.Semantics.Types as V1
-import Marlowe.Actus (currenciesWith6Decimals, evalVal)
 import Marlowe.Runtime.Web (post')
 import Marlowe.Runtime.Web.Client (put')
 import Marlowe.Runtime.Web.Types (PostTransactionsRequest(..), PostTransactionsResponse(..), PutTransactionRequest(..), Runtime(..), ServerURL, TextEnvelope(..), TransactionEndpoint, TransactionsEndpoint, toTextEnvelope)
 import Marlowe.Runtime.Web.Types as Runtime
 import React.Basic (fragment) as DOOM
-import React.Basic.DOM (input, span_, text) as DOOM
+import React.Basic.DOM (input, text) as DOOM
 import React.Basic.DOM (text)
 import React.Basic.DOM as R
 import React.Basic.DOM.Simplified.Generated as DOM
@@ -315,9 +315,7 @@ mkEventList = do
                         let
                           cashFlowInfo = Lazy.force contractInfo.cashFlowInfo
                           tdCentered = DOM.td { className: "text-center" }
-                          formatAmount currency amount = fromMaybe "" $
-                            if elem currency currenciesWith6Decimals then Just $ show (((BigInt.toNumber amount / 1000000.0)))
-                            else BigInt.toString <$> (evalVal $ DivValue (Constant amount) (Constant $ BigInt.fromInt 1000000))
+                          formatAmount amount = show $ BigInt.toNumber amount / 1000000.0
                           step { prevExecuted, result } (CashFlowInfo { cashFlow, sender, token, value, transaction, userCashFlowDirection }) = do
                             let
                               cf = unwrap cashFlow
@@ -334,12 +332,12 @@ mkEventList = do
                                       moneyInfoStr /\ cellStyle =
                                         if showOnlyMyContracts then
                                           case userCashFlowDirection of
-                                            Just (IncomingFlow /\ PositiveBigInt absValue) -> ("+" <> formatAmount cf.currency absValue) /\ "table-success"
-                                            Just (OutgoingFlow /\ PositiveBigInt absValue) -> ("-" <> formatAmount cf.currency absValue) /\ "table-danger"
-                                            Just (InternalFlow /\ PositiveBigInt absValue) -> ("=" <> formatAmount cf.currency absValue) /\ "table-light"
+                                            Just (IncomingFlow /\ PositiveBigInt absValue) -> ("+" <> formatAmount absValue) /\ "table-success"
+                                            Just (OutgoingFlow /\ PositiveBigInt absValue) -> ("-" <> formatAmount absValue) /\ "table-danger"
+                                            Just (InternalFlow /\ PositiveBigInt absValue) -> ("=" <> formatAmount absValue) /\ "table-light"
                                             _ -> "" /\ ""
                                         else
-                                          formatAmount cf.currency value /\ ""
+                                          formatAmount value /\ ""
 
                                     --   if elem cf.currency currenciesWith6Decimals
                                     --   then show <$> (((_ / 1000000.0) <<< BigInt.toNumber) <$> evalVal cf.amount)
@@ -349,7 +347,7 @@ mkEventList = do
                                     -- ]
                                     DOM.td { className: "text-end " <> cellStyle }
                                       [ text $ moneyInfoStr ]
-                                , tdCentered [ text $ if cf.currency == "" then "₳" else cf.currency ]
+                                , tdCentered [ text $ if elem (toUpper cf.currency) [ "", "ADA" ] then "₳" else cf.currency ]
                                 -- , tdCentered $ Array.singleton $ text $
                                 --     "user role: " <> show userContractRole <> ", sender: " <> show sender <> ", transaction endpoint: " <> show (isJust endpoints.transactions)
                                 , tdCentered $ Array.singleton $ case endpoints.transactions of
@@ -365,7 +363,6 @@ mkEventList = do
                                           [ DOM.span { className: "me-1" } $ Icons.toJSX Icons.eye
                                           , text "Tx details"
                                           ]
-
                                       Nothing -> do
                                         let
                                           button = Lazy.defer \_ -> linkWithIcon
@@ -398,4 +395,3 @@ mkEventList = do
 partyToString :: Party -> String
 partyToString (V1.Address addr) = addr
 partyToString (V1.Role role) = role
-
