@@ -143,6 +143,7 @@ genContract contractTerms cashFlows = reduceContract $ foldl (generator contract
 
   invoice :: Party -> Party -> Token -> Value -> Instant -> Contract -> Contract
   invoice a b token amount timeout continue =
+    -- TODO: Use MerkleizedCase instead
     When [ Case (Deposit a a token amount) (Pay a (Party b) token amount continue) ] timeout Close
 
 currencyToToken :: String -> Token

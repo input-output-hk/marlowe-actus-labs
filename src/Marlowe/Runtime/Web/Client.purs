@@ -28,7 +28,7 @@ import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Fetch (RequestMode(..))
 import Fetch.Core.Headers (Headers, toArray)
-import Marlowe.Runtime.Web.Types (class EncodeHeaders, class EncodeJsonBody, class ToResourceLink, GetContractsResponse, IndexEndpoint(..), ResourceEndpoint(..), ResourceLink(..), ResourceWithLinks, ResourceWithLinksRow, ServerURL(..), decodeResourceWithLink, encodeHeaders, encodeJsonBody, toResourceLink)
+import Marlowe.Runtime.Web.Types (class EncodeHeaders, class EncodeJsonBody, class ToResourceLink, GetContractsResponse, IndexEndpoint(..), PostMerkleizationRequest(..), PostMerkleizationResponse(..), ResourceEndpoint(..), ResourceLink(..), ResourceWithLinks, ResourceWithLinksRow, ServerURL(..), decodeResourceWithLink, encodeHeaders, encodeJsonBody, toResourceLink)
 import Prim.Row (class Lacks) as Row
 import Record as R
 import Safe.Coerce (coerce)
@@ -38,6 +38,7 @@ import Type.Row.Homogeneous (class Homogeneous) as Row
 data ClientError
   = FetchError FetchError
   | ResponseDecodingError JsonDecodeError
+  | MerkleizationError
 
 derive instance Generic ClientError _
 instance Show ClientError where
@@ -84,6 +85,36 @@ getResource (ServerURL serverUrl) (ResourceLink path) extraHeaders = do
     lift (jsonBody res) >>= decode >>> case _ of
       Left err -> throwError (ResponseDecodingError err)
       Right payload -> pure { payload, headers: resHeaders, status }
+
+merkleize
+  :: ServerURL
+  -> PostMerkleizationRequest
+  -> Aff
+       ( Either ClientError
+           { headers :: Headers
+           , payload :: PostMerkleizationResponse
+           , status :: Int
+           }
+       )
+merkleize (ServerURL serverUrl) req = runExceptT do
+  let
+    url = serverUrl <> "/contracts/merkleize"
+    body = stringify $ encodeJsonBody req
+
+    headers :: { "Accept" :: String, "Content-Type" :: String }
+    headers =
+      { "Accept": "application/json"
+      , "Content-Type": "application/json"
+      }
+
+    decode :: Json -> Either JsonDecodeError PostMerkleizationResponse
+    decode json = do
+      decodeResponse json <|> decodeJson json
+
+  res@{ status, headers: resHeaders } <- ExceptT $ fetchEither url { method: POST, body, headers } allowedStatusCodes FetchError
+  lift (jsonBody res) >>= decode >>> case _ of
+    Left err -> throwError (ResponseDecodingError err)
+    Right payload -> pure { payload, headers: resHeaders, status }
 
 getPage
   :: forall a

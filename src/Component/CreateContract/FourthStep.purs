@@ -26,8 +26,8 @@ import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus.Metadata (Metadata(..), actusMetadataKey)
-import Marlowe.Runtime.Web.Client (ClientError, post', put')
-import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractsEndpoint, PostContractsRequest(..), PostContractsResponseContent(..), PutContractRequest(..), Runtime(..), ServerURL, TextEnvelope(..), toTextEnvelope)
+import Marlowe.Runtime.Web.Client (ClientError(..), merkleize, post', put')
+import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractsEndpoint, PostContractsRequest(..), PostContractsResponseContent(..), PostMerkleizationRequest(..), PostMerkleizationResponse(..), PutContractRequest(..), Runtime(..), ServerURL, TextEnvelope(..), toTextEnvelope)
 import Marlowe.Runtime.Web.Types as RT
 import React.Basic (fragment) as DOOM
 import React.Basic.DOM (tbody_, td_, text, tr_) as DOOM
@@ -159,18 +159,28 @@ create contractData serverUrl contractsEndpoint = do
       , counterParty
       }
 
-    req = PostContractsRequest
-      { metadata
-      -- , version :: MarloweVersion
-      -- , roles :: Maybe RolesConfig
-      , contract
-      , minUTxODeposit: V1.Lovelace (BigInt.fromInt 2_000_000)
-      , changeAddress: changeAddress
-      , addresses: usedAddresses <> [ changeAddress ]
-      , collateralUTxOs: []
-      }
+    merkleizationReq = PostMerkleizationRequest { contract }
 
-  post' serverUrl contractsEndpoint req
+  merkleize serverUrl merkleizationReq >>= case _ of
+    Right { headers, payload, status } -> do
+      let
+        PostMerkleizationResponse { contract: merkleized, continuations } = payload
+
+        req = PostContractsRequest
+          { metadata
+          -- , version :: MarloweVersion
+          -- , roles :: Maybe RolesConfig
+          , contract: merkleized
+          , minUTxODeposit: V1.Lovelace (BigInt.fromInt 2_000_000)
+          , changeAddress: changeAddress
+          , addresses: usedAddresses <> [ changeAddress ]
+          , collateralUTxOs: []
+          }
+
+      post' serverUrl contractsEndpoint req
+    Left err -> do
+      traceM err
+      pure $ Left MerkleizationError
 
 submit :: CborHex TransactionWitnessSetObject -> ServerURL -> ContractEndpoint -> Aff _
 submit witnesses serverUrl contractEndpoint = do

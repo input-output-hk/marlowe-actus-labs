@@ -397,6 +397,23 @@ class EncodeJsonBody a where
   encodeJsonBody :: a -> Json
 
 -- API Endpoints
+newtype PostMerkleizationRequest = PostMerkleizationRequest
+  { contract :: V1.Contract
+  }
+
+instance EncodeJsonBody PostMerkleizationRequest where
+  encodeJsonBody (PostMerkleizationRequest r) = encodeJson
+    { contract: r.contract
+    }
+
+newtype PostMerkleizationResponse = PostMerkleizationResponse
+  { contract :: V1.Contract
+  , continuations :: Map String V1.Contract
+  }
+
+derive instance Newtype PostMerkleizationResponse _
+
+derive newtype instance DecodeJson PostMerkleizationResponse
 
 newtype PostContractsRequest = PostContractsRequest
   { metadata :: Metadata
