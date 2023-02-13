@@ -92,9 +92,10 @@ type Props =
   , connectedWallet :: WalletInfo Wallet.Api
   }
 
-mkForm :: ContractTerms
- -> CardanoMultiplatformLib.Lib
- -> BootstrapForm Effect Query Result
+mkForm
+  :: ContractTerms
+  -> CardanoMultiplatformLib.Lib
+  -> BootstrapForm Effect Query Result
 mkForm contractTerms cardanoMultiplatformLib = FormBuilder.evalBuilder ado
   partyAddress <- addressInput cardanoMultiplatformLib "Your address" "" $ Just "party"
   counterPartyAddress <- addressInput cardanoMultiplatformLib "Counter-party address" initialAddress $ Just "counter-party"
@@ -155,58 +156,59 @@ mkComponent = do
         formBody =
           DOM.div { className: "form-group" } $
             fields
-            <> (result >>= fst >>> un V >>> hush) `flip foldMap` \{ cashFlows } -> do
-               Array.singleton $
-                DOM.table { className: "table table-hover" } $
-                  [ DOM.thead {} $
-                      [ DOM.tr {}
-                          [ DOM.th {} [ DOOM.text "Contract Id" ]
-                          , DOM.th {} [ DOOM.text "Type" ]
-                          , DOM.th {} [ DOOM.text "Date" ]
-                          , DOM.th {} [ DOOM.text "Amount" ]
-                          , DOM.th {} [ DOOM.text "Currency" ]
-                          ]
-                      ]
-                  , DOM.tbody {} $ Array.fromFoldable $
-                      map
-                        ( \cashflow ->
-                            let
-                              { contractId, event, paymentDay, amount, currency } = unwrap cashflow
-                            in
-                              [ DOM.tr {}
-                                  [ DOM.td {} [ DOOM.text contractId ]
-                                  , DOM.td {} [ DOOM.text $ show event ]
-                                  , DOM.td {} [ DOOM.text <$> hush (formatDateTime "YYYY-DD-MM HH:mm:ss:SSS" paymentDay) ]
-                                  , DOM.td {}
-                                      [ DOOM.text $ do
-                                          -- empty state and environment at contract creation
-                                          let
-                                            environment = Environment { timeInterval: TimeInterval unixEpoch unixEpoch }
-                                            state = emptyState
-                                          show <<< (_ / 1000000.0) <<< toNumber $ evalValue environment state amount
-                                      ]
-                                  , DOM.td {} [ DOOM.text $ if elem (toUpper currency) [ "", "ADA" ] then "₳" else currency ]
-                                  ]
-                              ]
-                        )
-                        (map toMarloweCashflow cashFlows)
--- =======
---                   , DOM.tbody {} $ Array.fromFoldable $ cashFlows <#> \cashFlow -> do
---                       let
---                         cf = unwrap $ toMarloweCashflow cashFlow
---                       DOM.tr {}
---                         [ DOM.td {} [ DOOM.text cf.contractId ]
---                         , DOM.td {} [ DOOM.text $ show cf.event ]
---                         , DOM.td {} [ DOOM.text <$> hush (formatDateTime "YYYY-DD-MM HH:mm:ss:SSS" cf.paymentDay) ]
---                         , DOM.td {}
---                             [ DOOM.text $ fromMaybe "" $
---                                 if elem cf.currency currenciesWith6Decimals then show <$> (((_ / 1000000.0) <<< toNumber) <$> evalVal cf.amount)
---                                 else toString <$> (evalVal $ DivValue cf.amount (Constant $ fromInt 1000000))
---                             ]
---                         , DOM.td {} [ DOOM.text $ if cf.currency == "" then "₳" else cf.currency ]
---                         ]
--- >>>>>>> e42a028 (Ongoing work on the contract wizzard):src/Component/CreateContract/ThirdStep.purs
-                  ]
+              <> (result >>= fst >>> un V >>> hush) `flip foldMap` \{ cashFlows } -> do
+                Array.singleton
+                  $ DOM.table { className: "table table-hover" }
+                  $
+                    [ DOM.thead {} $
+                        [ DOM.tr {}
+                            [ DOM.th {} [ DOOM.text "Contract Id" ]
+                            , DOM.th {} [ DOOM.text "Type" ]
+                            , DOM.th {} [ DOOM.text "Date" ]
+                            , DOM.th {} [ DOOM.text "Amount" ]
+                            , DOM.th {} [ DOOM.text "Currency" ]
+                            ]
+                        ]
+                    , DOM.tbody {} $ Array.fromFoldable $
+                        map
+                          ( \cashflow ->
+                              let
+                                { contractId, event, paymentDay, amount, currency } = unwrap cashflow
+                              in
+                                [ DOM.tr {}
+                                    [ DOM.td {} [ DOOM.text contractId ]
+                                    , DOM.td {} [ DOOM.text $ show event ]
+                                    , DOM.td {} [ DOOM.text <$> hush (formatDateTime "YYYY-DD-MM HH:mm:ss:SSS" paymentDay) ]
+                                    , DOM.td {}
+                                        [ DOOM.text $ do
+                                            -- empty state and environment at contract creation
+                                            let
+                                              environment = Environment { timeInterval: TimeInterval unixEpoch unixEpoch }
+                                              state = emptyState
+                                            show <<< (_ / 1000000.0) <<< toNumber $ evalValue environment state amount
+                                        ]
+                                    , DOM.td {} [ DOOM.text $ if elem (toUpper currency) [ "", "ADA" ] then "₳" else currency ]
+                                    ]
+                                ]
+                          )
+                          (map toMarloweCashflow cashFlows)
+                    -- =======
+                    --                   , DOM.tbody {} $ Array.fromFoldable $ cashFlows <#> \cashFlow -> do
+                    --                       let
+                    --                         cf = unwrap $ toMarloweCashflow cashFlow
+                    --                       DOM.tr {}
+                    --                         [ DOM.td {} [ DOOM.text cf.contractId ]
+                    --                         , DOM.td {} [ DOOM.text $ show cf.event ]
+                    --                         , DOM.td {} [ DOOM.text <$> hush (formatDateTime "YYYY-DD-MM HH:mm:ss:SSS" cf.paymentDay) ]
+                    --                         , DOM.td {}
+                    --                             [ DOOM.text $ fromMaybe "" $
+                    --                                 if elem cf.currency currenciesWith6Decimals then show <$> (((_ / 1000000.0) <<< toNumber) <$> evalVal cf.amount)
+                    --                                 else toString <$> (evalVal $ DivValue cf.amount (Constant $ fromInt 1000000))
+                    --                             ]
+                    --                         , DOM.td {} [ DOOM.text $ if cf.currency == "" then "₳" else cf.currency ]
+                    --                         ]
+                    -- >>>>>>> e42a028 (Ongoing work on the contract wizzard):src/Component/CreateContract/ThirdStep.purs
+                    ]
         formActions = DOOM.fragment
           [ link
               { label: DOOM.text "Cancel"

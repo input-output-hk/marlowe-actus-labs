@@ -40,6 +40,7 @@ import Type.Row (type (+))
 import Wallet as Wallet
 
 newtype ContractData = ContractData { | FourthStepBaseRow + () }
+
 derive instance Newtype ContractData _
 
 type Props =

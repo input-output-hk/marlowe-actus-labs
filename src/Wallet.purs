@@ -368,7 +368,7 @@ fromSomeAddress lib (SomeAddress s) = do
 
 -- | Manually tested and works with Nami.
 getUsedAddresses :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (Array SomeAddress))
-getUsedAddresses api = toAffEitherE rejectionAPIError <<<  _Api.getUsedAddresses $ api
+getUsedAddresses api = toAffEitherE rejectionAPIError <<< _Api.getUsedAddresses $ api
 
 -- | Manually tested and works with Nami.
 getUtxos

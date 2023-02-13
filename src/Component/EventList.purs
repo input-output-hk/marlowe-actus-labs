@@ -132,61 +132,61 @@ mkEventList = do
         -- FIXME: move aff flow into `useAff` on the component level
         launchAff_ $ do
           case possibleWalletContext of
-              Just { changeAddress: Just changeAddress } -> do
+            Just { changeAddress: Just changeAddress } -> do
 
-                addresses <- walletAddresses cardanoMultiplatformLib cw
+              addresses <- walletAddresses cardanoMultiplatformLib cw
 
-                let
-                  inputs = singleton $ IDeposit party party token value
+              let
+                inputs = singleton $ IDeposit party party token value
 
-                  invalidBefore = fromMaybe now $ adjust (Duration.Minutes (-2.0)) now
-                  invalidHereafter = fromMaybe now $ adjust (Duration.Minutes 2.0) now
-                  collateralUTxOs = []
+                invalidBefore = fromMaybe now $ adjust (Duration.Minutes (-2.0)) now
+                invalidHereafter = fromMaybe now $ adjust (Duration.Minutes 2.0) now
+                collateralUTxOs = []
 
-                  req = PostTransactionsRequest
-                    { inputs
-                    , invalidBefore
-                    , invalidHereafter
-                    , metadata: mempty
-                    , changeAddress
-                    , addresses
-                    , collateralUTxOs
-                    }
+                req = PostTransactionsRequest
+                  { inputs
+                  , invalidBefore
+                  , invalidHereafter
+                  , metadata: mempty
+                  , changeAddress
+                  , addresses
+                  , collateralUTxOs
+                  }
 
-                post' runtime.serverURL transactionsEndpoint req
-                  >>= case _ of
-                    Right ({ resource: PostTransactionsResponse postTransactionsResponse, links: { transaction: transactionEndpoint } }) -> do
-                      traceM postTransactionsResponse
-                      let
-                        { txBody: tx } = postTransactionsResponse
-                        TextEnvelope { cborHex: txCborHex } = tx
-                      Wallet.signTx cw txCborHex true >>= case _ of
-                        Right witnessSet -> do
-                          submit witnessSet runtime.serverURL transactionEndpoint >>= case _ of
-                            Right _ -> do
-                              traceM "Successfully submitted the transaction"
-                              liftEffect $ msgHubProps.add $ Success $ DOOM.text $ "Successfully submitted a transaction"
-                            -- liftEffect $ onSuccess contractEndpoint
-                            Left err -> do
-                              traceM "Error while submitting the transaction"
-                              liftEffect $ msgHubProps.add $ Error $ DOOM.text $ "Error while submitting the transaction"
-                              traceM err
+              post' runtime.serverURL transactionsEndpoint req
+                >>= case _ of
+                  Right ({ resource: PostTransactionsResponse postTransactionsResponse, links: { transaction: transactionEndpoint } }) -> do
+                    traceM postTransactionsResponse
+                    let
+                      { txBody: tx } = postTransactionsResponse
+                      TextEnvelope { cborHex: txCborHex } = tx
+                    Wallet.signTx cw txCborHex true >>= case _ of
+                      Right witnessSet -> do
+                        submit witnessSet runtime.serverURL transactionEndpoint >>= case _ of
+                          Right _ -> do
+                            traceM "Successfully submitted the transaction"
+                            liftEffect $ msgHubProps.add $ Success $ DOOM.text $ "Successfully submitted a transaction"
+                          -- liftEffect $ onSuccess contractEndpoint
+                          Left err -> do
+                            traceM "Error while submitting the transaction"
+                            liftEffect $ msgHubProps.add $ Error $ DOOM.text $ "Error while submitting the transaction"
+                            traceM err
 
-                        Left err -> do
-                          traceM err
-                          pure unit
+                      Left err -> do
+                        traceM err
+                        pure unit
 
-                      pure unit
-                    Left _ -> do
-                      traceM token
-                      traceM $ BigInt.toString value
-                      traceM "error"
-                      pure unit
+                    pure unit
+                  Left _ -> do
+                    traceM token
+                    traceM $ BigInt.toString value
+                    traceM "error"
+                    pure unit
 
-                pure unit
-              _ -> do
-                -- Note: this happens, when the contract is in status `Unsigned`
-                pure unit
+              pure unit
+            _ -> do
+              -- Note: this happens, when the contract is in status `Unsigned`
+              pure unit
 
         updateState _ { newInput = Nothing }
 

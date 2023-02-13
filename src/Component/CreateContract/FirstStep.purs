@@ -59,7 +59,7 @@ contractFormTypeChoiceField = do
   let
     dual = Batteries.stringifyDual $ UrlEncoded.Duals.enum (Proxy :: Proxy ContractFormTypeChoice)
 
-    serialize ∷ ContractFormTypeChoice → String
+    serialize :: ContractFormTypeChoice -> String
     serialize = Duals.runSerializer dual
 
     validator = requiredV' $ Polyform.Dual.parser dual
@@ -71,11 +71,11 @@ contractFormTypeChoiceField = do
         disabled = not $ a `Array.elem` [ JsonForm, AmortizingLoans ]
         helpText = Just $ contractFormTypeChoiceToHelpText a
       { label, value, disabled, helpText }
-    choices = map asChoice (upFromIncluding bottom ∷ ArrayAL 1 ContractFormTypeChoice)
+    choices = map asChoice (upFromIncluding bottom :: ArrayAL 1 ContractFormTypeChoice)
     initial = _.value <<< ArrayAL.head $ choices
     fieldChoices = RadioButtonFieldChoices
       { switch: true
-      , choices: map asChoice (upFromIncluding bottom ∷ ArrayAL 1 ContractFormTypeChoice)
+      , choices: map asChoice (upFromIncluding bottom :: ArrayAL 1 ContractFormTypeChoice)
       }
   choiceField { initial, choices: fieldChoices, validator, touched: true }
 

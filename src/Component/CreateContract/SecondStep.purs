@@ -151,9 +151,8 @@ contractRoleField = do
       }
   choiceField'
     (UseSelectField choiceConfig)
-    (Just $ ArrayAL.solo' A.CR_RPA [A.CR_RPL])
+    (Just $ ArrayAL.solo' A.CR_RPA [ A.CR_RPL ])
     { label: Just $ DOOM.text "Contract role" }
-
 
 -- |DayCountConvention
 -- data DCC
@@ -184,7 +183,6 @@ dayCountConventionField = do
     (UseSelectField choiceConfig)
     Nothing
     { label: Just $ DOOM.text "Day count convention" }
-
 
 -- FIXME: Implemnt cycle widget
 -- -- |CyclePeriod
@@ -245,7 +243,7 @@ cycleField label = formBuilder do
   form <- unFormBuilder $ ado
     n <- do
       let
-        choices = SelectFieldChoices $ ArrayAL.solo' 1 (2..31) <#> \i -> selectFieldChoice (show i) (show i)
+        choices = SelectFieldChoices $ ArrayAL.solo' 1 (2 .. 31) <#> \i -> selectFieldChoice (show i) (show i)
         choiceConfig =
           { choices
           , validator: requiredV' $ Batteries.stringifyValidator Batteries.Int.validator
@@ -259,7 +257,6 @@ cycleField label = formBuilder do
     in { n, p, stub, includeEndDay: false }
 
   pure $ renderMultiField label $ form
-
 
 scheduleConfigField :: FormBuilder' _ _
 scheduleConfigField = formBuilder do
@@ -276,7 +273,8 @@ scheduleConfigField = formBuilder do
         (UseSelectField choiceConfig)
         Nothing
         { inline: true }
-        -- { label: Just $ DOOM.text "Calendar" }
+
+    -- { label: Just $ DOOM.text "Calendar" }
 
     businessDayConventionField :: FormBuilder' Effect A.BDC
     businessDayConventionField = do
@@ -290,7 +288,8 @@ scheduleConfigField = formBuilder do
         (UseSelectField choiceConfig)
         Nothing
         { inline: true }
-        -- { label: Just $ DOOM.text "Business day convention" }
+
+    -- { label: Just $ DOOM.text "Business day convention" }
 
     endOfMonthConventionField :: FormBuilder' Effect A.EOMC
     endOfMonthConventionField = do
@@ -304,7 +303,7 @@ scheduleConfigField = formBuilder do
         (UseSelectField choiceConfig)
         Nothing
         { inline: true }
-        -- { label: Just $ DOOM.text "End of month convention" }
+  -- { label: Just $ DOOM.text "End of month convention" }
 
   form <- unFormBuilder $ ado
     calendar <- calendarField
@@ -344,7 +343,7 @@ mkAmortizingLoanForm = FormBuilder.evalBuilder ado
     -- FIXME: Implement currency choice
     currency = "DjedTestUSD"
 
-    -- initialExchangeDate = "2024-01-01T00:00:00", """
+  -- initialExchangeDate = "2024-01-01T00:00:00", """
   cycleOfInterestPayment <- cycleField (Just $ DOOM.text "Cycle of interest payment")
 
   initialExchangeDate <- dateTimeField $ Just $ DOOM.text "Initial exchange date"
@@ -367,26 +366,27 @@ mkAmortizingLoanForm = FormBuilder.evalBuilder ado
   rateMultiplier <- decimalInput
     { label: Just $ DOOM.text "Rate multiplier" }
 
-  in mkContractTerms
-    { contractType
-    , contractId
-    , dayCountConvention: Just dayCountConvention
-    , statusDate: statusDate
-    , scheduleConfig:
-      { calendar: Just calendar
-      , businessDayConvention: Just businessDayConvention
-      , endOfMonthConvention: Just endOfMonthConvention
+  in
+    mkContractTerms
+      { contractType
+      , contractId
+      , dayCountConvention: Just dayCountConvention
+      , statusDate: statusDate
+      , scheduleConfig:
+          { calendar: Just calendar
+          , businessDayConvention: Just businessDayConvention
+          , endOfMonthConvention: Just endOfMonthConvention
+          }
+      , contractRole
+      , cycleOfInterestPayment: Just cycleOfInterestPayment
+      , initialExchangeDate: Just initialExchangeDate
+      , cycleAnchorDateOfInterestPayment: Just cycleAnchorDateOfInterestPayment
+      , maturityDate: Just maturityDate
+      , nominalInterestRate: Just nominalInterestRate
+      , notionalPrincipal: Just notionalPrincipal
+      , premiumDiscountAtIED: Just premiumDiscountAtIED
+      , rateMultiplier: Just rateMultiplier
       }
-    , contractRole
-    , cycleOfInterestPayment: Just cycleOfInterestPayment
-    , initialExchangeDate: Just initialExchangeDate
-    , cycleAnchorDateOfInterestPayment: Just cycleAnchorDateOfInterestPayment
-    , maturityDate: Just maturityDate
-    , nominalInterestRate: Just nominalInterestRate
-    , notionalPrincipal: Just notionalPrincipal
-    , premiumDiscountAtIED: Just premiumDiscountAtIED
-    , rateMultiplier: Just rateMultiplier
-    }
 
 -- cp1 : {address: {…}}
 -- pa1 : {address: {…}}
@@ -410,17 +410,16 @@ mkAmortizingLoanForm = FormBuilder.evalBuilder ado
 -- pdied : "0"
 -- rrmlt : "1"
 
-
 mkJsonForm :: _ -> BootstrapForm Effect Query Result
 mkJsonForm cardanoMultiplatformLib = FormBuilder.evalBuilder $ FormBuilder.textArea
-    { missingError: "Please provide contract terms JSON value"
-    , initial: initialJson
-    , validator: requiredV' $ Validator.liftFnEither \jsonString -> do
-        json <- lmap (const $ [ "Invalid JSON" ]) $ parseJson jsonString
-        lmap (Array.singleton <<< show) (decodeJson json)
-    , rows: 15
-    , name: (Just $ "contract-terms")
-    }
+  { missingError: "Please provide contract terms JSON value"
+  , initial: initialJson
+  , validator: requiredV' $ Validator.liftFnEither \jsonString -> do
+      json <- lmap (const $ [ "Invalid JSON" ]) $ parseJson jsonString
+      lmap (Array.singleton <<< show) (decodeJson json)
+  , rows: 15
+  , name: (Just $ "contract-terms")
+  }
 
 type Props =
   { contractFormTypeChoice :: ContractFormTypeChoice
@@ -480,9 +479,9 @@ mkComponent = do
         { title: R.text "Add contract | Step 2 of 4"
         , onDismiss
         , body: DOM.div { className: "row" }
-          [ DOM.div { className: "col-9" } [ formBody ]
-          , DOM.div { className: "col-3" } [ DOOM.text "TEST" ]
-          ]
+            [ DOM.div { className: "col-9" } [ formBody ]
+            , DOM.div { className: "col-3" } [ DOOM.text "TEST" ]
+            ]
         , footer: formActions
         , size: Modal.ExtraLarge
         }
@@ -510,6 +509,4 @@ initialJson = String.joinWith "\n"
   , """ "contractRole": "RPA" """
   , "}"
   ]
-
-
 

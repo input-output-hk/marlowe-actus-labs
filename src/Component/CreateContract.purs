@@ -34,7 +34,6 @@ type Props =
 --                   msgHubProps.add $ Error $ DOOM.text err
 --                 Nothing -> pure unit
 
-
 -- FIXME: add submit testing to the wizzard
 -- useEffectOnce $ do
 --   when testingSubmit do
@@ -61,7 +60,6 @@ type Props =
 --         pure unit
 --   pure (pure unit)
 
-
 mkComponent :: MkComponentM (Props -> JSX)
 mkComponent = do
   firstStepComponent <- FirstStep.mkComponent
@@ -75,7 +73,7 @@ mkComponent = do
       FirstStep -> firstStepComponent
         { onDismiss
         , onSuccess: \result -> do
-          setStep $ SecondStep result
+            setStep $ SecondStep result
         , inModal
         }
       SecondStep contractFormTypeChoice -> secondStepComponent
@@ -90,11 +88,11 @@ mkComponent = do
         , connectedWallet
         , onDismiss
         , onSuccess: \r -> do
-          let
-            r' = Record.merge
-              r
-              input
-          setStep $ FourthStep r'
+            let
+              r' = Record.merge
+                r
+                input
+            setStep $ FourthStep r'
         , inModal: true
         }
       FourthStep r -> do
@@ -105,9 +103,8 @@ mkComponent = do
           { contractData
           , connectedWallet
           , onSuccess: \result -> do
-             onSuccess result
+              onSuccess result
           , onDismiss
           , inModal
           }
-
 

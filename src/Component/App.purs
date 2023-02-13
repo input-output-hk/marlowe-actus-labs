@@ -169,16 +169,16 @@ mkApp = do
       case pwi, pwc of
         Nothing, Nothing -> pure unit
         Nothing, Just _ -> do
-           liftEffect $ setWalletContext Nothing
+          liftEffect $ setWalletContext Nothing
         Just (WalletInfo walletInfo), _ -> do
           let
             action = do
               walletContext <- WalletContext.walletContext cardanoMultiplatformLib walletInfo.wallet
               liftEffect $ setWalletContext $ Just walletContext
           action `catchError` \_ -> do
-             -- FIXME: Report back (to the reporting backend) a wallet problem?
-             traceM "ERROR during wallet context construction"
-             pure unit
+            -- FIXME: Report back (to the reporting backend) a wallet problem?
+            traceM "ERROR during wallet context construction"
+            pure unit
 
     configuringWallet /\ setConfiguringWallet <- useState' false
     checkingNotifications /\ setCheckingNotifications <- useState' false

@@ -27,12 +27,15 @@ derive instance Ord ContractFormTypeChoice
 derive instance Generic ContractFormTypeChoice _
 instance Show ContractFormTypeChoice where
   show = genericShow
+
 instance Enum ContractFormTypeChoice where
   succ = genericSucc
   pred = genericPred
+
 instance Bounded ContractFormTypeChoice where
   bottom = genericBottom
   top = genericTop
+
 instance BoundedEnum ContractFormTypeChoice where
   cardinality = genericCardinality
   toEnum = genericToEnum
@@ -49,12 +52,15 @@ derive instance Ord AmortizingLoanChoice
 derive instance Generic AmortizingLoanChoice _
 instance Show AmortizingLoanChoice where
   show = genericShow
+
 instance Enum AmortizingLoanChoice where
   succ = genericSucc
   pred = genericPred
+
 instance Bounded AmortizingLoanChoice where
   bottom = genericBottom
   top = genericTop
+
 instance BoundedEnum AmortizingLoanChoice where
   cardinality = genericCardinality
   toEnum = genericToEnum

@@ -717,7 +717,8 @@ renderChoiceField { choices, id, inline, possibleHelpText, possibleLabel, name }
 
           { isValid, isInvalid } = fieldValidity touched selectedValue errors
 
-          select = Bootstrap.Form.select
+          select =
+            Bootstrap.Form.select
               { onChange: onChangeHandler
               , className: if inline then "mb-md-1" else ""
               , value: selectedValue
@@ -727,8 +728,7 @@ renderChoiceField { choices, id, inline, possibleHelpText, possibleLabel, name }
               , isInvalid
               } $
               map renderOption (ArrayAL.toArray choices')
-        if inline
-        then select
+        if inline then select
         else DOM.div { className: "col-sm-9" } $
           [ select
           ]
@@ -739,8 +739,8 @@ renderChoiceField { choices, id, inline, possibleHelpText, possibleLabel, name }
                   }
               ]
 
-  pure $ if inline
-    then DOM.div { className: "col-12 flex-fill" } [ label, body ]
+  pure $
+    if inline then DOM.div { className: "col-12 flex-fill" } [ label, body ]
     else DOM.div { className: "row mb-2" } [ label, body ]
 
 choiceField
@@ -843,5 +843,4 @@ choiceField' useElement possibleArr props = do
       }
       props
   choiceField props'
-
 

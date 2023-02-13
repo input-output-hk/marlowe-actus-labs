@@ -24,7 +24,6 @@ fieldForm name fieldValidator = do
       Array.head value
   UrlEncoded.fromValidator name validator'
 
-
-requiredV msg v = v <<< Validator.liftFnEither (note [msg])
+requiredV msg v = v <<< Validator.liftFnEither (note [ msg ])
 
 requiredV' v = requiredV "This field is required" v
