@@ -1,4 +1,4 @@
-module Component.SubmitContract where
+module Component.CreateContract.FourthStep where
 
 import Prelude
 
@@ -7,7 +7,7 @@ import CardanoMultiplatformLib (CborHex)
 import CardanoMultiplatformLib.Lib as Lib
 import CardanoMultiplatformLib.Transaction (TransactionWitnessSetObject)
 import CardanoMultiplatformLib.Types (cborHexToCbor)
-import Component.CreateContract as CreateContract
+import Component.CreateContract.Types (FourthStepBaseRow)
 import Component.Modal (mkModal)
 import Component.Modal as Modal
 import Component.Types (MkComponentM, WalletInfo(..))
@@ -19,6 +19,7 @@ import Data.Argonaut (encodeJson)
 import Data.BigInt.Argonaut as BigInt
 import Data.Either (Either(..))
 import Data.Map as Map
+import Data.Newtype (class Newtype)
 import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
@@ -35,10 +36,14 @@ import React.Basic.DOM.Simplified.Generated as DOM
 import React.Basic.Events (handler)
 import React.Basic.Hooks (JSX, component, useState', (/\))
 import React.Basic.Hooks as React
+import Type.Row (type (+))
 import Wallet as Wallet
 
+newtype ContractData = ContractData { | FourthStepBaseRow + () }
+derive instance Newtype ContractData _
+
 type Props =
-  { contractData :: CreateContract.Result
+  { contractData :: ContractData
   , inModal :: Boolean
   , onDismiss :: Effect Unit
   , onSuccess :: ContractEndpoint -> Effect Unit
@@ -51,13 +56,13 @@ data SubmissionStep
   | Signing (Either String PostContractsResponseContent)
   | Signed (Either ClientError PostContractsResponseContent)
 
-mkSubmitContract :: MkComponentM (Props -> JSX)
-mkSubmitContract = do
+mkComponent :: MkComponentM (Props -> JSX)
+mkComponent = do
   Runtime runtime <- asks _.runtime
   modal <- liftEffect mkModal
   cardanoMultiplatformLib <- asks _.cardanoMultiplatformLib
 
-  liftEffect $ component "SubmitContract" \{ contractData, connectedWallet, inModal, onDismiss, onSuccess } -> React.do
+  liftEffect $ component "SubmitContract" \{ contractData: contractData@(ContractData contractDataRec), connectedWallet, inModal, onDismiss, onSuccess } -> React.do
     step /\ setStep <- useState' Creating
     let
       onSubmit = handler preventDefault \_ -> do
@@ -94,15 +99,15 @@ mkSubmitContract = do
       let
         body = table { striped: Table.striped.boolean true, responsive: Table.responsive.sm, size: Table.sm } do
           let
-            ContractTerms ct = contractData.contractTerms
+            ContractTerms ct = contractDataRec.contractTerms
             row header value = DOOM.tr_ do
               [ DOM.th { scope: "row" } [ DOOM.text header ]
               , DOOM.td_
                   [ DOM.div { className: "text-truncate w-32rem" } [ DOOM.text value ] ]
               ]
           DOOM.tbody_ do
-            [ row "Party (you)" (partyToString $ contractData.party)
-            , row "Counterparty" (partyToString $ contractData.counterParty)
+            [ row "Party (you)" (partyToString $ contractDataRec.party)
+            , row "Counterparty" (partyToString $ contractDataRec.counterParty)
             , row "Contract type" (show ct.contractType)
             ]
         -- FIXME: Introduce nice rendering of a contract here
@@ -143,10 +148,10 @@ mkSubmitContract = do
           , footer
           ]
 
-create :: CreateContract.Result -> ServerURL -> ContractsEndpoint -> Aff _
+create :: ContractData -> ServerURL -> ContractsEndpoint -> Aff _
 create contractData serverUrl contractsEndpoint = do
   let
-    { contractTerms, contract, party, counterParty, changeAddress, usedAddresses } = contractData
+    ContractData { contractTerms, contract, party, counterParty, changeAddress, usedAddresses } = contractData
     metadata = RT.Metadata $ Map.singleton actusMetadataKey $ encodeJson $ Metadata
       { contractTerms: contractTerms
       , party

@@ -12,7 +12,6 @@ import Data.Argonaut (Json, decodeJson, (.:))
 import Data.Map as Map
 import Data.Maybe (Maybe(..), isJust, maybe)
 import Data.Tuple.Nested ((/\))
-import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Milliseconds(..), delay, launchAff_)
 import Effect.Class (liftEffect)
@@ -87,13 +86,8 @@ main configJson = do
     let
       reqInterval = RequestInterval (Milliseconds 50.0)
       pollInterval = PollingInterval (Milliseconds 20_000.0)
-      isActus { resource: Runtime.ContractHeader { metadata: Runtime.Metadata md } } = do
-        let
-          actus = isJust $ Map.lookup actusMetadataKey md
-          x = do
-            actusJson <- Map.lookup actusMetadataKey md
-            traceM actusJson
-        actus
+      isActus { resource: Runtime.ContractHeader { metadata: Runtime.Metadata md } } =
+        isJust $ Map.lookup actusMetadataKey md
 
     contractStream <- Streaming.mkContractsWithTransactions pollInterval reqInterval isActus config.marloweWebServerUrl
 

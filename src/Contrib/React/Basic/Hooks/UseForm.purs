@@ -9,6 +9,8 @@ module Contrib.React.Basic.Hooks.UseForm where
 
 import Prelude
 
+import Contrib.Data.Foldable (foldMapFlipped)
+import Contrib.Polyform.Batteries.UrlEncoded (fieldForm)
 import Data.Array as Array
 import Data.Array.NonEmpty (NonEmptyArray)
 import Data.Either (Either(..))
@@ -43,10 +45,14 @@ import Utils.React.Basic.Hooks (useDebounce)
 type FieldInitialsRow r =
   ( name :: FieldId
   , initial :: Array String
+  -- Should we treat the field as "touched" from the begining
   | r
   )
 
-type FieldInitials = { | FieldInitialsRow () }
+type FieldInitials =
+  { touched :: Boolean
+  | FieldInitialsRow ()
+  }
 
 type RenderFn err doc = FormState err -> doc
 
@@ -86,12 +92,15 @@ instance (Monad m, Semigroup doc) => Semigroupoid (Form m doc err) where
 instance (Monad m, Monoid doc) => Category (Form m doc err) where
   identity = Form { fields: mempty, validator: identity, render: mempty }
 
+liftValidator :: forall m doc err i o. Monoid doc => UrlEncoded.Validator m err i o -> Form m doc err i o
+liftValidator validator = Form { fields: [], validator, render: const mempty }
+
 hoistForm :: forall doc err m m' i o. Functor m => (m ~> m') -> Form m doc err i o -> Form m' doc err i o
 hoistForm f (Form { fields, validator, render }) =
   Form { fields, validator: Validator.hoist f validator, render }
 
 type InputFieldStateRow err r =
-  ( errors :: Maybe (Array err) -- `Maybe` indicates if a field was validated
+  ( errors :: Maybe (Array err /\ Array String) -- `Maybe` indicates if a field was validated
   , onChange :: String -> Effect Unit
   , touched :: Boolean
   , value :: String
@@ -119,13 +128,13 @@ input
   => Monoid doc
   => FieldId
   -> String
-  -> err
   -> RenderInputFn err doc
-  -> Batteries.Validator m err String a
+  -> Boolean
+  -> Batteries.Validator m err (Maybe String) a
   -> Form m doc err Query a
-input name initial err render validator = Form
-  { fields: [ { name, initial: [ initial ] } ]
-  , validator: Validators.required name err $ validator
+input name initial render touched validator = Form
+  { fields: [ { name, initial: [ initial ], touched } ]
+  , validator: fieldForm name validator
   , render: \state -> do
       let
         doc = Map.lookup name state.fields <#> render <<< toInputState
@@ -139,10 +148,11 @@ optInput
   => FieldId
   -> String
   -> RenderInputFn err doc
+  -> Boolean
   -> Validators.SingleValueFieldValidator m err a
   -> Form m doc err Query (Maybe a)
-optInput name initial render validator = Form
-  { fields: [ { name, initial: [ initial ] } ]
+optInput name initial render touched validator = Form
+  { fields: [ { name, initial: [ initial ], touched } ]
   , validator: Validators.optional name $ validator
   , render: \state -> do
       let
@@ -157,10 +167,11 @@ multiSelect
   -> Array String
   -> err
   -> RenderFn err doc
+  -> Boolean
   -> Batteries.Validator m err (NonEmptyArray String) (NonEmptyArray a)
   -> Form m doc err Query (NonEmptyArray a)
-multiSelect name initial err render validator = Form
-  { fields: [ { name, initial } ]
+multiSelect name initial err render touched validator = Form
+  { fields: [ { name, initial, touched } ]
   , validator: Validators.requiredMulti name err $ validator
   , render
   }
@@ -168,7 +179,7 @@ multiSelect name initial err render validator = Form
 type Props doc err o =
   { onSubmit ::
       { payload :: Query
-      , result :: Maybe (V (UrlEncoded.Errors err) o)
+      , result :: Maybe ((V (UrlEncoded.Errors err) o) /\ Query)
       }
       -> Effect Unit
   , spec :: Form Effect doc err Query o
@@ -177,7 +188,7 @@ type Props doc err o =
 
 newtype UseForm err o hooks = UseForm
   ( UseState (Set FieldId) hooks
-      & UseState (Maybe (V (UrleEncoded.Errors err) o))
+      & UseState (Maybe ((V (UrleEncoded.Errors err) o) /\ Query))
       & UseMemo (Array FieldInitials) Query
       & UseState Query
       & UseState Query
@@ -188,7 +199,7 @@ newtype UseForm err o hooks = UseForm
 derive instance Newtype (UseForm o err hooks) _
 
 type FieldStateRow err r =
-  ( errors :: Maybe (Array err)
+  ( errors :: Maybe (Array err /\ Array String) -- `Maybe` indicates if a field was validated
   , onChange :: Array String -> Effect Unit
   , touched :: Disj Boolean
   , value :: Array String
@@ -204,19 +215,20 @@ type FieldsState err = Map FieldId (FieldState err)
 
 type FormState err =
   { fields :: FieldsState err
-  , errors :: Maybe (UrleEncoded.Errors err)
+  , errors :: Maybe (UrleEncoded.Errors err /\ Query)
   -- , state :: state
   }
 
 type Result err o =
   { formState :: FormState err
   , onSubmit :: EffectFn1 SyntheticEvent Unit
-  , result :: Maybe (V (UrlEncoded.Errors err) o)
+  , result :: Maybe ((V (UrlEncoded.Errors err) o) /\ Query)
   }
 
 useForm :: forall doc err o. Props doc err o -> Hook (UseForm err o) (Result err o)
 useForm ({ spec: Form { fields, validator }, onSubmit, validationDebounce }) = React.coerceHook React.do
-  touched /\ updateTouched <- useState (mempty :: Set FieldId)
+  touched /\ updateTouched <- useState $ foldMapFlipped fields \{ name, touched } ->
+    if touched then Set.singleton name else Set.empty
   validationResult /\ setValidationResult <- useState' Nothing
 
   initialPayload <- useMemo fields \_ -> do
@@ -231,7 +243,7 @@ useForm ({ spec: Form { fields, validator }, onSubmit, validationDebounce }) = R
   useEffect debouncedPayload do
     when (not <<< null $ touched) do
       result <- runValidator validator debouncedPayload
-      setValidationResult $ Just result
+      setValidationResult $ Just (result /\ debouncedPayload)
     pure $ pure unit
 
   let
@@ -248,16 +260,22 @@ useForm ({ spec: Form { fields, validator }, onSubmit, validationDebounce }) = R
       let
         value = fromMaybe [] $ Query.lookup name currPayload
         fieldErrors = do
-          V res <- validationResult
+          V res /\ query <- validationResult
           case res of
-            Left errs -> pure $ Errors.lookup (coerce name) errs
-            Right _ -> pure []
+            Left errs -> do
+              let
+                errs' = Errors.lookup (coerce name) errs
+              val' <- Query.lookup name query
+              pure $ errs' /\ val'
+            Right _ -> do
+              val' <- Query.lookup name query
+              pure $ [] /\ val'
       (name /\ { name, initial, value, errors: fieldErrors, touched: Disj (name `Set.member` touched), onChange: updateField name })
     formState =
       { fields: fieldsState
       , errors: validationResult >>= case _ of
-          V (Left errs) -> Just errs
-          V (Right _) -> Nothing
+          V (Left errs) /\ query -> Just (errs /\ query)
+          V (Right _) /\ _ -> Nothing
       }
-  pure { formState, onSubmit: onSubmit', result: validationResult }
+  pure { formState: formState, onSubmit: onSubmit', result: validationResult }
 

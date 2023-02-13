@@ -4,6 +4,7 @@ module Wallet
   , Cbor(..)
   , Coin
   , HashObject32(..)
+  , SomeAddress(..)
   , Transaction(..)
   , TransactionUnspentOutput
   , Value(..)
@@ -13,6 +14,7 @@ module Wallet
   , enable
   , enable_
   , eternl
+  , fromSomeAddress
   , gerowallet
   , getBalance
   , getChangeAddress
@@ -39,6 +41,7 @@ import Prelude
 import CardanoMultiplatformLib (AddressObject, Bech32, CborHex, bech32FromCborHex, bech32FromString, runGarbageCollector)
 import CardanoMultiplatformLib as CardanoMultiplatformLib
 import CardanoMultiplatformLib.Transaction (TransactionObject, TransactionUnspentOutputObject, TransactionWitnessSetObject, TransactionHashObject)
+import CardanoMultiplatformLib.Types (unsafeCborHex)
 import Control.Alt ((<|>))
 import Control.Monad.Except (runExcept, runExceptT)
 import Data.Either (Either(..), either, hush)
@@ -47,11 +50,11 @@ import Data.List.NonEmpty (NonEmptyList)
 import Data.Maybe (Maybe(..), fromMaybe')
 import Data.Nullable (Nullable)
 import Data.Nullable as Nullable
+import Data.Traversable (for)
 import Data.Tuple.Nested (type (/\), (/\))
 import Data.Undefined.NoProblem (undefined)
 import Data.Variant (Variant)
 import Data.Variant as Variant
-import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, makeAff)
 import Effect.Class (liftEffect)
@@ -59,6 +62,7 @@ import Effect.Exception (throw)
 import Foreign (Foreign, ForeignError)
 import Foreign as Foreign
 import Foreign.Index as Foreign.Index
+import HexString as HexString
 import JS.Object (EffectMth0, EffectMth1, EffectMth2, EffectProp, JSObject)
 import JS.Object.Generic (mkFFI)
 import Prim.TypeError (class Warn, Text)
@@ -193,9 +197,9 @@ type Api = JSObject
   , getUtxos :: EffectMth0 (Promise (Nullable (Array (CborHex TransactionUnspentOutputObject))))
   , getCollateral :: EffectMth1 (Cbor Coin) (Promise (Nullable (Array (Cbor TransactionUnspentOutput))))
   , getBalance :: EffectMth0 (Promise (Cbor Value))
-  , getUsedAddresses :: EffectMth0 (Promise (Array (CborHex AddressObject)))
+  , getUsedAddresses :: EffectMth0 (Promise (Array SomeAddress))
   , getUnusedAddresses :: EffectMth0 (Promise (Array (CborHex AddressObject)))
-  , getChangeAddress :: EffectMth0 (Promise (CborHex AddressObject))
+  , getChangeAddress :: EffectMth0 (Promise SomeAddress)
   , getRewardAddresses :: EffectMth0 (Promise (Array (CborHex AddressObject)))
   , signTx :: EffectMth2 (CborHex TransactionObject) Boolean (Promise (CborHex TransactionWitnessSetObject))
   , signData :: EffectMth2 (CborHex AddressObject) Bytes (Promise Bytes)
@@ -204,12 +208,12 @@ type Api = JSObject
 
 _Api
   :: { getBalance :: Api -> Effect (Promise (Cbor Value))
-     , getChangeAddress :: Api -> Effect (Promise (CborHex AddressObject))
+     , getChangeAddress :: Api -> Effect (Promise SomeAddress)
      , getCollateral :: Api -> Cbor Coin -> Effect (Promise (Nullable (Array (Cbor TransactionUnspentOutput))))
      , getNetworkId :: Api -> Effect (Promise Int)
      , getRewardAddresses :: Api -> Effect (Promise (Array (CborHex AddressObject)))
      , getUnusedAddresses :: Api -> Effect (Promise (Array (CborHex AddressObject)))
-     , getUsedAddresses :: Api -> Effect (Promise (Array (CborHex AddressObject)))
+     , getUsedAddresses :: Api -> Effect (Promise (Array SomeAddress))
      , getUtxos :: Api -> Effect (Promise (Nullable (Array (CborHex TransactionUnspentOutputObject))))
      , signData :: Api -> CborHex AddressObject -> Bytes -> Effect (Promise Bytes)
      , signTx :: Api -> CborHex TransactionObject -> Boolean -> Effect (Promise (CborHex TransactionWitnessSetObject))
@@ -331,7 +335,7 @@ getBalance :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErro
 getBalance = toAffEitherE rejectionAPIError <<< _Api.getBalance
 
 -- | Manually tested and works with Nami.
-getChangeAddress :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (CborHex AddressObject))
+getChangeAddress :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) SomeAddress)
 getChangeAddress = toAffEitherE rejectionAPIError <<< _Api.getChangeAddress
 
 -- | Manually tested and works with Nami.
@@ -352,10 +356,18 @@ newtype SomeAddress = SomeAddress String
 
 fromSomeAddress :: CardanoMultiplatformLib.Lib -> SomeAddress -> Effect (Maybe Bech32)
 fromSomeAddress lib (SomeAddress s) = do
-  (<|>) <*> bech32FromString lib s <*> runGarbageCollector lib (bech32FromCborHex (cborHex s) undefined)
+  let
+    parseString = bech32FromString lib s
+    parseCborHex = runGarbageCollector lib do
+      for (HexString.hex s) \hex -> do
+        let
+          cborHex = unsafeCborHex hex
+        bech32FromCborHex cborHex undefined
+
+  (<|>) <$> parseString <*> parseCborHex
 
 -- | Manually tested and works with Nami.
-getUsedAddresses :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (Array (CborHex AddressObject)))
+getUsedAddresses :: forall r. Api -> Aff (Either (Variant (| ApiError + ApiForeignErrors + UnknownError r)) (Array SomeAddress))
 getUsedAddresses api = toAffEitherE rejectionAPIError <<<  _Api.getUsedAddresses $ api
 
 -- | Manually tested and works with Nami.

@@ -7,18 +7,23 @@ import Component.Modal (mkModal)
 import Component.Modal as Modal
 import Component.Types (MkComponentM)
 import Component.Widgets (link)
+import Contrib.Polyform.Batteries.UrlEncoded (requiredV')
 import Contrib.React.Basic.Hooks.UseForm (useForm)
 import Contrib.React.Basic.Hooks.UseForm as UseForm
-import Contrib.React.Bootstrap.FormBuilder (BootstrapForm, ChoiceFieldChoices(..), FormBuilder, choiceField)
+import Contrib.React.Bootstrap.FormBuilder (BootstrapForm, ChoiceFieldChoices(..), FormBuilder', choiceField)
 import Contrib.React.Bootstrap.FormBuilder as FormBuilder
 import Data.Array as Array
 import Data.Array.ArrayAL (ArrayAL)
+import Data.Array.ArrayAL as ArrayAL
 import Data.Either (Either(..))
 import Data.Enum (upFromIncluding)
 import Data.FormURLEncoded.Query (Query)
 import Data.Maybe (Maybe(..))
+import Data.Set as Set
 import Data.Time.Duration (Seconds(..))
+import Data.Tuple.Nested ((/\))
 import Data.Validation.Semigroup (V(..))
+import Debug (traceM)
 import Effect (Effect)
 import Effect.Class (liftEffect)
 import Polyform.Batteries as Batteries
@@ -49,7 +54,7 @@ contractFormTypeChoiceToHelpText AmortizingLoans = DOOM.text "An amortizing loan
 contractFormTypeChoiceToHelpText JsonForm = DOOM.text "You can create any contract by providing JSON object which is conformant to the ACTUS specification."
 contractFormTypeChoiceToHelpText _ = DOOM.text "Not implemented yet."
 
-contractFormTypeChoiceField :: FormBuilder Effect ContractFormTypeChoice
+contractFormTypeChoiceField :: FormBuilder' Effect ContractFormTypeChoice
 contractFormTypeChoiceField = do
   let
     dual = Batteries.stringifyDual $ UrlEncoded.Duals.enum (Proxy :: Proxy ContractFormTypeChoice)
@@ -57,7 +62,7 @@ contractFormTypeChoiceField = do
     serialize ∷ ContractFormTypeChoice → String
     serialize = Duals.runSerializer dual
 
-    validator = Polyform.Dual.parser dual
+    validator = requiredV' $ Polyform.Dual.parser dual
 
     asChoice a = do
       let
@@ -66,11 +71,13 @@ contractFormTypeChoiceField = do
         disabled = not $ a `Array.elem` [ JsonForm, AmortizingLoans ]
         helpText = Just $ contractFormTypeChoiceToHelpText a
       { label, value, disabled, helpText }
-    choices = RadioButtonFieldChoices
+    choices = map asChoice (upFromIncluding bottom ∷ ArrayAL 1 ContractFormTypeChoice)
+    initial = _.value <<< ArrayAL.head $ choices
+    fieldChoices = RadioButtonFieldChoices
       { switch: true
       , choices: map asChoice (upFromIncluding bottom ∷ ArrayAL 1 ContractFormTypeChoice)
       }
-  choiceField { choices, validator }
+  choiceField { initial, choices: fieldChoices, validator, touched: true }
 
 type Props =
   { onSuccess :: Result -> Effect Unit
@@ -89,13 +96,17 @@ mkComponent = do
   liftEffect $ component "CreateContract.FirstStep" \{ onSuccess, onDismiss, inModal } -> React.do
     let
       onSubmit = _.result >>> case _ of
-        Just (V (Right contractFormTypeChoice)) -> do
+        Just (V (Right contractFormTypeChoice) /\ _) -> do
           onSuccess contractFormTypeChoice
         _ -> do
           -- Rather improbable path because we disable submit button if the form is invalid
           pure unit
 
-    { formState, onSubmit: onSubmit', result } <- useForm { spec: form, onSubmit, validationDebounce: Seconds 0.5 }
+    { formState, onSubmit: onSubmit', result } <- useForm
+      { spec: form
+      , onSubmit
+      , validationDebounce: Seconds 0.5
+      }
 
     pure $ do
       let
@@ -111,7 +122,7 @@ mkComponent = do
               do
                 let
                   disabled = case result of
-                    Just (V (Right _)) -> false
+                    Just (V (Right _) /\ _) -> false
                     _ -> true
                 { className: "btn btn-primary"
                 , onClick: onSubmit'
@@ -121,7 +132,7 @@ mkComponent = do
           ]
 
       if inModal then modal
-        { title: R.text "Add contract"
+        { title: R.text "Add contract | Step 1 of 4"
         , onDismiss
         , body: formBody
         , footer: formActions

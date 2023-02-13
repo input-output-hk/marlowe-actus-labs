@@ -24,6 +24,7 @@ import Contrib.React.Bootstrap.Offcanvas as Offcanvas
 import Contrib.React.Bootstrap.Tab (tab)
 import Contrib.React.Bootstrap.Tabs (tabs)
 import Contrib.React.Svg (SvgUrl(..), svgImg)
+import Control.Monad.Error.Class (catchError)
 import Control.Monad.Reader.Class (asks)
 import Data.Array as Array
 import Data.BigInt.Argonaut as BigInt
@@ -41,6 +42,7 @@ import Data.Newtype as Newtype
 import Data.Time.Duration (Milliseconds(..))
 import Data.Traversable (for, traverse)
 import Data.Tuple.Nested ((/\))
+import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
@@ -112,7 +114,7 @@ autoConnectWallet walletBrand onSuccess = liftEffect (window >>= Wallet.cardano)
 
 -- | Use this switch to autoconnect the wallet for testing.
 debugWallet :: Maybe WalletBrand
-debugWallet = Just Lace -- Nothing
+debugWallet = Just Nami -- Nothing
 
 data DisplayOption = Default | About
 
@@ -166,10 +168,17 @@ mkApp = do
       pwc <- liftEffect $ readRef possibleWalletContextRef
       case pwi, pwc of
         Nothing, Nothing -> pure unit
-        Nothing, Just _ -> liftEffect $ setWalletContext Nothing
+        Nothing, Just _ -> do
+           liftEffect $ setWalletContext Nothing
         Just (WalletInfo walletInfo), _ -> do
-          walletContext <- WalletContext.walletContext cardanoMultiplatformLib walletInfo.wallet
-          liftEffect $ setWalletContext $ Just walletContext
+          let
+            action = do
+              walletContext <- WalletContext.walletContext cardanoMultiplatformLib walletInfo.wallet
+              liftEffect $ setWalletContext $ Just walletContext
+          action `catchError` \_ -> do
+             -- FIXME: Report back (to the reporting backend) a wallet problem?
+             traceM "ERROR during wallet context construction"
+             pure unit
 
     configuringWallet /\ setConfiguringWallet <- useState' false
     checkingNotifications /\ setCheckingNotifications <- useState' false
@@ -221,7 +230,7 @@ mkApp = do
     let
       AppContractInfoMap { map: contracts } = contractMap
 
-    pure $ provider walletInfoCtx possibleWalletInfo $ Array.singleton $ DOM.div { className: "mt-6" } $
+    pure $ provider walletInfoCtx ((/\) <$> possibleWalletInfo <*> possibleWalletContext) $ Array.singleton $ DOM.div { className: "mt-6" } $
       [ DOM.div { className: "fixed-top" }
           [ DOM.nav { className: "navbar mb-lg-3 navbar-expand-sm navbar-light bg-light py-0" } $
               DOM.div { className: "container-xl" }

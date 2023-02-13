@@ -202,7 +202,7 @@ addressObject
 addressObject = mkNewtypedFFI (Proxy :: Proxy AddressObject)
 
 -- foreign import data Address :: Type
--- 
+--
 -- -- | We allocate the `Address` in the memory. If we don't `free` it up then
 -- -- | we gonna leak memory.
 -- foreign import fromBytesImpl :: EffectFn2 Lib Uint8Array Address
@@ -248,8 +248,6 @@ addressObject = mkNewtypedFFI (Proxy :: Proxy AddressObject)
 --   Nothing -> pure Nothing
 -- 
 -- foreign import isValidBech32Impl :: EffectFn2 Lib String Boolean
--- 
-
 -- isValidBech32 :: Lib -> String -> Effect Boolean
 -- isValidBech32 lib str = runEffectFn2 isValidBech32Impl lib str
 

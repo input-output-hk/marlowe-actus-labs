@@ -135,7 +135,7 @@ useLoopAff
   -> Aff Unit
   -> Hook (UseAff deps Unit) Unit
 useLoopAff deps interval action = React.do
-  void $ useAff deps $ forever do
+  void $ useAff deps $ forever $ do
     action
     delay interval
 

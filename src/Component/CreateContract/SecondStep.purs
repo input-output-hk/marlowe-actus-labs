@@ -1,113 +1,47 @@
 module Component.CreateContract.SecondStep where
 
 import Prelude
-import Prelude
 
-import Actus.Core (genProjectedCashflows)
-import Actus.Core (genProjectedCashflows)
-import Actus.Domain (CT(..), ContractTerms(..), DCC)
-import Actus.Domain (ContractTerms)
+import Actus.Domain (CT(..), ContractTerms)
 import Actus.Domain as A
-import Actus.Domain.ContractTerms (ContractTermsRow)
-import CardanoMultiplatformLib (Bech32, bech32FromBytes, bech32FromString, bech32ToString, runGarbageCollector)
-import CardanoMultiplatformLib (Bech32, bech32FromBytes, bech32FromString, bech32ToString, runGarbageCollector)
-import CardanoMultiplatformLib as CardanoMultiplatformLib
-import CardanoMultiplatformLib as CardanoMultiplatformLib
-import CardanoMultiplatformLib.Types (cborHexToCbor)
-import CardanoMultiplatformLib.Types (cborHexToCbor)
+import Actus.Domain.ContractTerms (mkContractTerms)
 import Component.CreateContract.Types (AmortizingLoanChoice(..), ContractFormTypeChoice(..))
 import Component.Modal (mkModal)
-import Component.Modal (mkModal)
 import Component.Modal as Modal
-import Component.Modal as Modal
-import Component.Types (MkComponentM, WalletInfo(..))
-import Component.Types (MkComponentM, WalletInfo(..))
+import Component.Types (MkComponentM)
 import Component.Widgets (link)
-import Component.Widgets (link)
-import Contrib.React.Basic.Hooks.UseForm (useForm)
+import Contrib.Polyform.Batteries.UrlEncoded (requiredV')
 import Contrib.React.Basic.Hooks.UseForm (useForm)
 import Contrib.React.Basic.Hooks.UseForm as UseForm
-import Contrib.React.Basic.Hooks.UseForm as UseForm
-import Contrib.React.Bootstrap.FormBuilder (BootstrapForm, FormBuilder, UseChoiceField(..), choiceField')
-import Contrib.React.Bootstrap.FormBuilder (FormBuilder, BootstrapForm)
-import Contrib.React.Bootstrap.FormBuilder as FormBuilder
+import Contrib.React.Bootstrap.FormBuilder (BootstrapForm, ChoiceFieldChoices(..), FormBuilder, FormBuilder', UseChoiceField(..), choiceField, choiceField', dateInput, dateTimeField, decimalInput, formBuilder, intInput, renderMultiField, selectFieldChoice, timeInput, unFormBuilder)
 import Contrib.React.Bootstrap.FormBuilder as FormBuilder
 import Control.Monad.Reader.Class (asks)
-import Control.Monad.Reader.Class (asks)
 import Data.Argonaut (decodeJson, parseJson)
-import Data.Argonaut (decodeJson, parseJson)
-import Data.Array (elem, fromFoldable)
-import Data.Array (elem, fromFoldable)
+import Data.Array ((..))
 import Data.Array as Array
-import Data.Array as Array
+import Data.Array.ArrayAL as ArrayAL
 import Data.Bifunctor (lmap)
-import Data.Bifunctor (lmap)
-import Data.BigInt.Argonaut (fromInt, toNumber, toString)
-import Data.BigInt.Argonaut (fromInt, toNumber, toString)
 import Data.DateTime (DateTime(..))
-import Data.Decimal (Decimal)
-import Data.Either (Either(..), hush)
-import Data.Either (Either(..), hush)
-import Data.FormURLEncoded.Query (FieldId(..), Query)
-import Data.FormURLEncoded.Query (FieldId(..), Query)
-import Data.Formatter.DateTime (formatDateTime)
-import Data.Formatter.DateTime (formatDateTime)
-import Data.Map as Map
-import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Maybe (Maybe(..), fromMaybe)
-import Data.Newtype (unwrap)
-import Data.Newtype (unwrap)
-import Data.String as String
+import Data.Either (Either(..))
+import Data.FormURLEncoded.Query (Query)
+import Data.Maybe (Maybe(..))
 import Data.String as String
 import Data.Time.Duration (Seconds(..))
-import Data.Time.Duration (Seconds(..))
-import Data.Undefined.NoProblem as NoProblem
-import Data.Undefined.NoProblem as NoProblem
+import Data.Tuple.Nested ((/\))
+import Data.Undefined.NoProblem (opt)
 import Data.Validation.Semigroup (V(..))
-import Data.Validation.Semigroup (V(..))
-import Debug (traceM)
-import Debug (traceM)
 import Effect (Effect)
-import Effect (Effect)
-import Effect.Aff (Aff, launchAff_)
-import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
-import Effect.Class (liftEffect)
-import Language.Marlowe.Core.V1.Semantics.Types (Party, Value(..))
-import Language.Marlowe.Core.V1.Semantics.Types (Party, Value(..))
-import Language.Marlowe.Core.V1.Semantics.Types as V1
-import Language.Marlowe.Core.V1.Semantics.Types as V1
-import Marlowe.Actus (CashFlows, currenciesWith6Decimals, defaultRiskFactors, evalVal, genContract, toMarloweCashflow)
-import Marlowe.Actus (CashFlows, currenciesWith6Decimals, defaultRiskFactors, evalVal, genContract, toMarloweCashflow)
-import Marlowe.Runtime.Web.Types (TxOutRef, bech32ToParty)
-import Marlowe.Runtime.Web.Types (TxOutRef, bech32ToParty)
-import Polyform.Batteries (rawError)
-import Polyform.Batteries (rawError)
 import Polyform.Batteries as Batteries
-import Polyform.Batteries as Batteries
-import Polyform.Validator (liftFnEither, liftFnMMaybe) as Validator
-import Polyform.Validator (liftFnEither, liftFnMMaybe) as Validator
-import Prim.Row as Row
-import React.Basic (JSX)
+import Polyform.Batteries.Int as Batteries.Int
+import Polyform.Validator (liftFnEither) as Validator
 import React.Basic (JSX)
 import React.Basic (fragment) as DOOM
-import React.Basic (fragment) as DOOM
-import React.Basic.DOM (text) as DOOM
 import React.Basic.DOM (text) as DOOM
 import React.Basic.DOM as R
-import React.Basic.DOM as R
 import React.Basic.DOM.Simplified.Generated as DOM
-import React.Basic.DOM.Simplified.Generated as DOM
-import React.Basic.Hooks (component, useEffectOnce, useState', (/\))
-import React.Basic.Hooks (component, useEffectOnce, useState', (/\))
+import React.Basic.Hooks (component)
 import React.Basic.Hooks as React
-import React.Basic.Hooks as React
-import Record as Record
-import Wallet as Wallet
-import Wallet as Wallet
-import WalletContext (walletAddresses)
-import WalletContext (walletAddresses)
 
 amortizingLoanChoiceToLabel :: AmortizingLoanChoice -> String
 amortizingLoanChoiceToLabel = case _ of
@@ -130,7 +64,7 @@ amortizingLoanToContractType = case _ of
   NegativeAmortizer -> NAM
   Annuity -> ANN
 
-contractTypeChoiceField :: FormBuilder Effect CT
+contractTypeChoiceField :: FormBuilder' Effect CT
 contractTypeChoiceField = do
   let
     choiceConfig a =
@@ -139,7 +73,7 @@ contractTypeChoiceField = do
       , disabled: false
       }
     useField = UseRadioButtonField choiceConfig
-  amortizingLoanToContractType <$> choiceField' useField { label: Just $ DOOM.text "Amortization type" }
+  amortizingLoanToContractType <$> choiceField' useField Nothing { label: Just $ DOOM.text "Amortization type" }
 
 businessDayConventionChoiceToLabel :: A.BDC -> String
 businessDayConventionChoiceToLabel = case _ of
@@ -153,7 +87,7 @@ businessDayConventionChoiceToLabel = case _ of
   A.BDC_CSP -> "Calculate/shift preceding"
   A.BDC_CSMP -> "Calculate/shift modified preceding"
 
-businessDayConventionField :: FormBuilder Effect A.BDC
+businessDayConventionField :: FormBuilder' Effect A.BDC
 businessDayConventionField = do
   let
     choiceConfig a =
@@ -161,37 +95,20 @@ businessDayConventionField = do
       , helpText: Nothing
       , disabled: false
       }
-  choiceField' (UseSelectField choiceConfig) { label: Just $ DOOM.text "Business day convention" }
+  choiceField'
+    (UseSelectField choiceConfig)
+    Nothing
+    { label: Just $ DOOM.text "Business day convention" }
 
 calendarChoiceToLabel :: A.Calendar -> String
 calendarChoiceToLabel = case _ of
   A.CLDR_NC -> "No calendar"
   A.CLDR_MF -> "Monday to Friday"
 
-calendarField :: FormBuilder Effect A.Calendar
-calendarField = do
-  let
-    choiceConfig a =
-      { label: calendarChoiceToLabel a
-      , helpText: Nothing
-      , disabled: false
-      }
-  choiceField' (UseSelectField choiceConfig) { label: Just $ DOOM.text "Calendar" }
-
 endOfMonthConventionChoiceToLabel :: A.EOMC -> String
 endOfMonthConventionChoiceToLabel = case _ of
   A.EOMC_EOM -> "End of month"
   A.EOMC_SD -> "Same day"
-
-endOfMonthConventionField :: FormBuilder Effect A.EOMC
-endOfMonthConventionField = do
-  let
-    choiceConfig a =
-      { label: endOfMonthConventionChoiceToLabel a
-      , helpText: Nothing
-      , disabled: false
-      }
-  choiceField' (UseSelectField choiceConfig) { label: Just $ DOOM.text "End of month convention" }
 
 -- -- |ContractRole
 -- data CR
@@ -224,7 +141,7 @@ contractRoleChoiceToLabel = case _ of
   A.CR_RF -> "Receive fix leg"
   A.CR_PF -> "Pay fix leg"
 
-contractRoleField :: FormBuilder Effect A.CR
+contractRoleField :: FormBuilder' Effect A.CR
 contractRoleField = do
   let
     choiceConfig a =
@@ -234,17 +151,172 @@ contractRoleField = do
       }
   choiceField'
     (UseSelectField choiceConfig)
+    (Just $ ArrayAL.solo' A.CR_RPA [A.CR_RPL])
     { label: Just $ DOOM.text "Contract role" }
 
-type Result =
-  { -- contractTerms :: ContractTerms
-    businessDayConvention :: A.BDC
-  , contractType :: A.CT
-  , contractId :: String
-  , calendar :: A.Calendar
-  , contractRole :: A.CR
-  , endOfMonthConvention :: A.EOMC
-  }
+
+-- |DayCountConvention
+-- data DCC
+--   = DCC_A_AISDA -- ^ Actual/Actual ISDA
+--   | DCC_A_360 -- ^ Actual/360
+--   | DCC_A_365 -- ^ Actual/365
+--   | DCC_E30_360ISDA -- ^ 30E/360 ISDA
+--   | DCC_E30_360 -- ^ 30E/360
+--   | DCC_B_252 -- ^ Business / 252
+dayCountConventionChoiceToLabel :: A.DCC -> String
+dayCountConventionChoiceToLabel = case _ of
+  A.DCC_A_AISDA -> "Actual/Actual ISDA"
+  A.DCC_A_360 -> "Actual/360"
+  A.DCC_A_365 -> "Actual/365"
+  A.DCC_E30_360ISDA -> "30E/360 ISDA"
+  A.DCC_E30_360 -> "30E/360"
+  A.DCC_B_252 -> "Business / 252"
+
+dayCountConventionField :: FormBuilder' Effect A.DCC
+dayCountConventionField = do
+  let
+    choiceConfig a =
+      { label: dayCountConventionChoiceToLabel a
+      , helpText: Nothing
+      , disabled: false
+      }
+  choiceField'
+    (UseSelectField choiceConfig)
+    Nothing
+    { label: Just $ DOOM.text "Day count convention" }
+
+
+-- FIXME: Implemnt cycle widget
+-- -- |CyclePeriod
+-- data Period
+--   = P_D -- ^ Day
+--   | P_W -- ^ Week
+--   | P_M -- ^ Month
+--   | P_Q -- ^ Quarter
+--   | P_H -- ^ Half year
+--   | P_Y -- ^ Year
+cyclePeriodChoiceToLabel :: A.Period -> String
+cyclePeriodChoiceToLabel = case _ of
+  A.P_D -> "Day"
+  A.P_W -> "Week"
+  A.P_M -> "Month"
+  A.P_Q -> "Quarter"
+  A.P_H -> "Half year"
+  A.P_Y -> "Year"
+
+--- cyclePeriodField :: _ -> FormBuilder' Effect A.Period
+cyclePeriodField props = do
+  let
+    choiceConfig a =
+      { label: cyclePeriodChoiceToLabel a
+      , helpText: Nothing
+      , disabled: false
+      }
+  choiceField'
+    (UseSelectField choiceConfig)
+    Nothing
+    props
+
+-- -- |CycleStub
+-- data Stub
+--   = ShortStub -- ^ Short last stub
+--   | LongStub -- ^ Long last stub
+cycleStubChoiceToLabel :: A.Stub -> String
+cycleStubChoiceToLabel = case _ of
+  A.ShortStub -> "Short last stub"
+  A.LongStub -> "Long last stub"
+
+-- cycleStubField :: forall m. Monad m => _ -> FormBuilder' m A.Stub
+cycleStubField props = do
+  let
+    choiceConfig a =
+      { label: cycleStubChoiceToLabel a
+      , helpText: Nothing
+      , disabled: false
+      }
+  choiceField'
+    (UseSelectField choiceConfig)
+    Nothing
+    props
+
+type Result = ContractTerms
+
+cycleField label = formBuilder do
+  form <- unFormBuilder $ ado
+    n <- do
+      let
+        choices = SelectFieldChoices $ ArrayAL.solo' 1 (2..31) <#> \i -> selectFieldChoice (show i) (show i)
+        choiceConfig =
+          { choices
+          , validator: requiredV' $ Batteries.stringifyValidator Batteries.Int.validator
+          , inline: true
+          , initial: "1"
+          }
+      choiceField choiceConfig
+
+    p <- cyclePeriodField { inline: true }
+    stub <- cycleStubField { inline: true }
+    in { n, p, stub, includeEndDay: false }
+
+  pure $ renderMultiField label $ form
+
+
+scheduleConfigField :: FormBuilder' _ _
+scheduleConfigField = formBuilder do
+  let
+    calendarField :: FormBuilder' Effect A.Calendar
+    calendarField = do
+      let
+        choiceConfig a =
+          { label: calendarChoiceToLabel a
+          , helpText: Nothing
+          , disabled: false
+          }
+      choiceField'
+        (UseSelectField choiceConfig)
+        Nothing
+        { inline: true }
+        -- { label: Just $ DOOM.text "Calendar" }
+
+    businessDayConventionField :: FormBuilder' Effect A.BDC
+    businessDayConventionField = do
+      let
+        choiceConfig a =
+          { label: businessDayConventionChoiceToLabel a
+          , helpText: Nothing
+          , disabled: false
+          }
+      choiceField'
+        (UseSelectField choiceConfig)
+        Nothing
+        { inline: true }
+        -- { label: Just $ DOOM.text "Business day convention" }
+
+    endOfMonthConventionField :: FormBuilder' Effect A.EOMC
+    endOfMonthConventionField = do
+      let
+        choiceConfig a =
+          { label: endOfMonthConventionChoiceToLabel a
+          , helpText: Nothing
+          , disabled: false
+          }
+      choiceField'
+        (UseSelectField choiceConfig)
+        Nothing
+        { inline: true }
+        -- { label: Just $ DOOM.text "End of month convention" }
+
+  form <- unFormBuilder $ ado
+    calendar <- calendarField
+    endOfMonthConvention <- endOfMonthConventionField
+    businessDayConvention <- businessDayConventionField
+    in
+      { calendar
+      , businessDayConvention
+      , endOfMonthConvention
+      }
+
+  pure $ renderMultiField (Just $ DOOM.text "Schedule config") $ form
 
 mkAmortizingLoanForm :: BootstrapForm Effect Query Result
 mkAmortizingLoanForm = FormBuilder.evalBuilder ado
@@ -253,52 +325,102 @@ mkAmortizingLoanForm = FormBuilder.evalBuilder ado
       props =
         { initial: ""
         , label: Just $ DOOM.text "Contract ID"
-        , validator: identity
+        , validator: requiredV' $ identity
         , helpText: Nothing
         }
     FormBuilder.textInput props
   contractType <- contractTypeChoiceField
-  businessDayConvention <- businessDayConventionField
-  calendar <- calendarField
-  endOfMonthConvention <- endOfMonthConventionField
+  { businessDayConvention, calendar, endOfMonthConvention } <- scheduleConfigField
+  dayCountConvention <- dayCountConventionField
   contractRole <- contractRoleField
-  in
-    { calendar
-    , contractType
+
+  let
+    cycleOfInterestPayment =
+      { n: 1
+      , p: A.P_Y
+      , stub: A.LongStub
+      , includeEndDay: false
+      }
+    -- FIXME: Implement currency choice
+    currency = "DjedTestUSD"
+
+    -- initialExchangeDate = "2024-01-01T00:00:00", """
+  cycleOfInterestPayment <- cycleField (Just $ DOOM.text "Cycle of interest payment")
+
+  initialExchangeDate <- dateTimeField $ Just $ DOOM.text "Initial exchange date"
+
+  cycleAnchorDateOfInterestPayment <- dateTimeField $ Just $ DOOM.text "Cycle anchor date of interest payment"
+
+  statusDate <- dateTimeField $ Just $ DOOM.text "Status date"
+
+  maturityDate <- dateTimeField $ Just $ DOOM.text "Maturity date"
+
+  nominalInterestRate <- decimalInput
+    { label: Just $ DOOM.text "Nominal interest rate" }
+
+  notionalPrincipal <- decimalInput
+    { label: Just $ DOOM.text "Notional principal" }
+
+  premiumDiscountAtIED <- decimalInput
+    { label: Just $ DOOM.text "Premium discount at IED" }
+
+  rateMultiplier <- decimalInput
+    { label: Just $ DOOM.text "Rate multiplier" }
+
+  in mkContractTerms
+    { contractType
     , contractId
-    , businessDayConvention
-    , endOfMonthConvention
+    , dayCountConvention: Just dayCountConvention
+    , statusDate: statusDate
+    , scheduleConfig:
+      { calendar: Just calendar
+      , businessDayConvention: Just businessDayConvention
+      , endOfMonthConvention: Just endOfMonthConvention
+      }
     , contractRole
+    , cycleOfInterestPayment: Just cycleOfInterestPayment
+    , initialExchangeDate: Just initialExchangeDate
+    , cycleAnchorDateOfInterestPayment: Just cycleAnchorDateOfInterestPayment
+    , maturityDate: Just maturityDate
+    , nominalInterestRate: Just nominalInterestRate
+    , notionalPrincipal: Just notionalPrincipal
+    , premiumDiscountAtIED: Just premiumDiscountAtIED
+    , rateMultiplier: Just rateMultiplier
     }
 
+-- cp1 : {address: {…}}
+-- pa1 : {address: {…}}
+
+-- bdc : "NULL"
+-- cal : "NC"
+-- emoc : "SD"
+-- cid : "Final Demo Test"
+-- cntrl : "RPA"
+-- ct : "PAM"
+
+-- dcc : "30E360"
+-- ipcl : "P1YL0"
+-- cur : "DjedTestUSD"
+
+-- ied : 1704067200000
+-- ipanx : 1735689600000
+-- md : 1735689600000
+-- ipnr : "0.1"
+-- nt : "5"
+-- pdied : "0"
+-- rrmlt : "1"
+
+
 mkJsonForm :: _ -> BootstrapForm Effect Query Result
-mkJsonForm cardanoMultiplatformLib = FormBuilder.evalBuilder ado
-  (contractTerms :: ContractTerms) <- FormBuilder.textArea
+mkJsonForm cardanoMultiplatformLib = FormBuilder.evalBuilder $ FormBuilder.textArea
     { missingError: "Please provide contract terms JSON value"
     , initial: initialJson
-    , validator: Validator.liftFnEither \jsonString -> do
+    , validator: requiredV' $ Validator.liftFnEither \jsonString -> do
         json <- lmap (const $ [ "Invalid JSON" ]) $ parseJson jsonString
         lmap (Array.singleton <<< show) (decodeJson json)
     , rows: 15
     , name: (Just $ "contract-terms")
     }
-  -- let
-  --   cashFlows =
-  --     genProjectedCashflows
-  --       (party /\ counterParty)
-  --       (defaultRiskFactors contractTerms)
-  --       contractTerms
-  --   contract = genContract cashFlows
-  in
-    { -- contractTerms
-      contractType: A.PAM
-    , businessDayConvention: A.BDC_NULL
-    , calendar: A.CLDR_NC
-    , contractId: "Contract"
-    , contractRole: A.CR_RPA
-    , endOfMonthConvention: A.EOMC_EOM
-    }
-
 
 type Props =
   { contractFormTypeChoice :: ContractFormTypeChoice
@@ -316,7 +438,7 @@ mkComponent = do
   liftEffect $ component "CreateContract.SecondStep" \{ contractFormTypeChoice, onSuccess, onDismiss, inModal } -> React.do
     let
       onSubmit = _.result >>> case _ of
-        Just (V (Right contractFormTypeChoice)) -> do
+        Just (V (Right contractFormTypeChoice) /\ _) -> do
           onSuccess contractFormTypeChoice
         _ -> do
           -- Rather improbable path because we disable submit button if the form is invalid
@@ -325,7 +447,11 @@ mkComponent = do
         AmortizingLoans -> mkAmortizingLoanForm
         _ -> mkJsonForm cardanoMultiplatformLib
 
-    { formState, onSubmit: onSubmit', result } <- useForm { spec: form, onSubmit, validationDebounce: Seconds 0.5 }
+    { formState, onSubmit: onSubmit', result } <- useForm
+      { spec: form
+      , onSubmit
+      , validationDebounce: Seconds 0.5
+      }
 
     pure $ do
       let
@@ -341,7 +467,7 @@ mkComponent = do
               do
                 let
                   disabled = case result of
-                    Just (V (Right _)) -> false
+                    Just (V (Right _) /\ _) -> false
                     _ -> true
                 { className: "btn btn-primary"
                 , onClick: onSubmit'
@@ -351,18 +477,17 @@ mkComponent = do
           ]
 
       if inModal then modal
-        { title: R.text "Add contract"
+        { title: R.text "Add contract | Step 2 of 4"
         , onDismiss
-        , body: formBody
+        , body: DOM.div { className: "row" }
+          [ DOM.div { className: "col-9" } [ formBody ]
+          , DOM.div { className: "col-3" } [ DOOM.text "TEST" ]
+          ]
         , footer: formActions
-        , size: Modal.Large
+        , size: Modal.ExtraLarge
         }
       else
         formBody
-
-
-
-
 
 initialJson :: String
 initialJson = String.joinWith "\n"
@@ -386,26 +511,5 @@ initialJson = String.joinWith "\n"
   , "}"
   ]
 
-
-
--- bdc : "NULL"
--- cal : "NC"
--- emoc : "SD"
--- cid : "Final Demo Test"
-
--- cntrl : "RPA"
--- cp1 : {address: {…}}
--- ct : "PAM"
--- cur : "DjedTestUSD"
--- dcc : "30E360"
--- ied : 1704067200000
--- ipanx : 1735689600000
--- ipcl : "P1YL0"
--- ipnr : "0.1"
--- md : 1735689600000
--- nt : "5"
--- pa1 : {address: {…}}
--- pdied : "0"
--- rrmlt : "1"
 
 

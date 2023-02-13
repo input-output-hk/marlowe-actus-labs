@@ -137,3 +137,27 @@ in upstream
         ]
         "https://github.com/purescript-polyform/batteries-urlencoded.git"
         "v0.4.1"
+  with datetime-iso =
+      mkPackage
+        [ "aff"
+        , "argonaut"
+        , "argonaut-codecs"
+        , "argonaut-core"
+        , "arrays"
+        , "bifunctors"
+        , "datetime"
+        , "effect"
+        , "either"
+        , "enums"
+        , "foldable-traversable"
+        , "maybe"
+        , "newtype"
+        , "parsing"
+        , "partial"
+        , "prelude"
+        , "spec"
+        , "strings"
+        , "transformers"
+        ]
+        "https://github.com/paluh/purescript-datetime-iso"
+        "c7b75bb16e0543687fc4c9b21c34a49cdaa22f0c"

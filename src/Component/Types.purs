@@ -18,11 +18,13 @@ import Control.Monad.Reader (ReaderT)
 import Data.List (List)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
+import Data.Tuple.Nested (type (/\), (/\))
 import Effect (Effect)
 import Marlowe.Runtime.Web (Runtime)
 import Marlowe.Runtime.Web.Streaming (ContractWithTransactionsStream)
 import React.Basic (JSX, ReactContext)
 import Wallet as Wallet
+import WalletContext (WalletContext(..))
 
 newtype WalletInfo wallet = WalletInfo
   { name :: String
@@ -55,7 +57,7 @@ newtype MessageHub = MessageHub
 
 type MkContextBase r =
   { cardanoMultiplatformLib :: CardanoMultiplatformLib.Lib
-  , walletInfoCtx :: ReactContext (Maybe (WalletInfo Wallet.Api))
+  , walletInfoCtx :: ReactContext (Maybe (WalletInfo Wallet.Api /\ WalletContext))
   -- FIXME: use more advanced logger so we use levels and setup app verbosity.
   , logger :: String -> Effect Unit
   , contractStream :: ContractWithTransactionsStream

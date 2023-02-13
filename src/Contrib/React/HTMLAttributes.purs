@@ -1,5 +1,6 @@
 module Contrib.React.HTMLAttributes where
 
+import Data.Undefined.NoProblem (Opt)
 import React.Basic (JSX)
 import React.Basic.Events (EventHandler)
 import Type.Row (type (+))
@@ -344,10 +345,10 @@ type InputHTMLAttributes otherProps =
     , formTarget :: String
     , height :: Number
     , list :: String
-    , max :: Number
-    , maxLength :: Number
-    , min :: Number
-    , minLength :: Number
+    , max :: Opt Number
+    , maxLength :: Opt Number
+    , min :: Opt Number
+    , minLength :: Opt Number
     , multiple :: Boolean
     , onChange :: EventHandler
     , name :: String
@@ -357,7 +358,7 @@ type InputHTMLAttributes otherProps =
     , required :: Boolean
     , size :: Number
     , src :: String
-    , step :: Number
+    , step :: Opt Number
     -- This collides with `Check` - take care of it upstream
     -- , type :: String
     , value :: String

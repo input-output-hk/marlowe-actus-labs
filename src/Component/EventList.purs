@@ -5,7 +5,6 @@ import Prelude
 import Actus.Domain.BusinessEvents as Actus.BussinessEvents
 import CardanoMultiplatformLib (CborHex)
 import CardanoMultiplatformLib.Transaction (TransactionWitnessSetObject)
-import Component.CreateContract (walletChangeAddress)
 import Component.Modal (mkModal)
 import Component.Types (ActusContractRole(..), CashFlowInfo(..), ContractInfo(..), MessageContent(..), MessageHub(..), MkComponentM, UserCashFlowDirection(..), UserContractRole(..), WalletInfo(..))
 import Component.Types.ContractInfo as ContractInfo
@@ -16,8 +15,8 @@ import Contrib.Data.BigInt.PositiveBigInt (PositiveBigInt(..))
 import Contrib.Fetch (FetchError)
 import Contrib.React.Bootstrap (overlayTrigger, tooltip)
 import Contrib.React.Bootstrap.Icons as Icons
-import Contrib.React.Bootstrap.Table (table)
 import Contrib.React.Bootstrap.Table (striped) as Table
+import Contrib.React.Bootstrap.Table (table)
 import Contrib.React.Bootstrap.Types as Bootstrap
 import Control.Monad.Reader.Class (asks)
 import Data.Array (elem, singleton)
@@ -34,6 +33,7 @@ import Data.Maybe (Maybe(..), fromMaybe, isJust, isNothing)
 import Data.Newtype (un, unwrap)
 import Data.String (toUpper)
 import Data.Time.Duration as Duration
+import Data.Tuple (snd)
 import Debug (traceM)
 import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
@@ -50,10 +50,10 @@ import React.Basic.DOM (text)
 import React.Basic.DOM as R
 import React.Basic.DOM.Simplified.Generated as DOM
 import React.Basic.Events (handler_)
-import React.Basic.Hooks (JSX, component, useState, (/\))
+import React.Basic.Hooks (JSX, component, useContext, useState, (/\))
 import React.Basic.Hooks as React
 import Wallet as Wallet
-import WalletContext (walletAddresses)
+import WalletContext (WalletContext(..), walletAddresses)
 
 data NewInput
   = Creating
@@ -101,12 +101,15 @@ mkEventList = do
   modal <- liftEffect mkModal
   booleanField <- liftEffect mkBooleanField
   cardanoMultiplatformLib <- asks _.cardanoMultiplatformLib
+  walletInfoCtx <- asks _.walletInfoCtx
   msgHub@(MessageHub msgHubProps) <- asks _.msgHub
 
   liftEffect $ component "EventList" \{ contractList, connectedWallet } -> React.do
     ((state :: EventListState) /\ updateState) <- useState { newInput: Nothing }
     ordering /\ updateOrdering <- useState { orderBy: OrderByCreationDate, orderAsc: false }
     showOnlyMyContracts /\ updateShowOnlyMyContracts <- useState false
+    possibleWalletContext <- useContext walletInfoCtx <#> map (un WalletContext <<< snd)
+
     let
       filterOwnContracts = Array.filter (isJust <<< _.userContractRole <<< un ContractInfo)
       filterContracts = if showOnlyMyContracts then filterOwnContracts else identity
@@ -128,9 +131,8 @@ mkEventList = do
         now <- nowDateTime
         -- FIXME: move aff flow into `useAff` on the component level
         launchAff_ $ do
-          walletChangeAddress cardanoMultiplatformLib cw
-            >>= case _ of
-              Just changeAddress -> do
+          case possibleWalletContext of
+              Just { changeAddress: Just changeAddress } -> do
 
                 addresses <- walletAddresses cardanoMultiplatformLib cw
 
@@ -182,7 +184,7 @@ mkEventList = do
                       pure unit
 
                 pure unit
-              Nothing -> do
+              _ -> do
                 -- Note: this happens, when the contract is in status `Unsigned`
                 pure unit
 

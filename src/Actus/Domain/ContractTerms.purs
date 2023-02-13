@@ -121,6 +121,20 @@ data DCC
 
 derive instance Generic DCC _
 derive instance Eq DCC
+derive instance Ord DCC
+
+instance Enum DCC where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded DCC where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum DCC where
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
 
 instance Show DCC where
   show DCC_A_AISDA = "AA"
@@ -655,6 +669,19 @@ derive instance Ord Stub
 
 instance Show Stub where
   show = genericShow
+
+instance Enum Stub where
+  succ = genericSucc
+  pred = genericPred
+
+instance Bounded Stub where
+  top = genericTop
+  bottom = genericBottom
+
+instance BoundedEnum Stub where
+  cardinality = genericCardinality
+  fromEnum = genericFromEnum
+  toEnum = genericToEnum
 
 stubToString :: Stub -> String
 stubToString ShortStub = "1"
