@@ -47,7 +47,7 @@ contractFormTypeChoiceToLabel Bonds = "Bonds"
 contractFormTypeChoiceToLabel BulletLoans = "Bullet Loans"
 contractFormTypeChoiceToLabel CapitalizingLoans = "Capitalizing Loans"
 contractFormTypeChoiceToLabel ZeroCouponBonds = "Zero Coupon Bonds"
-contractFormTypeChoiceToLabel JsonForm = "Any ACUTS contract (Json Form)"
+contractFormTypeChoiceToLabel JsonForm = "Any ACTUS contract (Json Form)"
 
 contractFormTypeChoiceToHelpText :: ContractFormTypeChoice -> JSX
 contractFormTypeChoiceToHelpText AmortizingLoans = DOOM.text "An amortizing loan is a loan where according to an amortization schedule payments are executed to pay back the principal with interest."

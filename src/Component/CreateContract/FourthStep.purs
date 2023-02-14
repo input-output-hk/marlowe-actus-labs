@@ -26,8 +26,8 @@ import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
 import Language.Marlowe.Core.V1.Semantics.Types as V1
 import Marlowe.Actus.Metadata (Metadata(..), actusMetadataKey)
-import Marlowe.Runtime.Web.Client (ClientError, post', put')
-import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractsEndpoint, PostContractsRequest(..), PostContractsResponseContent(..), PutContractRequest(..), Runtime(..), ServerURL, TextEnvelope(..), toTextEnvelope)
+import Marlowe.Runtime.Web.Client (ClientError(..), merkleize, post', put')
+import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractsEndpoint, PostContractsRequest(..), PostContractsResponseContent(..), PostMerkleizationRequest(..), PostMerkleizationResponse(..), PutContractRequest(..), Runtime(..), ServerURL, TextEnvelope(..), toTextEnvelope)
 import Marlowe.Runtime.Web.Types as RT
 import React.Basic (fragment) as DOOM
 import React.Basic.DOM (tbody_, td_, text, tr_) as DOOM
@@ -66,10 +66,10 @@ mkComponent = do
   liftEffect $ component "SubmitContract" \{ contractData: contractData@(ContractData contractDataRec), connectedWallet, inModal, onDismiss, onSuccess } -> React.do
     step /\ setStep <- useState' Creating
     let
-      onSubmit = handler preventDefault \_ -> do
+      onSubmit f = handler preventDefault \_ -> do
         traceM "ON SUBMIT CLICKED"
         launchAff_ $ do
-          create contractData runtime.serverURL runtime.root >>= case _ of
+          f contractData runtime.serverURL runtime.root >>= case _ of
             Right res@{ resource: PostContractsResponseContent postContractsResponse, links: { contract: contractEndpoint } } -> do
               traceM "Response"
               traceM res
@@ -131,9 +131,15 @@ mkComponent = do
           , DOM.button
               do
                 { className: "btn btn-primary"
-                , onClick: onSubmit
+                , onClick: onSubmit create
                 }
               [ DOOM.text "Submit" ]
+          , DOM.button
+              do
+                { className: "btn btn-primary"
+                , onClick: onSubmit createMerkleized
+                }
+              [ DOOM.text "Submit merkleized" ]
           ]
 
       if inModal then modal
@@ -148,6 +154,39 @@ mkComponent = do
           [ body
           , footer
           ]
+
+createMerkleized :: ContractData -> ServerURL -> ContractsEndpoint -> Aff _
+createMerkleized contractData serverUrl contractsEndpoint = do
+  let
+    ContractData { contractTerms, contract, party, counterParty, changeAddress, usedAddresses } = contractData
+    metadata = RT.Metadata $ Map.singleton actusMetadataKey $ encodeJson $ Metadata
+      { contractTerms: contractTerms
+      , party
+      , counterParty
+      }
+
+    merkleizationReq = PostMerkleizationRequest { contract }
+
+  merkleize serverUrl merkleizationReq >>= case _ of
+    Right { payload } -> do
+      let
+        PostMerkleizationResponse { contract: merkleized } = payload
+
+        req = PostContractsRequest
+          { metadata
+          -- , version :: MarloweVersion
+          -- , roles :: Maybe RolesConfig
+          , contract: merkleized
+          , minUTxODeposit: V1.Lovelace (BigInt.fromInt 2_000_000)
+          , changeAddress: changeAddress
+          , addresses: usedAddresses <> [ changeAddress ]
+          , collateralUTxOs: []
+          }
+
+      post' serverUrl contractsEndpoint req
+    Left err -> do
+      traceM err
+      pure $ Left MerkleizationError
 
 create :: ContractData -> ServerURL -> ContractsEndpoint -> Aff _
 create contractData serverUrl contractsEndpoint = do

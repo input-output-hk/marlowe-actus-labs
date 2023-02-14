@@ -22,7 +22,7 @@ import Data.Tuple.Nested ((/\))
 import Debug (traceM)
 import Effect.Exception (error)
 import Language.Marlowe.Core.V1.Semantics (isClose, playTrace, reduceContract)
-import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId(..), Input(..), Party(..), Payee(..), Payment(..), TimeInterval(..), Token(..), TransactionInput(..), TransactionOutput(..))
+import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId(..), Input(..), InputContent(..), Party(..), Payee(..), Payment(..), TimeInterval(..), Token(..), TransactionInput(..), TransactionOutput(..))
 import Marlowe.Actus (currencyToToken, defaultRiskFactors, genContract, oracleParty)
 import Marlowe.Time (unixEpoch)
 import Node.Encoding (Encoding(..))
@@ -55,7 +55,7 @@ spec = do
             interest = IDeposit counterparty counterparty token $ unsafePartial $ fromJust $ fromString "200000000"
             payout = IDeposit counterparty counterparty token $ unsafePartial $ fromJust $ fromString "10000000000"
 
-            inputs = toUnfoldable
+            inputs = map NormalInput $ toUnfoldable
               [ payin
               , interest
               , interest
@@ -101,7 +101,7 @@ spec = do
             interest = IDeposit counterparty counterparty token $ unsafePartial $ fromJust $ fromString "200000000"
             payout = IDeposit counterparty counterparty token $ unsafePartial $ fromJust $ fromString "10000000000"
 
-            inputs = toUnfoldable
+            inputs = map NormalInput $ toUnfoldable
               [ payin
               , interest
               , interest
@@ -146,7 +146,7 @@ spec = do
             interest = IDeposit party party token $ unsafePartial $ fromJust $ fromString "200000000"
             payout = IDeposit party party token $ unsafePartial $ fromJust $ fromString "10000000000"
 
-            inputs = toUnfoldable
+            inputs = map NormalInput $ toUnfoldable
               [ payin
               , interest
               , interest
@@ -192,15 +192,15 @@ spec = do
             interest = IDeposit counterparty counterparty token $ unsafePartial $ fromJust $ fromString "200000000"
             payout = IDeposit counterparty counterparty token $ unsafePartial $ fromJust $ fromString "10000000000"
 
-            inputsPayIn = toUnfoldable
+            inputsPayIn = map NormalInput $ toUnfoldable
               [ exchangeRate
               , payin
               ]
-            inputsInterest = toUnfoldable
+            inputsInterest = map NormalInput $ toUnfoldable
               [ exchangeRate
               , interest
               ]
-            inputsPayOut = toUnfoldable
+            inputsPayOut = map NormalInput $ toUnfoldable
               [ exchangeRate
               , payout
               ]

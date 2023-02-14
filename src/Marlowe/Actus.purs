@@ -4,6 +4,7 @@ module Marlowe.Actus
   ( CashFlows
   , RiskFactorsMarlowe
   , genContract
+  , genContract'
   , defaultRiskFactors
   , toMarloweCashflow
   , toMarloweValue
@@ -90,7 +91,17 @@ genContract
   ->
   -- | Marlowe contract
   Contract
-genContract contractTerms cashFlows = reduceContract $ foldl (generator contractTerms) Close $ reverse (map toMarloweCashflow cashFlows)
+genContract contractTerms cashFlows = genContract' contractTerms $ reverse (map toMarloweCashflow cashFlows)
+
+-- | 'genContract' generates contract terms from projected cash-flows
+genContract'
+  :: ContractTerms
+  -- | List of projected cash-flows
+  -> List (CashFlow Value Party)
+  ->
+  -- | Marlowe contract
+  Contract
+genContract' contractTerms cashFlows = reduceContract $ foldl (generator contractTerms) Close cashFlows
   where
   generator :: ContractTerms -> Contract -> CashFlow Value Party -> Contract
   generator
@@ -143,6 +154,7 @@ genContract contractTerms cashFlows = reduceContract $ foldl (generator contract
 
   invoice :: Party -> Party -> Token -> Value -> Instant -> Contract -> Contract
   invoice a b token amount timeout continue =
+    -- TODO: Use MerkleizedCase instead
     When [ Case (Deposit a a token amount) (Pay a (Party b) token amount continue) ] timeout Close
 
 currencyToToken :: String -> Token
