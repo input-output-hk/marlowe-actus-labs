@@ -66,10 +66,10 @@ mkComponent = do
   liftEffect $ component "SubmitContract" \{ contractData: contractData@(ContractData contractDataRec), connectedWallet, inModal, onDismiss, onSuccess } -> React.do
     step /\ setStep <- useState' Creating
     let
-      onSubmit = handler preventDefault \_ -> do
+      onSubmit f = handler preventDefault \_ -> do
         traceM "ON SUBMIT CLICKED"
         launchAff_ $ do
-          create contractData runtime.serverURL runtime.root >>= case _ of
+          f contractData runtime.serverURL runtime.root >>= case _ of
             Right res@{ resource: PostContractsResponseContent postContractsResponse, links: { contract: contractEndpoint } } -> do
               traceM "Response"
               traceM res
@@ -131,9 +131,15 @@ mkComponent = do
           , DOM.button
               do
                 { className: "btn btn-primary"
-                , onClick: onSubmit
+                , onClick: onSubmit create
                 }
               [ DOOM.text "Submit" ]
+          , DOM.button
+              do
+                { className: "btn btn-primary"
+                , onClick: onSubmit createMerkleized
+                }
+              [ DOOM.text "Submit merkleized" ]
           ]
 
       if inModal then modal
@@ -149,8 +155,8 @@ mkComponent = do
           , footer
           ]
 
-create :: ContractData -> ServerURL -> ContractsEndpoint -> Aff _
-create contractData serverUrl contractsEndpoint = do
+createMerkleized :: ContractData -> ServerURL -> ContractsEndpoint -> Aff _
+createMerkleized contractData serverUrl contractsEndpoint = do
   let
     ContractData { contractTerms, contract, party, counterParty, changeAddress, usedAddresses } = contractData
     metadata = RT.Metadata $ Map.singleton actusMetadataKey $ encodeJson $ Metadata
@@ -162,9 +168,9 @@ create contractData serverUrl contractsEndpoint = do
     merkleizationReq = PostMerkleizationRequest { contract }
 
   merkleize serverUrl merkleizationReq >>= case _ of
-    Right { headers, payload, status } -> do
+    Right { payload } -> do
       let
-        PostMerkleizationResponse { contract: merkleized, continuations } = payload
+        PostMerkleizationResponse { contract: merkleized } = payload
 
         req = PostContractsRequest
           { metadata
@@ -181,6 +187,29 @@ create contractData serverUrl contractsEndpoint = do
     Left err -> do
       traceM err
       pure $ Left MerkleizationError
+
+create :: ContractData -> ServerURL -> ContractsEndpoint -> Aff _
+create contractData serverUrl contractsEndpoint = do
+  let
+    ContractData { contractTerms, contract, party, counterParty, changeAddress, usedAddresses } = contractData
+    metadata = RT.Metadata $ Map.singleton actusMetadataKey $ encodeJson $ Metadata
+      { contractTerms: contractTerms
+      , party
+      , counterParty
+      }
+
+    req = PostContractsRequest
+      { metadata
+      -- , version :: MarloweVersion
+      -- , roles :: Maybe RolesConfig
+      , contract
+      , minUTxODeposit: V1.Lovelace (BigInt.fromInt 2_000_000)
+      , changeAddress: changeAddress
+      , addresses: usedAddresses <> [ changeAddress ]
+      , collateralUTxOs: []
+      }
+
+  post' serverUrl contractsEndpoint req
 
 submit :: CborHex TransactionWitnessSetObject -> ServerURL -> ContractEndpoint -> Aff _
 submit witnesses serverUrl contractEndpoint = do
