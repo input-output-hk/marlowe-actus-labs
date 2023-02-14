@@ -4,6 +4,7 @@ module Marlowe.Actus
   ( CashFlows
   , RiskFactorsMarlowe
   , genContract
+  , genContract'
   , defaultRiskFactors
   , toMarloweCashflow
   , toMarloweValue
@@ -90,7 +91,17 @@ genContract
   ->
   -- | Marlowe contract
   Contract
-genContract contractTerms cashFlows = reduceContract $ foldl (generator contractTerms) Close $ reverse (map toMarloweCashflow cashFlows)
+genContract contractTerms cashFlows = genContract' contractTerms $ reverse (map toMarloweCashflow cashFlows)
+
+-- | 'genContract' generates contract terms from projected cash-flows
+genContract'
+  :: ContractTerms
+  -- | List of projected cash-flows
+  -> List (CashFlow Value Party)
+  ->
+  -- | Marlowe contract
+  Contract
+genContract' contractTerms cashFlows = reduceContract $ foldl (generator contractTerms) Close cashFlows
   where
   generator :: ContractTerms -> Contract -> CashFlow Value Party -> Contract
   generator
