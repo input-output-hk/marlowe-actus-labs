@@ -141,79 +141,79 @@ mkEventList = do
           case possibleWalletContext of
             Just { changeAddress: Just changeAddress } -> do
 
-                let
-                  contract = genContract' contractTerms $ List.reverse $ map (\(CashFlowInfo { cashFlow }) -> cashFlow) cashFlowInfo
-                  merkleizationReq = PostMerkleizationRequest { contract }
+              let
+                contract = genContract' contractTerms $ List.reverse $ map (\(CashFlowInfo { cashFlow }) -> cashFlow) cashFlowInfo
+                merkleizationReq = PostMerkleizationRequest { contract }
 
-                merkleize runtime.serverURL merkleizationReq >>= case _ of
-                  Right { payload } -> do
-                    let
-                      PostMerkleizationResponse { continuations } = payload
-                    addresses <- walletAddresses cardanoMultiplatformLib cw
+              merkleize runtime.serverURL merkleizationReq >>= case _ of
+                Right { payload } -> do
+                  let
+                    PostMerkleizationResponse { continuations } = payload
+                  addresses <- walletAddresses cardanoMultiplatformLib cw
 
-                    let
-                      inputs = case marloweInfo of
-                        Just (MarloweInfo { currentContract: Just currentContract' }) ->
-                          case continuationHash currentContract' of
-                            Just hash ->
-                              case Map.lookup hash continuations of
-                                Just cont -> do
-                                  singleton $ MerkleizedInput (IDeposit party party token value) hash cont
-                                _ -> singleton $ NormalInput (IDeposit party party token value) -- TODO: error instead
-                            _ -> singleton $ NormalInput (IDeposit party party token value)
-                        _ -> singleton $ NormalInput (IDeposit party party token value)
+                  let
+                    inputs = case marloweInfo of
+                      Just (MarloweInfo { currentContract: Just currentContract' }) ->
+                        case continuationHash currentContract' of
+                          Just hash ->
+                            case Map.lookup hash continuations of
+                              Just cont -> do
+                                singleton $ MerkleizedInput (IDeposit party party token value) hash cont
+                              _ -> singleton $ NormalInput (IDeposit party party token value) -- TODO: error instead
+                          _ -> singleton $ NormalInput (IDeposit party party token value)
+                      _ -> singleton $ NormalInput (IDeposit party party token value)
 
-                      invalidBefore = fromMaybe now $ adjust (Duration.Minutes (-2.0)) now
-                      invalidHereafter = fromMaybe now $ adjust (Duration.Minutes 2.0) now
-                      collateralUTxOs = []
+                    invalidBefore = fromMaybe now $ adjust (Duration.Minutes (-2.0)) now
+                    invalidHereafter = fromMaybe now $ adjust (Duration.Minutes 2.0) now
+                    collateralUTxOs = []
 
-                      req = PostTransactionsRequest
-                        { inputs
-                        , invalidBefore
-                        , invalidHereafter
-                        , metadata: mempty
-                        , changeAddress
-                        , addresses
-                        , collateralUTxOs
-                        }
+                    req = PostTransactionsRequest
+                      { inputs
+                      , invalidBefore
+                      , invalidHereafter
+                      , metadata: mempty
+                      , changeAddress
+                      , addresses
+                      , collateralUTxOs
+                      }
 
-                    post' runtime.serverURL transactionsEndpoint req
-                      >>= case _ of
-                        Right ({ resource: PostTransactionsResponse postTransactionsResponse, links: { transaction: transactionEndpoint } }) -> do
-                          traceM postTransactionsResponse
-                          let
-                            { txBody: tx } = postTransactionsResponse
-                            TextEnvelope { cborHex: txCborHex } = tx
-                          Wallet.signTx cw txCborHex true >>= case _ of
-                            Right witnessSet -> do
-                              submit witnessSet runtime.serverURL transactionEndpoint >>= case _ of
-                                Right _ -> do
-                                  traceM "Successfully submitted the transaction"
-                                  liftEffect $ msgHubProps.add $ Success $ DOOM.text $ "Successfully submitted a transaction"
-                                -- liftEffect $ onSuccess contractEndpoint
-                                Left err -> do
-                                  traceM "Error while submitting the transaction"
-                                  liftEffect $ msgHubProps.add $ Error $ DOOM.text $ "Error while submitting the transaction"
-                                  traceM err
+                  post' runtime.serverURL transactionsEndpoint req
+                    >>= case _ of
+                      Right ({ resource: PostTransactionsResponse postTransactionsResponse, links: { transaction: transactionEndpoint } }) -> do
+                        traceM postTransactionsResponse
+                        let
+                          { txBody: tx } = postTransactionsResponse
+                          TextEnvelope { cborHex: txCborHex } = tx
+                        Wallet.signTx cw txCborHex true >>= case _ of
+                          Right witnessSet -> do
+                            submit witnessSet runtime.serverURL transactionEndpoint >>= case _ of
+                              Right _ -> do
+                                traceM "Successfully submitted the transaction"
+                                liftEffect $ msgHubProps.add $ Success $ DOOM.text $ "Successfully submitted a transaction"
+                              -- liftEffect $ onSuccess contractEndpoint
+                              Left err -> do
+                                traceM "Error while submitting the transaction"
+                                liftEffect $ msgHubProps.add $ Error $ DOOM.text $ "Error while submitting the transaction"
+                                traceM err
 
-                            Left err -> do
-                              traceM err
-                              pure unit
+                          Left err -> do
+                            traceM err
+                            pure unit
 
-                          pure unit
-                        Left _ -> do
-                          traceM token
-                          traceM $ BigInt.toString value
-                          traceM "error"
-                          pure unit
+                        pure unit
+                      Left _ -> do
+                        traceM token
+                        traceM $ BigInt.toString value
+                        traceM "error"
+                        pure unit
 
-                    pure unit
-                  Left err -> do
-                    traceM err
-                    pure unit
-            Nothing -> do
-                -- Note: this happens, when the contract is in status `Unsigned`
-                pure unit
+                  pure unit
+                Left err -> do
+                  traceM err
+                  pure unit
+            _ -> do
+              -- Note: this happens, when the contract is in status `Unsigned`
+              pure unit
 
         updateState _ { newInput = Nothing }
 
