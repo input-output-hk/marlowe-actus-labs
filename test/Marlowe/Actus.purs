@@ -21,10 +21,11 @@ import Data.Time.Duration (Milliseconds(..))
 import Data.Tuple.Nested ((/\))
 import Debug (traceM)
 import Effect.Exception (error)
-import Language.Marlowe.Core.V1.Semantics (isClose, playTrace, reduceContract)
+import Language.Marlowe.Core.V1.Semantics (isClose, playTrace)
 import Language.Marlowe.Core.V1.Semantics.Types (ChoiceId(..), Input(..), InputContent(..), Party(..), Payee(..), Payment(..), TimeInterval(..), Token(..), TransactionInput(..), TransactionOutput(..))
 import Marlowe.Actus (currencyToToken, defaultRiskFactors, genContract, oracleParty)
 import Marlowe.Time (unixEpoch)
+import Marlowe.Utils (rewrite)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff (readTextFile)
 import Partial.Unsafe (unsafePartial)
@@ -48,7 +49,7 @@ spec = do
             party = Role "party"
             counterparty = Role "counterparty"
             cashFlows = genProjectedCashflows (party /\ counterparty) riskFactors contract
-            marloweContract = reduceContract $ genContract contract cashFlows
+            marloweContract = rewrite $ genContract contract cashFlows
             token = tokenFromContractTerms contract
 
             payin = IDeposit party party token $ unsafePartial $ fromJust $ fromString "10000000000"
@@ -94,7 +95,7 @@ spec = do
             party = Role "party"
             counterparty = Role "counterparty"
             cashFlows = genProjectedCashflows (party /\ counterparty) riskFactors contract
-            marloweContract = reduceContract $ genContract contract cashFlows
+            marloweContract = rewrite $ genContract contract cashFlows
             token = tokenFromContractTerms contract
 
             payin = IDeposit party party token $ unsafePartial $ fromJust $ fromString "10000000000"
@@ -139,7 +140,7 @@ spec = do
             party = Role "party"
             counterparty = Role "counterparty"
             cashFlows = genProjectedCashflows (party /\ counterparty) riskFactors contract
-            marloweContract = reduceContract $ genContract contract cashFlows
+            marloweContract = rewrite $ genContract contract cashFlows
             token = tokenFromContractTerms contract
 
             payin = IDeposit counterparty counterparty token $ unsafePartial $ fromJust $ fromString "10000000000"
@@ -184,7 +185,7 @@ spec = do
             party = Role "party"
             counterparty = Role "counterparty"
             cashFlows = genProjectedCashflows (party /\ counterparty) (defaultRiskFactors contract) contract
-            marloweContract = reduceContract $ genContract contract cashFlows
+            marloweContract = rewrite $ genContract contract cashFlows
             token = tokenFromContractTerms contract
 
             exchangeRate = IChoice (ChoiceId "ADADjedTestUSD" oracleParty) (fromInt 100000000) -- 100 cents in micro currency

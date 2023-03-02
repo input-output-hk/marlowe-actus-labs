@@ -26,9 +26,9 @@ import Data.Int (round)
 import Data.List (List, reverse)
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Time.Duration (Seconds(..), convertDuration)
-import Language.Marlowe.Core.V1.Semantics (reduceContract)
 import Language.Marlowe.Core.V1.Semantics.Types (Action(..), Bound(..), Case(..), ChoiceId(..), Contract(..), Observation(..), Party(..), Payee(..), Token(..), Value(..), ValueId(..))
 import Marlowe.Actus.Metadata (Metadata(..)) as Exports
+import Marlowe.Utils (rewrite)
 
 type CashFlows = List (CashFlow Value' Party)
 type ContractStateMarlowe = ContractState Value'
@@ -101,7 +101,7 @@ genContract'
   ->
   -- | Marlowe contract
   Contract
-genContract' contractTerms cashFlows = reduceContract $ foldl (generator contractTerms) Close cashFlows
+genContract' contractTerms cashFlows = rewrite $ foldl (generator contractTerms) Close cashFlows
   where
   generator :: ContractTerms -> Contract -> CashFlow Value Party -> Contract
   generator
@@ -145,7 +145,7 @@ genContract' contractTerms cashFlows = reduceContract $ foldl (generator contrac
         IP, CR_RPL -> invoice party counterparty token negAmount timeout continuation
         MD, CR_RPA -> invoice counterparty party token amount timeout continuation
         MD, CR_RPL -> invoice party counterparty token negAmount timeout continuation
-        _, _ -> reduceContract $ If ((Constant $ fromInt 0) `ValueLT` amount)
+        _, _ -> rewrite $ If ((Constant $ fromInt 0) `ValueLT` amount)
           (invoice counterparty party token amount timeout continuation)
           ( If (amount `ValueLT` (Constant $ fromInt 0))
               (invoice party counterparty token negAmount timeout continuation)
