@@ -4,8 +4,8 @@
 
 import { main } from "../output/Main/index.js";
 import domready from 'domready';
-import "../public/style.scss";
-import aboutMarkdown from "../public/about.md";
+import "../static/style.scss";
+import aboutMarkdown from "../static/about.md";
 
 import actusApplicability from "../static/actus-dictionary-applicability.json";
 import actusTerms from "../static/actus-dictionary-terms.json";
