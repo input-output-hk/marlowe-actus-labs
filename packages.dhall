@@ -69,7 +69,7 @@ in upstream
       , "unfoldable"
       ]
       "https://github.com/input-output-hk/purescript-marlowe.git"
-      "main"
+      "624063eb604b376272593a8fd0b106cbe523aeaf"
   with typelevel-eval =mkPackage
     [ "bifunctors"
     , "console"
