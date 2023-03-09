@@ -33,11 +33,13 @@ import Data.Foldable (foldMap)
 import Data.Map (Map)
 import Data.Map (catMaybes, empty, filter, fromFoldable, lookup, union) as Map
 import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Newtype (un)
 import Data.Newtype as Newtype
 import Data.Traversable (for_)
 import Data.TraversableWithIndex (forWithIndex)
 import Data.Tuple (snd)
 import Data.Tuple.Nested (type (/\), (/\))
+import Debug (traceM)
 import Effect (Effect)
 import Effect.Aff (Aff, Fiber, Milliseconds, delay, forkAff)
 import Effect.Aff.AVar as AVar
@@ -46,7 +48,7 @@ import Effect.Ref as Ref
 import Halogen.Subscription (Listener)
 import Halogen.Subscription as Subscription
 import Marlowe.Runtime.Web.Client (foldMapMContractPages, getPages', getResource')
-import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractId, ContractState, GetContractResponse, GetContractsResponse, ServerURL, TransactionEndpoint, TransactionsEndpoint, TxHeader, api)
+import Marlowe.Runtime.Web.Types (ContractEndpoint, ContractHeader(..), ContractId, ContractState, GetContractResponse, GetContractsResponse, ServerURL, TransactionEndpoint, TransactionsEndpoint, TxHeader, api)
 
 -- | API CAUTION: We update the state in chunks but send the events one by one. This means that
 -- | the event handler can see some state changes (in `getLiveState`) before it receives some notifications.
@@ -94,6 +96,7 @@ contracts (PollingInterval pollingInterval) (RequestInterval requestInterval) se
     nextContracts :: Map ContractId GetContractsResponse <-
       map contractsById $ Effect.liftEither =<< foldMapMContractPages serverUrl api Nothing \pageContracts -> do
         liftEffect do
+          traceM $ map (_.metadata <<< un ContractHeader <<< _.resource) pageContracts
           let
             cs :: Map ContractId GetContractsResponse
             cs = contractsById pageContracts

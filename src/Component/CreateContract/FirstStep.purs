@@ -2,7 +2,7 @@ module Component.CreateContract.FirstStep where
 
 import Prelude
 
-import Component.CreateContract.Types (ContractFormTypeChoice(..))
+import Component.CreateContract.Types (AmortizingLoanChoice(..), ContractFormTypeChoice(..))
 import Component.Modal (mkModal)
 import Component.Modal as Modal
 import Component.Types (MkComponentM)
@@ -19,11 +19,9 @@ import Data.Either (Either(..))
 import Data.Enum (upFromIncluding)
 import Data.FormURLEncoded.Query (Query)
 import Data.Maybe (Maybe(..))
-import Data.Set as Set
 import Data.Time.Duration (Seconds(..))
 import Data.Tuple.Nested ((/\))
 import Data.Validation.Semigroup (V(..))
-import Debug (traceM)
 import Effect (Effect)
 import Effect.Class (liftEffect)
 import Polyform.Batteries as Batteries
@@ -42,15 +40,26 @@ import Type.Prelude (Proxy(..))
 type Result = ContractFormTypeChoice
 
 contractFormTypeChoiceToLabel :: ContractFormTypeChoice -> String
-contractFormTypeChoiceToLabel AmortizingLoans = "Amortizing Loans"
+contractFormTypeChoiceToLabel (AmortizingLoans amortizingLoan) = case amortizingLoan of
+  PrincipalAtMaturity -> "Principal at maturity"
+  LinearAmortizer -> "Linear amortizer"
+  NegativeAmortizer -> "Negative amortizer"
+  Annuity -> "Annuity"
 contractFormTypeChoiceToLabel Bonds = "Bonds"
 contractFormTypeChoiceToLabel BulletLoans = "Bullet Loans"
 contractFormTypeChoiceToLabel CapitalizingLoans = "Capitalizing Loans"
 contractFormTypeChoiceToLabel ZeroCouponBonds = "Zero Coupon Bonds"
 contractFormTypeChoiceToLabel JsonForm = "Any ACTUS contract (Json Form)"
 
+amortizingLoanChoiceToHelpText :: AmortizingLoanChoice -> String
+amortizingLoanChoiceToHelpText = case _ of
+  PrincipalAtMaturity -> "Principal at maturity only defines periodic interest payments, the full principal is due at maturity."
+  LinearAmortizer -> "Regular principal repayments over time, the interest payments decrease linearly."
+  NegativeAmortizer -> "Negative amortization means that the payments per period are smaller than the interest, i.e. the balance of the loan increases over time."
+  Annuity -> "The annuity amortization consists of regular payments of equal amounts over the lifetime of the loan."
+
 contractFormTypeChoiceToHelpText :: ContractFormTypeChoice -> JSX
-contractFormTypeChoiceToHelpText AmortizingLoans = DOOM.text "An amortizing loan is a loan where according to an amortization schedule payments are executed to pay back the principal with interest."
+contractFormTypeChoiceToHelpText (AmortizingLoans amortizingLoan) = DOOM.text $ amortizingLoanChoiceToHelpText amortizingLoan
 contractFormTypeChoiceToHelpText JsonForm = DOOM.text "You can create any contract by providing JSON object which is conformant to the ACTUS specification."
 contractFormTypeChoiceToHelpText _ = DOOM.text "Not implemented yet."
 
@@ -68,7 +77,13 @@ contractFormTypeChoiceField = do
       let
         value = serialize a
         label = DOOM.text $ contractFormTypeChoiceToLabel a
-        disabled = not $ a `Array.elem` [ JsonForm, AmortizingLoans ]
+        disabled = not $ a `Array.elem`
+          [ JsonForm
+          , AmortizingLoans PrincipalAtMaturity
+          , AmortizingLoans LinearAmortizer
+          , AmortizingLoans NegativeAmortizer
+          , AmortizingLoans Annuity
+          ]
         helpText = Just $ contractFormTypeChoiceToHelpText a
       { label, value, disabled, helpText }
     choices = map asChoice (upFromIncluding bottom :: ArrayAL 1 ContractFormTypeChoice)
@@ -87,7 +102,7 @@ type Props =
   }
 
 form :: BootstrapForm Effect Query Result
-form = FormBuilder.evalBuilder contractFormTypeChoiceField
+form = FormBuilder.evalBuilder' $ contractFormTypeChoiceField
 
 mkComponent :: MkComponentM (Props -> JSX)
 mkComponent = do
@@ -140,4 +155,3 @@ mkComponent = do
         }
       else
         formBody
-

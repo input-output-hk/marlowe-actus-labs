@@ -230,7 +230,10 @@ class HasTextEnvelope a where
   textEnvelopeType :: forall proxy. proxy a -> String
 
 instance HasTextEnvelope TransactionWitnessSetObject where
-  textEnvelopeType _ = "WitnessesBabbage"
+  textEnvelopeType _ = "ShelleyTxWitness BabbageEra"
+
+instance HasTextEnvelope TransactionObject where
+  textEnvelopeType _ = "Tx BabbageEra"
 
 toTextEnvelope :: forall a. HasTextEnvelope a => CborHex a -> String -> TextEnvelope a
 toTextEnvelope cborHex description = TextEnvelope
@@ -438,6 +441,7 @@ instance EncodeJsonBody PostContractsRequest where
 type PostContractsHeadersRow =
   ( "X-Change-Address" :: String
   , "X-Address" :: String
+  , "Accept" :: String
   -- , "X-Collateral-UTxO" :: String
   )
 
@@ -445,6 +449,7 @@ instance EncodeHeaders PostContractsRequest PostContractsHeadersRow where
   encodeHeaders (PostContractsRequest { changeAddress, addresses }) =
     { "X-Change-Address": bech32ToString changeAddress
     , "X-Address": String.joinWith "," (map bech32ToString addresses)
+    , "Accept": "application/vendor.iog.marlowe-runtime.contract-tx-json"
     -- FIXME: Empty collateral causes request rejection so ... this header record representation
     -- gonna be hard to maintain and we should switch to `Object String` probably and use
     -- lower level fetch API.
@@ -455,14 +460,14 @@ instance EncodeHeaders PostContractsRequest PostContractsHeadersRow where
 -- just the body.
 newtype PostContractsResponseContent = PostContractsResponseContent
   { contractId :: TxOutRef
-  , txBody :: TextEnvelope TransactionObject
+  , tx :: TextEnvelope TransactionObject
   }
 
 derive instance Newtype PostContractsResponseContent _
 
 instance DecodeJson PostContractsResponseContent where
   decodeJson = decodeNewtypedRecord
-    { txBody: map decodeTransactionObjectTextEnvelope :: Maybe _ -> Maybe _ }
+    { tx: map decodeTransactionObjectTextEnvelope :: Maybe _ -> Maybe _ }
 
 type ContractEndpointRow r = ("contract" :: ContractEndpoint | r)
 
@@ -519,10 +524,18 @@ instance EncodeJsonBody PostTransactionsRequest where
     , version: V1
     }
 
-instance EncodeHeaders PostTransactionsRequest PostContractsHeadersRow where
+type PostTransactionsRequestRow =
+  ( "X-Change-Address" :: String
+  , "X-Address" :: String
+  , "Accept" :: String
+  -- , "X-Collateral-UTxO" :: String
+  )
+
+instance EncodeHeaders PostTransactionsRequest PostTransactionsRequestRow where
   encodeHeaders (PostTransactionsRequest { changeAddress, addresses }) = -- , collateralUTxOs }) =
     { "X-Change-Address": bech32ToString changeAddress
     , "X-Address": String.joinWith "," (map bech32ToString addresses)
+    , "Accept": "application/vendor.iog.marlowe-runtime.apply-inputs-tx-json"
     -- FIXME: Check comment above regarding the same header and contraacts endpoint request.
     -- , "X-Collateral-UTxO": String.joinWith "," (map txOutRefToString collateralUTxOs)
     }

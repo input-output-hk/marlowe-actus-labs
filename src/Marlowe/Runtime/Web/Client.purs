@@ -60,9 +60,8 @@ newtype Range = Range String
 getResource
   :: forall a extraHeaders
    . DecodeJson a
-  => Row.Lacks "Accept" extraHeaders
   => Row.Lacks "Access-Control-Request-Headers" extraHeaders
-  => Row.Homogeneous ("Accept" :: String, "Access-Control-Request-Headers" :: String | extraHeaders) String
+  => Row.Homogeneous ("Access-Control-Request-Headers" :: String | extraHeaders) String
   => ServerURL
   -> ResourceLink a
   -> { | extraHeaders }
@@ -73,7 +72,7 @@ getResource (ServerURL serverUrl) (ResourceLink path) extraHeaders = do
 
     reqHeaders =
       R.insert (Proxy :: Proxy "Access-Control-Request-Headers") "Range, Accept"
-        $ R.insert (Proxy :: Proxy "Accept") "application/json"
+        -- $ R.insert (Proxy :: Proxy "Accept") "application/json"
         $ extraHeaders
 
   runExceptT do
@@ -227,9 +226,9 @@ getItems' serverUrl endpoint range = do
 getResource'
   :: forall a extraHeaders endpoint
    . DecodeJson a
-  => Row.Lacks "Accept" extraHeaders
+  -- => Row.Lacks "Accept" extraHeaders
   => Row.Lacks "Access-Control-Request-Headers" extraHeaders
-  => Row.Homogeneous ("Accept" :: String, "Access-Control-Request-Headers" :: String | extraHeaders) String
+  => Row.Homogeneous ("Access-Control-Request-Headers" :: String | extraHeaders) String
   => ToResourceLink endpoint a
   => ServerURL
   -> endpoint
@@ -267,8 +266,8 @@ post
   => EncodeJsonBody postRequest
   => DecodeRecord (resource :: DecodeJsonFieldFn postResponse) (ResourceWithLinksRow postResponse postResponseLinks)
   => Row.Homogeneous extraHeaders String
-  => Row.Homogeneous ("Accept" :: String, "Content-Type" :: String | extraHeaders) String
-  => Row.Lacks "Accept" extraHeaders
+  => Row.Homogeneous ("Content-Type" :: String | extraHeaders) String
+  -- => Row.Lacks "Accept" extraHeaders
   => Row.Lacks "Content-Type" extraHeaders
   => ServerURL
   -> IndexEndpoint postRequest postResponse postResponseLinks getResponse getResponseLinks
@@ -279,11 +278,11 @@ post (ServerURL serverUrl) (IndexEndpoint (ResourceLink path)) req = runExceptT 
     url = serverUrl <> "/" <> path
     body = stringify $ encodeJsonBody req
 
-    headers :: { "Accept" :: String, "Content-Type" :: String | extraHeaders }
+    headers :: {"Content-Type" :: String | extraHeaders }
     headers =
-      R.insert (Proxy :: Proxy "Accept") "application/json"
-        $ R.insert (Proxy :: Proxy "Content-Type") "application/json"
-        $ (encodeHeaders req :: { | extraHeaders })
+      -- R.insert (Proxy :: Proxy "Accept") "application/json"
+        R.insert (Proxy :: Proxy "Content-Type") "application/json"
+          $ (encodeHeaders req :: { | extraHeaders })
 
   response <- ExceptT $ fetchEither url { method: POST, body, headers } allowedStatusCodes FetchError
   (lift (jsonBody response)) >>= decodeResourceWithLink (map decodeJson :: Maybe _ -> Maybe _) >>> case _ of
@@ -298,8 +297,8 @@ post'
   => EncodeHeaders postRequest extraHeaders
   => EncodeJsonBody postRequest
   => Row.Homogeneous extraHeaders String
-  => Row.Homogeneous ("Accept" :: String, "Content-Type" :: String | extraHeaders) String
-  => Row.Lacks "Accept" extraHeaders
+  => Row.Homogeneous ("Content-Type" :: String | extraHeaders) String
+  -- => Row.Lacks "Accept" extraHeaders
   => Row.Lacks "Content-Type" extraHeaders
   => ServerURL
   -> t
@@ -315,8 +314,8 @@ put
    . EncodeHeaders putRequest extraHeaders
   => EncodeJsonBody putRequest
   => Row.Homogeneous extraHeaders String
-  => Row.Homogeneous ("Accept" :: String, "Content-Type" :: String | extraHeaders) String
-  => Row.Lacks "Accept" extraHeaders
+  => Row.Homogeneous ("Content-Type" :: String | extraHeaders) String
+  -- => Row.Lacks "Accept" extraHeaders
   => Row.Lacks "Content-Type" extraHeaders
   => ServerURL
   -> ResourceEndpoint putRequest getResponse links
@@ -327,10 +326,10 @@ put (ServerURL serverUrl) (ResourceEndpoint (ResourceLink path)) req = runExcept
     url = serverUrl <> "/" <> path
     body = stringify $ encodeJsonBody req
 
-    headers :: { "Accept" :: String, "Content-Type" :: String | extraHeaders }
+    headers :: { "Content-Type" :: String | extraHeaders }
     headers =
-      R.insert (Proxy :: Proxy "Accept") "application/json"
-        $ R.insert (Proxy :: Proxy "Content-Type") "application/json"
+      -- R.insert (Proxy :: Proxy "Accept") "application/json"
+      R.insert (Proxy :: Proxy "Content-Type") "application/json"
         $ (encodeHeaders req :: { | extraHeaders })
   void $ ExceptT $ fetchEither url { method: PUT, body, headers } allowedStatusCodes identity
 
@@ -340,8 +339,8 @@ put'
   => EncodeJsonBody putRequest
   => Newtype t (ResourceEndpoint putRequest getResponse links)
   => Row.Homogeneous extraHeaders String
-  => Row.Homogeneous ("Accept" :: String, "Content-Type" :: String | extraHeaders) String
-  => Row.Lacks "Accept" extraHeaders
+  => Row.Homogeneous ("Content-Type" :: String | extraHeaders) String
+  -- => Row.Lacks "Accept" extraHeaders
   => Row.Lacks "Content-Type" extraHeaders
   => ServerURL
   -> t

@@ -6,7 +6,7 @@ import Component.CreateContract.FirstStep as FirstStep
 import Component.CreateContract.FourthStep as FourthStep
 import Component.CreateContract.SecondStep as SecondStep
 import Component.CreateContract.ThirdStep as ThirdStep
-import Component.CreateContract.Types (WizzardStep(..))
+import Component.CreateContract.Types (ContractFormTypeChoice(..), WizzardStep(..))
 import Component.Types (MkComponentM, WalletInfo)
 import Control.Monad.Reader.Class (asks)
 import Effect (Effect)

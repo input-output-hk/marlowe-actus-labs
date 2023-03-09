@@ -15,7 +15,7 @@ import Marlowe.Runtime.Web.Types (TxOutRef)
 import Type.Row (type (+))
 
 data ContractFormTypeChoice
-  = AmortizingLoans
+  = AmortizingLoans AmortizingLoanChoice
   | JsonForm
   | Bonds
   | BulletLoans

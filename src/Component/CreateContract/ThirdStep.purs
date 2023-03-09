@@ -55,7 +55,7 @@ import React.Basic.Hooks as React
 import Wallet as Wallet
 import WalletContext (WalletContext(..))
 
-addressInput :: CardanoMultiplatformLib.Lib -> String -> String -> Maybe String -> FormBuilder' Effect Bech32
+addressInput :: CardanoMultiplatformLib.Lib -> String -> String -> Maybe FieldId -> FormBuilder' Effect Bech32
 addressInput cardanoMultiplatformLib label initial name = do
   let
     props =
@@ -96,9 +96,9 @@ mkForm
   :: ContractTerms
   -> CardanoMultiplatformLib.Lib
   -> BootstrapForm Effect Query Result
-mkForm contractTerms cardanoMultiplatformLib = FormBuilder.evalBuilder ado
-  partyAddress <- addressInput cardanoMultiplatformLib "Your address" "" $ Just "party"
-  counterPartyAddress <- addressInput cardanoMultiplatformLib "Counter-party address" initialAddress $ Just "counter-party"
+mkForm contractTerms cardanoMultiplatformLib = FormBuilder.evalBuilder' ado
+  partyAddress <- addressInput cardanoMultiplatformLib "Your address" "" $ Just (FieldId "party")
+  counterPartyAddress <- addressInput cardanoMultiplatformLib "Counter-party address" initialAddress $ Just (FieldId "counter-party")
   let
     counterParty = bech32ToParty counterPartyAddress
     party = bech32ToParty partyAddress

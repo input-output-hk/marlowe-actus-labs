@@ -116,6 +116,7 @@ mkContractList = do
                     [ "Successfully submitted the contract. Contract transaction awaits to be included in the blockchain."
                     , "Contract status should change to 'Confirmed' at that point."
                     ]
+                  updateState _ { newContract = false }
               , inModal: true
               }
             _, _ -> mempty

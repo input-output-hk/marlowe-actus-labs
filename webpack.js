@@ -7,24 +7,23 @@ const __dirname = path.dirname(__filename);
 import webpack from 'webpack';
 import RemarkHTML from 'remark-html';
 
-export default function(env, argv) {
-  const develMode = argv.mode == "development";
-
-  if (develMode) {
-    console.log("Building development version");
-    if(!process.env.MARLOWE_WEB_SERVER_URL) {
-      console.log("You should setup MARLOWE_WEBSERVER_URL before starting the devel server - for example: $ export MARLOWE_WEB_SERVER_URL='http://127.0.0.1:479001'");
-    } else {
-      console.log("Checking MARLOWE_WEB_SERVER_URL: " + process.env.MARLOWE_WEB_SERVER_URL);
-      fetch(process.env.MARLOWE_WEB_SERVER_URL + "/contracts").catch(function (error) {
-        throw ("You should start the marlowe-web-server or change the MARLOWE_WEB_SERVER_URL environment variable value.");
-      }).then(function (response) {
-        console.log("marlowe-web-server is running");
-      });
-    }
+function getWebServerUrl() {
+  if(!process.env.MARLOWE_WEB_SERVER_URL) {
+    console.log("You should setup MARLOWE_WEBSERVER_URL before starting the devel server - for example: $ export MARLOWE_WEB_SERVER_URL='http://127.0.0.1:479001'");
+  } else {
+    console.log("Checking MARLOWE_WEB_SERVER_URL: " + process.env.MARLOWE_WEB_SERVER_URL);
+    fetch(process.env.MARLOWE_WEB_SERVER_URL + "/contracts").catch(function (_err) {
+      throw ("You should start the marlowe-web-server or change the MARLOWE_WEB_SERVER_URL environment variable value.");
+    }).then(function (_response) {
+      console.log("marlowe-web-server is running");
+      return process.env.MARLOWE_WEB_SERVER_URL;
+    });
   }
+};
 
-  const webServerUrl = process.env.MARLOWE_WEB_SERVER_URL;
+export default function(_env, argv) {
+  const develMode = argv.mode == "development";
+  const webServerUrl = getWebServerUrl();
 
   return {
     experiments: {
@@ -45,7 +44,7 @@ export default function(env, argv) {
         '@dcspark/cardano-multiplatform-lib-browser'
       ),
       new webpack.EnvironmentPlugin({
-        MARLOWE_WEB_SERVER_URL: process.env.MARLOWE_WEB_SERVER_URL,
+        MARLOWE_WEB_SERVER_URL: webServerUrl,
         DEVEL_MODE: develMode,
       }),
     ],

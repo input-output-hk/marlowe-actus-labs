@@ -1,5 +1,6 @@
 module Component.Types
-  ( MkContextBase(..)
+  ( ActusDictionaries
+  , MkContextBase(..)
   , MkComponentMBase(..)
   , MkComponentM
   , MessageHub(..)
@@ -15,16 +16,18 @@ import Prelude
 import CardanoMultiplatformLib as CardanoMultiplatformLib
 import Component.Types.ContractInfo (ContractInfo(..), UserCashFlowDirection(..), UserContractRole(..), ActusContractRole(..), CashFlowInfo(..), ActusContractId(..)) as Exports
 import Control.Monad.Reader (ReaderT)
+import Data.Argonaut (Json)
 import Data.List (List)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
-import Data.Tuple.Nested (type (/\), (/\))
+import Data.Tuple.Nested (type (/\))
 import Effect (Effect)
+import Foreign.Object as Foreign
 import Marlowe.Runtime.Web (Runtime)
 import Marlowe.Runtime.Web.Streaming (ContractWithTransactionsStream)
 import React.Basic (JSX, ReactContext)
 import Wallet as Wallet
-import WalletContext (WalletContext(..))
+import WalletContext (WalletContext)
 
 newtype WalletInfo wallet = WalletInfo
   { name :: String
@@ -55,6 +58,11 @@ newtype MessageHub = MessageHub
   , ctx :: ReactContext (List Message)
   }
 
+type ActusDictionaries =
+  { applicability :: Foreign.Object Json
+  , terms :: Foreign.Object Json
+  }
+
 type MkContextBase r =
   { cardanoMultiplatformLib :: CardanoMultiplatformLib.Lib
   , walletInfoCtx :: ReactContext (Maybe (WalletInfo Wallet.Api /\ WalletContext))
@@ -65,6 +73,7 @@ type MkContextBase r =
   , runtime :: Runtime
   , msgHub :: MessageHub
   , aboutMarkdown :: String
+  , actusDictionaries :: ActusDictionaries
   | r
   }
 

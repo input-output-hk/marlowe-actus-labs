@@ -216,6 +216,7 @@ type FieldsState err = Map FieldId (FieldState err)
 type FormState err =
   { fields :: FieldsState err
   , errors :: Maybe (UrleEncoded.Errors err /\ Query)
+  , query :: Query
   -- , state :: state
   }
 
@@ -231,44 +232,43 @@ useForm ({ spec: Form { fields, validator }, onSubmit, validationDebounce }) = R
     if touched then Set.singleton name else Set.empty
   validationResult /\ setValidationResult <- useState' Nothing
 
-  initialPayload <- useMemo fields \_ -> do
+  initialQuery <- useMemo fields \_ -> do
     let
-      payload = fields <#> \{ name, initial } -> name /\ initial
-    Query.fromFoldable payload
+      query = fields <#> \{ name, initial } -> name /\ initial
+    Query.fromFoldable query
 
-  currPayload /\ updatePayload <- useState initialPayload
+  currQuery /\ updateQuery <- useState initialQuery
+  debouncedQuery <- useDebounce currQuery validationDebounce
 
-  debouncedPayload <- useDebounce currPayload validationDebounce
-
-  useEffect debouncedPayload do
+  useEffect debouncedQuery do
     when (not <<< null $ touched) do
-      result <- runValidator validator debouncedPayload
-      setValidationResult $ Just (result /\ debouncedPayload)
+      result <- runValidator validator debouncedQuery
+      setValidationResult $ Just (result /\ debouncedQuery)
     pure $ pure unit
 
   let
     updateField :: FieldId -> Array String -> Effect Unit
     updateField name value = do
-      updatePayload $ Query.insert name value
+      updateQuery $ Query.insert name value
       updateTouched (Set.insert name)
 
     onSubmit' :: EventHandler
     onSubmit' = handler_ do
-      onSubmit { payload: currPayload, result: validationResult }
+      onSubmit { payload: currQuery, result: validationResult }
 
     fieldsState = Map.fromFoldable $ fields <#> \{ name, initial } -> do
       let
-        value = fromMaybe [] $ Query.lookup name currPayload
+        value = fromMaybe [] $ Query.lookup name currQuery
         fieldErrors = do
-          V res /\ query <- validationResult
+          V res /\ validationQuery <- validationResult
           case res of
             Left errs -> do
               let
                 errs' = Errors.lookup (coerce name) errs
-              val' <- Query.lookup name query
+              val' <- Query.lookup name validationQuery
               pure $ errs' /\ val'
             Right _ -> do
-              val' <- Query.lookup name query
+              val' <- Query.lookup name validationQuery
               pure $ [] /\ val'
       (name /\ { name, initial, value, errors: fieldErrors, touched: Disj (name `Set.member` touched), onChange: updateField name })
     formState =
@@ -276,6 +276,7 @@ useForm ({ spec: Form { fields, validator }, onSubmit, validationDebounce }) = R
       , errors: validationResult >>= case _ of
           V (Left errs) /\ query -> Just (errs /\ query)
           V (Right _) /\ _ -> Nothing
+      , query: currQuery
       }
   pure { formState: formState, onSubmit: onSubmit', result: validationResult }
 

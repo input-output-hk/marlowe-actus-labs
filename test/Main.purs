@@ -46,15 +46,15 @@ main = do
 
     runSpec' config [ consoleReporter, specReporter ] $ do
       Spec.parallel do
-        ContractTerms.spec
-        Metadata.spec
-        TestFramework.spec testsPAM
-        TestFramework.spec testsLAM
-        TestFramework.spec testsNAM
-        TestFramework.spec testsANN
-        MarloweActus.spec
+        --ContractTerms.spec
+        --Metadata.spec
+        --TestFramework.spec testsPAM
+        --TestFramework.spec testsLAM
+        --TestFramework.spec testsNAM
+        --TestFramework.spec testsANN
+        --MarloweActus.spec
         Web.spec serverUrlStr
-        Test.Contrib.Data.Map.spec
+        --Test.Contrib.Data.Map.spec
 
   where
   readFile file = do

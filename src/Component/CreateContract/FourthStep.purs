@@ -71,10 +71,8 @@ mkComponent = do
         launchAff_ $ do
           f contractData runtime.serverURL runtime.root >>= case _ of
             Right res@{ resource: PostContractsResponseContent postContractsResponse, links: { contract: contractEndpoint } } -> do
-              traceM "Response"
-              traceM res
               let
-                { contractId, txBody: tx } = postContractsResponse
+                { contractId, tx } = postContractsResponse
                 TextEnvelope { cborHex: txCborHex } = tx
                 lib = Lib.props cardanoMultiplatformLib
                 txCbor = cborHexToCbor txCborHex
@@ -85,7 +83,6 @@ mkComponent = do
                 Right witnessSet -> do
                   submit witnessSet runtime.serverURL contractEndpoint >>= case _ of
                     Right _ -> do
-                      traceM "Successfully submitted the transaction"
                       liftEffect $ onSuccess contractEndpoint
                     Left err -> do
                       traceM "Error while submitting the transaction"

@@ -145,7 +145,7 @@ mkApp = do
   (ContractWithTransactionsStream contractStream) <- asks _.contractStream
 
   throttledEmitter :: Subscription.Emitter (List ContractWithTransactionsEvent) <- liftEffect $
-    Subscription.foldMapThrottle (List.singleton) (MinInterval $ Milliseconds 500.0) contractStream.emitter
+    Subscription.foldMapThrottle (List.singleton) (MinInterval $ Milliseconds 10_000.0) contractStream.emitter
 
   initialVersion <- liftEffect now
 
@@ -158,12 +158,12 @@ mkApp = do
     possibleWalletInfo /\ setWalletInfo <- useState' Nothing
     let
       walletInfoName = _.name <<< un WalletInfo <$> possibleWalletInfo
-    possibleWalletInfoRef <- useStateRef walletInfoName possibleWalletInfo
 
+    possibleWalletInfoRef <- useStateRef walletInfoName possibleWalletInfo
     possibleWalletContext /\ setWalletContext <- useState' Nothing
     possibleWalletContextRef <- useStateRef' possibleWalletContext
 
-    useLoopAff walletInfoName (Milliseconds 5000.0) do
+    useLoopAff walletInfoName (Milliseconds 20_000.0) do
       pwi <- liftEffect $ readRef possibleWalletInfoRef
       pwc <- liftEffect $ readRef possibleWalletContextRef
       case pwi, pwc of
@@ -438,7 +438,7 @@ contractCashFlowInfo
   -> Maybe UserContractRole
   -> Array Runtime.TxHeader
   -> Array CashFlowInfo
-contractCashFlowInfo (Just (BlockHeader { slotNo: SlotNumber slot })) contractTerms party counterParty (Just (MarloweInfo { state })) possibleUserContractRole transactions = do
+contractCashFlowInfo (Just (BlockHeader { slotNo: SlotNumber slot })) contractTerms party counterParty marloweInfo possibleUserContractRole transactions = do
   let
     cashFlows = genProjectedCashflows
       (party /\ counterParty)
@@ -447,6 +447,10 @@ contractCashFlowInfo (Just (BlockHeader { slotNo: SlotNumber slot })) contractTe
     cashFlows' = addChoiceMarker $ map Just cashFlows
     transactions' = map Just transactions <> (Array.replicate (length cashFlows') Nothing)
     transactionsAndCashFlows = Array.zipWith { tx: _, cf: _ } transactions' (Array.fromFoldable cashFlows')
+    -- Till state is not availble we just display zero because of how `evalValue` works
+    state = fromMaybe emptyState do
+      MarloweInfo { state: st } <- marloweInfo
+      st
 
   Array.catMaybes $
     map
@@ -458,7 +462,8 @@ contractCashFlowInfo (Just (BlockHeader { slotNo: SlotNumber slot })) contractTe
               beginInterval = unsafeInstantFromInt (slot + slotZeroTime)
               endInterval = unsafeInstantFromInt (slot + slotZeroTime)
               environment = Environment { timeInterval: TimeInterval beginInterval endInterval }
-              actusValue = evalValue environment (fromMaybe emptyState state) (Actus.toMarloweValue amount)
+              -- TODO: Detect if zero means zero or a missing variable.
+              actusValue = evalValue environment state (Actus.toMarloweValue amount)
 
             value <- PositiveBigInt.fromBigInt $ BigInt.abs actusValue
             let

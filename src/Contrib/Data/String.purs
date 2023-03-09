@@ -4,12 +4,16 @@ import Prelude
 
 import Data.Enum (class BoundedEnum, upFromIncluding)
 import Data.Map as Map
-import Data.Maybe (Maybe, fromMaybe)
+import Data.Maybe (Maybe, fromMaybe, isJust)
 import Data.Profunctor.Strong ((&&&))
 import Data.String (Pattern, stripPrefix)
+import Data.String as String
 
 tryStripPrefix :: Pattern -> String -> String
 tryStripPrefix pattern str = fromMaybe str (stripPrefix pattern str)
+
+isPrefixOf :: Pattern -> String -> Boolean
+isPrefixOf prefixPattern = isJust <<< String.stripPrefix prefixPattern
 
 decodeEnumWith :: forall a. Show a => BoundedEnum a => (String -> String) -> String -> Maybe a
 decodeEnumWith adaptConstructorName = do

@@ -16,7 +16,6 @@ import Data.Map as Map
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype, unwrap)
 import Data.String as String
-import Data.Tuple.Nested (type (/\), (/\))
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Language.Marlowe.Core.V1.Semantics.Types (Party)

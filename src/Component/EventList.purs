@@ -217,6 +217,8 @@ mkEventList = do
 
         updateState _ { newInput = Nothing }
 
+    traceM contractList'
+
     pure $
       DOM.div {}
         [ case state.newInput, connectedWallet of
