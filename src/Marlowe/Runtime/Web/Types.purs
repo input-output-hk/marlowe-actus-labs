@@ -12,13 +12,13 @@ import Data.Argonaut.Decode.Combinators ((.:))
 import Data.Argonaut.Decode.Decoders (decodeMaybe)
 import Data.DateTime (DateTime)
 import Data.DateTime.ISO (ISO(..))
-import Data.Either (Either, note)
+import Data.Either (Either(..), note)
 import Data.Generic.Rep (class Generic)
 import Data.Int as Int
 import Data.JSDate as JSDate
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (class Newtype, un, unwrap)
 import Data.Profunctor.Strong ((***))
 import Data.String as String
@@ -176,11 +176,45 @@ instance DecodeJson Metadata where
 metadataFieldDecoder :: { metadata :: DecodeJsonFieldFn Metadata }
 metadataFieldDecoder = { metadata: map decodeJson :: Maybe Json -> Maybe (JsonParserResult Metadata) }
 
+newtype Tags = Tags (Map String Metadata)
+derive instance Generic Tags _
+derive instance Newtype Tags _
+derive instance Eq Tags
+instance Semigroup Tags where
+  append (Tags a) (Tags b) = Tags (Map.union a b)
+
+instance Monoid Tags where
+  mempty = Tags Map.empty
+
+instance EncodeJson Tags where
+  encodeJson = encodeJson
+    <<< Object.fromFoldable
+    <<< map (show *** identity)
+    <<< (Map.toUnfoldable :: _ -> Array _)
+    <<< un Tags
+
+instance DecodeJson Tags where
+  decodeJson _ = Right mempty
+  -- FIXME: properly decode Tags
+  {-
+  decodeJson json = do
+    (obj :: Object Metadata) <- decodeJson json
+
+    (arr :: Array (String /\ Metadata)) <- for (Object.toUnfoldable obj) \(idx /\ value) -> do
+      idx' <- do
+        let
+          err = TypeMismatch $ "Expecting an integer metadata label but got: " <> show idx
+        note err (Just idx)
+      pure (idx' /\ value)
+    pure <<< Tags <<< Map.fromFoldable $ arr
+    -}
+
 type ContractHeadersRowBase r =
   ( contractId :: TxOutRef
   , roleTokenMintingPolicyId :: PolicyId
   , version :: MarloweVersion
   , metadata :: Metadata
+  , tags :: Tags
   , status :: TxStatus
   , block :: Maybe BlockHeader
   | r
@@ -422,6 +456,7 @@ newtype PostContractsRequest = PostContractsRequest
   { metadata :: Metadata
   -- , version :: MarloweVersion
   -- , roles :: Maybe RolesConfig
+  , tags :: Tags
   , contract :: V1.Contract
   , minUTxODeposit :: V1.Ada
   , changeAddress :: Bech32
@@ -432,6 +467,7 @@ newtype PostContractsRequest = PostContractsRequest
 instance EncodeJsonBody PostContractsRequest where
   encodeJsonBody (PostContractsRequest r) = encodeJson
     { metadata: r.metadata
+    , tags: r.tags
     , version: V1
     , roles: Nothing :: Maybe String
     , contract: r.contract
@@ -510,6 +546,7 @@ newtype PostTransactionsRequest = PostTransactionsRequest
   , invalidBefore :: DateTime
   , invalidHereafter :: DateTime
   , metadata :: Metadata
+  , tags :: Tags
   , changeAddress :: Bech32
   , addresses :: Array Bech32
   , collateralUTxOs :: Array TxOutRef
@@ -521,6 +558,7 @@ instance EncodeJsonBody PostTransactionsRequest where
     , invalidBefore: ISO r.invalidBefore
     , invalidHereafter: ISO r.invalidHereafter
     , metadata: r.metadata
+    , tags: r.tags
     , version: V1
     }
 
@@ -543,7 +581,7 @@ instance EncodeHeaders PostTransactionsRequest PostTransactionsRequestRow where
 newtype PostTransactionsResponse = PostTransactionsResponse
   { contractId :: TxOutRef
   , transactionId :: TxId
-  , txBody :: TextEnvelope TransactionObject
+  , tx :: TextEnvelope TransactionObject
   }
 
 derive instance Newtype PostTransactionsResponse _

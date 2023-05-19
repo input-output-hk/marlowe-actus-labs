@@ -173,6 +173,7 @@ createMerkleized contractData serverUrl contractsEndpoint = do
           { metadata
           -- , version :: MarloweVersion
           -- , roles :: Maybe RolesConfig
+          , tags: mempty -- TODO: use instead of metadata
           , contract: merkleized
           , minUTxODeposit: V1.Lovelace (BigInt.fromInt 2_000_000)
           , changeAddress: changeAddress
@@ -199,6 +200,7 @@ create contractData serverUrl contractsEndpoint = do
       { metadata
       -- , version :: MarloweVersion
       -- , roles :: Maybe RolesConfig
+      , tags: mempty -- TODO: use instead of metadata
       , contract
       , minUTxODeposit: V1.Lovelace (BigInt.fromInt 2_000_000)
       , changeAddress: changeAddress
