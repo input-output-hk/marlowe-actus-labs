@@ -413,6 +413,7 @@ reqDecimalInput label actusFieldName = formBuilderT do
     }
 
 data Optionality = Required | Optional
+
 derive instance Generic Optionality _
 instance Show Optionality where
   show Required = "Required"
@@ -432,7 +433,7 @@ mkAmortizingLoanForm amortizingLoanChoice = do
           actusLabel `Object.lookup` applicabilityRulesDictJson >>= Argonaut.toObject
 
       Map.catMaybes $ Map.fromFoldableWithIndex $ mapWithIndexFlipped contractApplicabilityRules \fieldName fieldJson -> do
-        Alternative.guard (not $ fieldName `Array.elem` ["contract", "contractType"]) *> do
+        Alternative.guard (not $ fieldName `Array.elem` [ "contract", "contractType" ]) *> do
           -- We use the same strategy like in the official demo
           -- to derive optinality of a field:
           -- https://github.com/actusfrf/actus-webapp/blob/0c426e9ff6fce9a45be4b1255e801bf10abc91ad/frontend/src/components/Form/index.js#L577
@@ -477,12 +478,10 @@ mkAmortizingLoanForm amortizingLoanChoice = do
         reqField = pseudoReqDecimalInput label actusFieldName
       mkOptionalField actusFieldName optField reqField
 
-
   traceM "FORM?"
   forWithIndex_ fieldsOptionality \fieldName fieldOptionality -> do
-    if (fieldName `Array.elem` knownFields)
-      then traceM $ "Known field: " <> fieldName <> " with optionality: " <> show fieldOptionality
-      else traceM $ "Unknown field: " <> fieldName <> " with optionality: " <> show fieldOptionality
+    if (fieldName `Array.elem` knownFields) then traceM $ "Known field: " <> fieldName <> " with optionality: " <> show fieldOptionality
+    else traceM $ "Unknown field: " <> fieldName <> " with optionality: " <> show fieldOptionality
 
   FormBuilder.evalBuilderT' ado
     contractId <- do

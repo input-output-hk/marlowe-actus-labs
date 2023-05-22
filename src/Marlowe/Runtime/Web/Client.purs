@@ -278,11 +278,11 @@ post (ServerURL serverUrl) (IndexEndpoint (ResourceLink path)) req = runExceptT 
     url = serverUrl <> "/" <> path
     body = stringify $ encodeJsonBody req
 
-    headers :: {"Content-Type" :: String | extraHeaders }
+    headers :: { "Content-Type" :: String | extraHeaders }
     headers =
       -- R.insert (Proxy :: Proxy "Accept") "application/json"
-        R.insert (Proxy :: Proxy "Content-Type") "application/json"
-          $ (encodeHeaders req :: { | extraHeaders })
+      R.insert (Proxy :: Proxy "Content-Type") "application/json"
+        $ (encodeHeaders req :: { | extraHeaders })
 
   response <- ExceptT $ fetchEither url { method: POST, body, headers } allowedStatusCodes FetchError
   (lift (jsonBody response)) >>= decodeResourceWithLink (map decodeJson :: Maybe _ -> Maybe _) >>> case _ of

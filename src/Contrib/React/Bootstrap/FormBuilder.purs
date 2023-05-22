@@ -195,8 +195,8 @@ genId = do
   possiblePrefix <- ask
   let
     prefix str = case possiblePrefix of
-        Nothing -> str
-        Just pref -> pref <> "-" <> str
+      Nothing -> str
+      Just pref -> pref <> "-" <> str
   counter <- get
   put (counter + 1)
   let id = prefix $ show counter
@@ -210,7 +210,7 @@ _genFieldId
 _genFieldId props = do
   case props.name of
     Just name -> pure name
-    Nothing  -> FieldId <$> genId
+    Nothing -> FieldId <$> genId
 
 fieldValidity touched value errors = do
   let
@@ -512,7 +512,7 @@ multiField possibleLabel possibleHelpText fieldsFormBuilder = formBuilderT do
     unFormBuilder (fieldsFormBuilder $ FieldId prefix)
   let
     Form (formRecord@{ render }) = form
-    -- errorId = Safe.Coerce.coerce fieldId
+  -- errorId = Safe.Coerce.coerce fieldId
   pure $ Form formRecord
     { render = \state -> do
         let
@@ -534,12 +534,13 @@ multiField possibleLabel possibleHelpText fieldsFormBuilder = formBuilderT do
             DOM.label
               { className: "col-sm-3 col-form-label-sm" } $ fold possibleLabel
 
-          body = DOM.div { className: "col-sm-9" } do
-            [ DOM.div { className: "row row-cols-lg-auto align-items-center" }
-                $ render state
-            , renderPossibleHelpText possibleHelpText
-            ]
-            <> foldMapFlipped possibleFieldErrors \fieldErrors ->
+          body =
+            DOM.div { className: "col-sm-9" } do
+              [ DOM.div { className: "row row-cols-lg-auto align-items-center" }
+                  $ render state
+              , renderPossibleHelpText possibleHelpText
+              ]
+              <> foldMapFlipped possibleFieldErrors \fieldErrors ->
                 foldMapWithIndexFlipped fieldErrors \fieldId errors -> do
                   let
                     errorId = un ErrorId fieldId

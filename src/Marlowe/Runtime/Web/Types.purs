@@ -177,6 +177,7 @@ metadataFieldDecoder :: { metadata :: DecodeJsonFieldFn Metadata }
 metadataFieldDecoder = { metadata: map decodeJson :: Maybe Json -> Maybe (JsonParserResult Metadata) }
 
 newtype Tags = Tags (Map String Metadata)
+
 derive instance Generic Tags _
 derive instance Newtype Tags _
 derive instance Eq Tags
@@ -195,19 +196,20 @@ instance EncodeJson Tags where
 
 instance DecodeJson Tags where
   decodeJson _ = Right mempty
-  -- FIXME: properly decode Tags
-  {-
-  decodeJson json = do
-    (obj :: Object Metadata) <- decodeJson json
 
-    (arr :: Array (String /\ Metadata)) <- for (Object.toUnfoldable obj) \(idx /\ value) -> do
-      idx' <- do
-        let
-          err = TypeMismatch $ "Expecting an integer metadata label but got: " <> show idx
-        note err (Just idx)
-      pure (idx' /\ value)
-    pure <<< Tags <<< Map.fromFoldable $ arr
-    -}
+-- FIXME: properly decode Tags
+{-
+decodeJson json = do
+  (obj :: Object Metadata) <- decodeJson json
+
+  (arr :: Array (String /\ Metadata)) <- for (Object.toUnfoldable obj) \(idx /\ value) -> do
+    idx' <- do
+      let
+        err = TypeMismatch $ "Expecting an integer metadata label but got: " <> show idx
+      note err (Just idx)
+    pure (idx' /\ value)
+  pure <<< Tags <<< Map.fromFoldable $ arr
+  -}
 
 type ContractHeadersRowBase r =
   ( contractId :: TxOutRef
